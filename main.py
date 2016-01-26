@@ -13,15 +13,16 @@ from fibbingnode.algorithms.ospf_simple import OSPFSimple
 from mininet.util import custom
 from mininet.link import TCIntf
 
-from trafficgenerator.mycustomhost import MyCustomHost
-from trafficgenerator.trafficgenerator import TrafficGenerator
+from tecontroller.trafficgenerator.mycustomhost import MyCustomHost
+from tecontroller.trafficgenerator.trafficgenerator import TrafficGenerator
+from tecontroller.res import defaultconf as dconf
 
 DB_path = '/tmp/db.topo'
 C1_cfg = '/tmp/c1.cfg'
 
 C1 = 'c1' #controller
-TG = 'c2' #traffic generator
-TEC = 'c3'#traffic engineering controller
+TG = dconf.TG_hostname #traffic generator
+LBC = dconf.LBC_hostname #Load Balancing controller
 
 R1 = 'r1'
 R2 = 'r2'
@@ -52,7 +53,7 @@ class SIGTopo(IPTopo):
  +--+      +----+        +---+_       +--+
               |            |   \__
             +---+        +---+    \+---+
-            |S2 |        |TG |     |TEC|
+            |S2 |        |TG |     |LBC|
             +---+        +---+     +---+
         """
         r1 = self.addRouter(R1)
@@ -83,11 +84,8 @@ class SIGTopo(IPTopo):
         self.addLink(c2, r4)
 
         # Adding Traffic Engineering Controller
-        c3 = self.addHost(TEC, isTrafficEngineeringController=True)
+        c3 = self.addHost(LBC, isLBController=True)
         self.addLink(c3, r4)
-
-
-
 
 
 def launch_network():
