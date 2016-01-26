@@ -44,8 +44,8 @@ class MyCustomHost(_node.Host):
             tg = self.popen(dconf.TG_PATH+'trafficgenerator.py',
                                            stdin=None, stdout=tgl, stderr=tgl)
             
-        elif 'isTrafficEngineeringController' in kwargs.keys() and kwargs.get('isTrafficEngineeringController') == True:
-            log.info("Starting Traffic Engineer Controller\n")
+        elif 'isLBController' in kwargs.keys() and kwargs.get('isLBController') == True:
+            log.info("Starting LoadBalancing Controller\n")
             
             tec = self.popen(LBC_PATH+'lbcontroller.py', stdin=None,
                              stdout=None, stderr=None)
@@ -57,8 +57,7 @@ class MyCustomHost(_node.Host):
             d = open(daemon_file, 'w')
             
             #Spawn the iperf server process
-            log.info('Host %s: Creating iperf server process, port
-            %s\n'%(self.name, dconf.Hosts_DefaultIperfPort))
+            log.info('Host %s: Creating iperf server process, port %s\n'%(self.name, dconf.Hosts_DefaultIperfPort))
             iperf_server_process = self.popen('iperf', '-u', '-s',
                                               '-p', dconf.Hosts_DefaultIperfPort,
                                               '-i', '1', stdin=None,
