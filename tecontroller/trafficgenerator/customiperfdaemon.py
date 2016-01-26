@@ -11,15 +11,14 @@ generator and creates the corresponding iperf client sessions that
 generate the desired traffic in the network.
 
 """
-
-from subprocess import Popen, PIPE
-import flask
-import traceback
-from subprocess import call
-import netifaces as ni
-from time import sleep
 import tecontroller.res import defaultconf as dconf
 
+from subprocess import Popen, PIPE
+from time import sleep
+import traceback
+
+
+import flask
 app = flask.Flask(__name__)
 
 @app.route("/startflow", methods = ['POST'])

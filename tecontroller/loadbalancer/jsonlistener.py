@@ -7,17 +7,13 @@ through a flesk interface.
 Upon receiving a new flow notificaiton, puts the event inside the
 shared queue eventQueue.
 """
-
-import netifaces as ni
-from flow import Flow
-from tecontroller import eventQueue
-import time
-
+from tecontroller.trafficgenerator.flow import Flow
+from tecontroller.loadbalancer.lbcontroller import eventQueue
 from tecontroller.res import defaultconf as dconf
+import time
 
 import flask 
 app = flask.Flask(__name__)
-
 
 @app.route("/newflowstarted", methods = ['POST'])
 def newFlowStarted():
@@ -31,11 +27,10 @@ def newFlowStarted():
     eventQueue.task_done()
 
 if __name__ == "__main__":
-    
     #Wait a bit until IP addresses have been assigned. We can do that,
     #since the Traffic Generator also waits some time before starting
     #to orchestraste traffic.
-    time.sleep(10)
+    time.sleep(dconf.InitialWaitingTime)
     
     #Searching for the interface's IP addr
     myETH0Iface = 'c3-eth0'

@@ -1,17 +1,34 @@
 #!/usr/bin/python
-import sched
-import time
+
+"""This module defines a traffic generator script to be executed in
+the Traffic Generator host in the mininet network.
+
+Essentially, reads from a flow definition file and schedules the
+traffic.
+
+When a new flow must be created: 
+
+ - Sends commands to corresponding hosts to start exchanging data using
+  iperf.
+
+ - Informs the LBController through a JSON interface
+
+After scheduling all flows defined in the file, it opens a JSON-flesk
+server to wait for further commands.
+"""
+
 from fibbingnode.misc.mininetlib.ipnet import TopologyDB
 from fibbingnode.misc.mininetlib import get_logger
-from flow import Flow, Base
+
+from tecontroller.trafficgenerator.flow import Flow, Base
+from tecontroller.res import defaultconf as dconf
+
 from threading import Thread 
-from time import sleep
+from time import sleep, time
 import requests
+import sched
 import json
 
-import tecontroller.config as cfg
-
-from tecontroller.res import defaultconf as dconf
 
 import flask
 app = flask.Flask(__name__)
@@ -31,7 +48,7 @@ class TrafficGenerator(Base):
         self.db = TopologyDB(db=cfg.DB_path)
         
         #IP of the Traffic Engineering Controller.
-        self._tec_ip = self.getHostIPByName(cfg.LBC_Hostname)
+        self._lbc_ip = self.getHostIPByName(cfg.LBC_Hostname)
 
 
     def getHostIPByName(self, hostname):
@@ -52,7 +69,7 @@ class TrafficGenerator(Base):
         LBController a new flow created in the network.
 
         """
-        url = "http://%s:%s/newflowstarted" %(self._tec_ip, LBC_JsonPort)
+        url = "http://%s:%s/newflowstarted" %(self._lbc_ip, LBC_JsonPort)
         requests.post(url, json = flow.toJSON())
 
     def createFlow(self, flow):
