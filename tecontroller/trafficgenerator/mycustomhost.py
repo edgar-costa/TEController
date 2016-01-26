@@ -41,13 +41,13 @@ class MyCustomHost(_node.Host):
         if 'isTrafficGenerator' in kwargs.keys() and kwargs.get('isTrafficGenerator') == True:
             log.info("Starting Traffic Generator\n")
             tgl = open(tg_logfile, 'w')
-            tg = self.popen(dconf.TG_PATH+'trafficgenerator.py',
+            tg = self.popen(dconf.TG_path+'trafficgenerator.py',
                                            stdin=None, stdout=tgl, stderr=tgl)
             
         elif 'isLBController' in kwargs.keys() and kwargs.get('isLBController') == True:
             log.info("Starting LoadBalancing Controller\n")
             
-            tec = self.popen(LBC_PATH+'lbcontroller.py', stdin=None,
+            tec = self.popen(LBC_path+'lbcontroller.py', stdin=None,
                              stdout=None, stderr=None)
             
         else: #Just a normal host in the network
@@ -65,7 +65,7 @@ class MyCustomHost(_node.Host):
             
             #Spawn the custom daemon process
             log.info('Host %s: Creating custom daemon process\n'%self.name)
-            custom_daemon_process = self.popen(dconf.TG_PATH +
+            custom_daemon_process = self.popen(dconf.TG_path +
                                                'customiperfdaemon.py',
                                                stdin=None, stdout=d,
                                                stderr=d)
