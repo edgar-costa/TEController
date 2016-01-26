@@ -21,7 +21,7 @@ DB_path = '/tmp/db.topo'
 TG_path = PPATH + 'tecontroller/trafficgenerator/'
 
 # Path to the Traffic Engineering controller package
-LB_path = PPATH + 'tecontroller/loadbalancer/'
+LBC_path = PPATH + 'tecontroller/loadbalancer/'
 
 # Default port for the json-daemons for the hosts in the network
 Hosts_JsonPort = 5000
