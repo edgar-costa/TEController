@@ -13,14 +13,15 @@ from fibbingnode.algorithms.ospf_simple import OSPFSimple
 from mininet.util import custom
 from mininet.link import TCIntf
 
-from tecontroller.trafficgenerator.mycustomhost import MyCustomHost
-from tecontroller.trafficgenerator.trafficgenerator import TrafficGenerator
+from trafficgenerator.mycustomhost import MyCustomHost
+from trafficgenerator.trafficgenerator import TrafficGenerator
 
 DB_path = '/tmp/db.topo'
 C1_cfg = '/tmp/c1.cfg'
 
 C1 = 'c1' #controller
 TG = 'c2' #traffic generator
+TEC = 'c3'#traffic engineering controller
 
 R1 = 'r1'
 R2 = 'r2'
@@ -32,7 +33,6 @@ S2 = 's2'
 D2 = 'd2'
 
 BW = 1  # Absurdly low bandwidth for easy congestion
-
 
 class SIGTopo(IPTopo):
     def build(self, *args, **kwargs):
@@ -49,11 +49,11 @@ class SIGTopo(IPTopo):
               |   /        |
  +--+      +----+'       +---+        +--+
  |S1|------| R1 |--------| R4|--------|C1|
- +--+      +----+        +---+        +--+
-              |            |   
-            +---+        +---+  
-            |S2 |        |TG |
-            +---+        +---+
+ +--+      +----+        +---+_       +--+
+              |            |   \__
+            +---+        +---+    \+---+
+            |S2 |        |TG |     |TEC|
+            +---+        +---+     +---+
         """
         r1 = self.addRouter(R1)
         r2 = self.addRouter(R2)
@@ -82,10 +82,18 @@ class SIGTopo(IPTopo):
         c2 = self.addHost(TG, isTrafficGenerator=True) 
         self.addLink(c2, r4)
 
+        # Adding Traffic Engineering Controller
+        c3 = self.addHost(TEC, isTrafficEngineeringController=True)
+        self.addLink(c3, r4)
+
+
+
+
+
 def launch_network():
     net = IPNet(topo=SIGTopo(),
                 debug=_lib.DEBUG_FLAG,
-                intf=custom(TCIntf, bw=BW))#,
+                intf=custom(TCIntf, bw=BW),
                 host=MyCustomHost)
     TopologyDB(net=net).save(DB_path)
     net.start()
