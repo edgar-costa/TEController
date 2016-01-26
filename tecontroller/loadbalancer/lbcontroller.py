@@ -7,9 +7,11 @@ from fibbingnode.misc.igp_graph import IGPGraph
 from fibbingnode.misc.mininetlib.ipnet import TopologyDB
 from fibbingnode import CFG
 
+from tecontroller.res import defaultconf as dconf
+
 import networkx as nx
 
-DB_path = '/tmp/db.topo'
+
 C1_cfg = '/tmp/c1.cfg'
 
 HAS_INITIAL_GRAPH = threading.Event()
@@ -18,11 +20,12 @@ class MyGraphProvider(SouthboundManager):
 
     def received_initial_graph(self):
         HAS_INITIAL_GRAPH.set()
-
-
         
 
-class TEController(object):
+eventQueue = Queue.Queue()
+
+
+class LBController(object):
     def __init__(self):
         """It basically reads the network topology from the MyGraphProvider,
         which is running in another thread because
@@ -31,12 +34,12 @@ class TEController(object):
         Here we are assuming that the topology does not change.        
         """
         self.flow_allocation = {}
-        self.eventQueue = Queue.Queue()
+        self.eventQueue = eventQueue
         self.timer = threading.Timer()
         self._stop = threading.Event()
         
         CFG.read(C1_cfg)
-        db = TopologyDB(db=DB_path)
+        db = TopologyDB(db=dconf.DB_path)
         sbmanager = MyGraphProvider(SouthboundManager)
         t = threading.Thread(target=sbmanager.run, name="Graph Listener")
         t.start()
@@ -44,12 +47,12 @@ class TEController(object):
         self.network_graph = sbmanager.igp_graph
 
     def stop(self):
-        """Stop the TEController correctly
+        """Stop the LBController correctly
         """
         self._stop.set()
 
     def isStopped(self):
-        """Check if TEController is set to be stopped or not
+        """Check if LBController is set to be stopped or not
         """
         return self._stop.isSet()
 
@@ -69,6 +72,7 @@ class TEController(object):
             else:
                 print event
 
+                
     def assignFlowToPath(self, flow, path):
         pass
 
@@ -96,8 +100,6 @@ class TEController(object):
 
         """
         pass
-
-
     
     def updateFlowAllocationTable(path, flow):
         if path in self.flow_allocation.keys():
@@ -106,34 +108,17 @@ class TEController(object):
             self.flow_allocation[path] = [flow]
 
 
-class GreedyTEController(TEController):
+
+
+
+
+
+            
+class GreedyLBController(LBController):
     def __init__(self, *args, **kwargs):
-        super(GreedyTEControllerLB, self).__init__(*args, **kwargs)
+        super(GreedyLBControllerLB, self).__init__(*args, **kwargs)
 
     
 
 
 
-################
-# Part of the controller that deals with new incoming flow demands
-from flow import Flow
-
-import flask 
-app = flask.Flask(__name__)
-
-
-@app.route("/newflowstarted", methods = ['POST'])
-def newFlowStarted():
-    req = flask.request.json
-
-    flow = Flow(req['src'], req['dst'], req['sport'], req['dport'],
-                req['size'], req['start_time'], req['duration'])
-
-    queue = getQueue('TECQueue').getLock()
-    queue.enqueue('newFlowStarted', flow)
-    queue.release()
-
-if __name__ == "__main__":
-    #Should run under it's own IP!
-    MyOwnIp = getMyOwnIp() 
-    app.run(MyOwnIp)

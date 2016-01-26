@@ -17,17 +17,12 @@ We allow for 3 different types of MyCustomHost to be created:
 """
 
 from fibbingnode.misc.mininetlib import get_logger
+from tecontroller.res import defaultconf as dconf
 import mininet.node as _node
 
-TG_PATH = '/tecontroller/trafficgenerator/'
-TEC_PATH = '/tecontroller/tecontroller/'
-
-logfolder = "./logs/"
-iperf_logfile = logfolder + "%s_iperf.log"
-daemon_logfile = logfolder + "%s_daemon.log"
-tg_logfile = logfolder + "TG.log"
-
-defaultIperfPort = '5001'
+iperf_logfile = dconf.Hosts_LogFolder + "%s_iperf.log"
+daemon_logfile = dconf.Hosts_LogFolder + "%s_daemon.log"
+tg_logfile = dconf.Hosts_LogFolder + "TG.log"
 
 log = get_logger()
 
@@ -46,15 +41,15 @@ class MyCustomHost(_node.Host):
         if 'isTrafficGenerator' in kwargs.keys() and kwargs.get('isTrafficGenerator') == True:
             log.info("Starting Traffic Generator\n")
             tgl = open(tg_logfile, 'w')
-            tg = self.popen(TG_PATH+'trafficgenerator.py',
+            tg = self.popen(dconf.TG_PATH+'trafficgenerator.py',
                                            stdin=None, stdout=tgl, stderr=tgl)
             
         elif 'isTrafficEngineeringController' in kwargs.keys() and kwargs.get('isTrafficEngineeringController') == True:
             log.info("Starting Traffic Engineer Controller\n")
             
-            tec = self.popen(TEC_PATH+'tecontroller.py', stdin=None,
+            tec = self.popen(LBC_PATH+'lbcontroller.py', stdin=None,
                              stdout=None, stderr=None)
-
+            
         else: #Just a normal host in the network
             iperf_file = iperf_logfile % (self.name)
             daemon_file = daemon_logfile % (self.name)
@@ -62,16 +57,19 @@ class MyCustomHost(_node.Host):
             d = open(daemon_file, 'w')
             
             #Spawn the iperf server process
-            log.info('Host %s: Creating iperf server process, port %s\n'%(self.name, defaultIperfPort))
+            log.info('Host %s: Creating iperf server process, port
+            %s\n'%(self.name, dconf.Hosts_DefaultIperfPort))
             iperf_server_process = self.popen('iperf', '-u', '-s',
-                                              '-p', defaultIperfPort,
+                                              '-p', dconf.Hosts_DefaultIperfPort,
                                               '-i', '1', stdin=None,
                                               stdout=i, stderr=i)
-
+            
             #Spawn the custom daemon process
             log.info('Host %s: Creating custom daemon process\n'%self.name)
-            custom_daemon_process = self.popen(TG_PATH + 'customiperfdaemon.py',
-                                               stdin=None, stdout=d, stderr=d)
+            custom_daemon_process = self.popen(dconf.TG_PATH +
+                                               'customiperfdaemon.py',
+                                               stdin=None, stdout=d,
+                                               stderr=d)
             
             i.close()
             d.close()

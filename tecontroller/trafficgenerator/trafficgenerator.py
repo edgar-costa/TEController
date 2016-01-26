@@ -1,5 +1,4 @@
 #!/usr/bin/python
-
 import sched
 import time
 from fibbingnode.misc.mininetlib.ipnet import TopologyDB
@@ -10,17 +9,12 @@ from time import sleep
 import requests
 import json
 
+import tecontroller.config as cfg
+
+from tecontroller.res import defaultconf as dconf
+
 import flask
 app = flask.Flask(__name__)
-
-TEControllerJsonPort = '5000'
-HostDefaultJsonPort = '5000'
-
-FlowFile = 'flowfile.csv'
-TG_path = '/root/tecontroller/trafficgenerator/'
-DB_path = '/tmp/db.topo'
-
-TEC = 'c3'
 
 # logger to log to the mininet cli
 log = get_logger()
@@ -34,10 +28,10 @@ class TrafficGenerator(Base):
         super(TrafficGenerator, self).__init__(*args, **kwargs)
         
         self.scheduler = sched.scheduler(time.time, time.sleep)
-        self.db = TopologyDB(db=DB_path)
-        #IP of the Traffic Engineering Controller. It must be set
-        #above to 'c3' instead of 'c2'
-        self._tec_ip = self.getHostIPByName(TEC)
+        self.db = TopologyDB(db=cfg.DB_path)
+        
+        #IP of the Traffic Engineering Controller.
+        self._tec_ip = self.getHostIPByName(cfg.LBC_Hostname)
 
 
     def getHostIPByName(self, hostname):
@@ -46,19 +40,19 @@ class TrafficGenerator(Base):
         """
         if hostname not in self.db.network.keys():
             return None
-
         else:
             routers = [r for r in self.db.network.keys() if 'r' in r]
-            ip = [self.db.interface(hostname, r) for r in routers if r in self.db.network[hostname].keys()]
+            ip = [self.db.interface(hostname, r) for r in routers if r
+                  in self.db.network[hostname].keys()]
             return str(ip[0]).split('/')[0]    
 
 
-    def informTEController(self, flow):
+    def informLBController(self, flow):
         """Part of the code that deals with the JSON interface to inform to
-        TEController a new flow created in the network.
+        LBController a new flow created in the network.
 
         """
-        url = "http://%s:%s/newflowstarted" %(self._tec_ip, TEControllerJsonPort)
+        url = "http://%s:%s/newflowstarted" %(self._tec_ip, LBC_JsonPort)
         requests.post(url, json = flow.toJSON())
 
     def createFlow(self, flow):
@@ -69,15 +63,15 @@ class TrafficGenerator(Base):
     def _createFlow(self, flow):
         """Creates the corresponding iperf command to actually install the
         given flow in the network.  This function has to call
-        self.informTEController!
+        self.informLBController!
 
         """
         hostIP = flow['src']
-        url = "http://%s:%s/startflow" %(hostIP, HostDefaultJsonPort)
+        url = "http://%s:%s/startflow" %(hostIP, dconf.Host_JsonPort)
         log.info('TrafficGenerator - starting Flow:\n')
         log.info('\t%s\n'%str(flow))
         requests.post(url, json = flow.toJSON())
-        # TODO: a call to informTEController should be added here
+        # TODO: a call to informLBController should be added here
         #self.informController(flow)
         
     def createRandomFlow(self):
@@ -89,7 +83,7 @@ class TrafficGenerator(Base):
     def scheduleRandomFlows(self, ex_time = 60, max_size = "40M"):
         """Creates a random schedule of random flows in the network. This will
         be useful later to evaluate the performance of the
-        TEController.
+        LBController.
 
         """
         pass
@@ -100,14 +94,20 @@ class TrafficGenerator(Base):
         f = open(flowfile, 'r')
         flows = f.readlines()
         for flowline in flows:
-            [s, d, sp, dp, size, start_time, duration] = flowline.strip('\n').split(',')
+            [s, d, sp, dp, size, s_t, dur] = flowline.strip('\n').split(',')
             srcip = self.getHostIPByName(s)
             dstip = self.getHostIPByName(d)
-            flow = Flow(srcip, dstip, sp, dp, size, start_time, duration)
+            flow = Flow(src = srcip,
+                        dst = dstip,
+                        sport = sp,
+                        dport = dp,
+                        size = size,
+                        start_time = s_t,
+                        duration = dur)
+            #Schedule flow creation
             self.scheduler.enter(flow['start_time'], 1, self.createFlow, ([flow]))
 
         self.scheduler.run()
-
 
 def create_app(app, traffic_generator):
     app.config['TG'] = traffic_generator
@@ -143,15 +143,16 @@ def trafficGeneratorCommandListener():
         
 if __name__ == '__main__':
     # Wait for the network to be created correcly: IP's assigned, etc.
-    sleep(10)
+    sleep(InitialWaitingTime)
+    
     # Start the traffic generator object
     tg = TrafficGenerator()
 
-    # Get Traffic Generator hosts's IP. We assume it's allways in 'c2'
-    MyOwnIp = tg.getHostIPByName('c2')
+    # Get Traffic Generator hosts's IP.
+    MyOwnIp = tg.getHostIPByName(dconf.TG_hostname)
     
     # Schedule flows from file
-    tg.scheduleFileFlows(TG_path+FlowFile)
+    tg.scheduleFileFlows(dconf.FlowFile)
 
     # Go start the JSON API server and listen for commands
     app = create_app(app, tg)

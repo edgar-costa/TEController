@@ -18,6 +18,7 @@ import traceback
 from subprocess import call
 import netifaces as ni
 from time import sleep
+import tecontroller.res import defaultconf as dconf
 
 app = flask.Flask(__name__)
 
@@ -43,7 +44,7 @@ def trafficGeneratorSlave():
 
 if __name__ == "__main__":
     #Waiting for the IP's to be assigned...
-    sleep(10)
+    sleep(tgconfig.InitialWaitingTime)
     
     #Searching for host's own interfaces
     proc = Popen(['netstat', '-i'], stdout=PIPE)
@@ -62,5 +63,4 @@ if __name__ == "__main__":
     ni.ifaddresses(MyETH0Iface)
     MyOwnIp = ni.ifaddresses(MyETH0Iface)[2][0]['addr']
     print 'Interface: %s, IPaddr: %s'%(MyETH0Iface, MyOwnIp)
-    
-    app.run(host=MyOwnIp)
+    app.run(host=MyOwnIp, port=dconf.Hosts_JsonPort)

@@ -5,7 +5,7 @@ It basically listens for information sent by the traffic generator
 through a flesk interface.
 
 Upon receiving a new flow notificaiton, puts the event inside the
-shared queue.
+shared queue eventQueue.
 """
 
 import netifaces as ni
@@ -13,10 +13,11 @@ from flow import Flow
 from tecontroller import eventQueue
 import time
 
+from tecontroller.res import defaultconf as dconf
+
 import flask 
 app = flask.Flask(__name__)
 
-MyJsonAPIPort = '5000'
 
 @app.route("/newflowstarted", methods = ['POST'])
 def newFlowStarted():
@@ -43,4 +44,4 @@ if __name__ == "__main__":
 
     #Start the flesk app under public ip and default json port
     print 'Interface: %s, IPaddr: %s'%(MyETH0Iface, MyOwnIp)
-    app.run(host=MyOwnIp, port=MyJsonAPIPort)
+    app.run(host=MyOwnIp, port=dconf.LBC_JsonPort)

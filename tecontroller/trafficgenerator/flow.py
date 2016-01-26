@@ -1,6 +1,10 @@
+"""
+This module defines the flow object
+"""
+
+from tecontroller.res import defaultconf as dconf
 import requests
 
-TEControllerJsonPort = '5000'
 
 class Base(object):
     """
@@ -129,10 +133,10 @@ class Flow(Base):
         under TrafficGenerator should be used instead.
 
         Part of the code that deals with the JSON interface to inform to
-        TEController a new flow created in the network.
+        LBController a new flow created in the network.
 
         """
-        url = "http://%s:%s/startflow" %(ip, TEControllerJsonPort)
+        url = "http://%s:%s/startflow" %(ip, dconf.LBC_JsonPort)
         #log.info("URL OF Flow.informCustomDaemonu: %s\n"%url)
         requests.post(url, json = self.toJSON())
 
