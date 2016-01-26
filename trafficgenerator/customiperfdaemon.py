@@ -1,4 +1,16 @@
 #!/usr/bin/python
+"""This python script defines the custom daemon that runs in the nodes
+of the mininet network and allows them to receive orders from the
+traffic generator.
+
+This srcipt is meant to run as a daemon thread in each custom host
+that is spawned at bootstrapping the host.
+
+It basically listents for /startflow requests from the traffic
+generator and creates the corresponding iperf client sessions that
+generate the desired traffic in the network.
+
+"""
 
 from subprocess import Popen, PIPE
 import flask
@@ -30,7 +42,6 @@ def trafficGeneratorSlave():
 
 
 if __name__ == "__main__":
-
     #Waiting for the IP's to be assigned...
     sleep(10)
     
@@ -38,7 +49,7 @@ if __name__ == "__main__":
     proc = Popen(['netstat', '-i'], stdout=PIPE)
     ip_output = proc.stdout.readlines()
     ifaces = []
-    MyETH0Iface = "CACA"
+    MyETH0Iface = ""
     
     for index, line in enumerate(ip_output):
         ifaces.append(line.split(' ')[0])
@@ -47,10 +58,9 @@ if __name__ == "__main__":
         if 'eth0' in i:
             MyETH0Iface = i
 
-    print MyETH0Iface
     #Searching for the interface's IP addr
     ni.ifaddresses(MyETH0Iface)
     MyOwnIp = ni.ifaddresses(MyETH0Iface)[2][0]['addr']
-    print MyOwnIp
+    print 'Interface: %s, IPaddr: %s'%(MyETH0Iface, MyOwnIp)
     
     app.run(host=MyOwnIp)

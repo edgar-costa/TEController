@@ -1,4 +1,5 @@
 #!/usr/bin/python
+
 import sched
 import time
 from fibbingnode.misc.mininetlib.ipnet import TopologyDB
@@ -16,10 +17,10 @@ TEControllerJsonPort = '5000'
 HostDefaultJsonPort = '5000'
 
 FlowFile = 'flowfile.csv'
-TG_path = '/root/fibbingnode/fibbingnode/trafficgenerator/'
+TG_path = '/root/tecontroller/trafficgenerator/'
 DB_path = '/tmp/db.topo'
 
-TEC = 'c2' #TODO: CHANGE TO C3 when TEC is created!!
+TEC = 'c3'
 
 # logger to log to the mininet cli
 log = get_logger()
@@ -36,7 +37,7 @@ class TrafficGenerator(Base):
         self.db = TopologyDB(db=DB_path)
         #IP of the Traffic Engineering Controller. It must be set
         #above to 'c3' instead of 'c2'
-        #self._tec_ip = self.getHostIPByName(TEC)
+        self._tec_ip = self.getHostIPByName(TEC)
 
 
     def getHostIPByName(self, hostname):
@@ -59,7 +60,6 @@ class TrafficGenerator(Base):
         """
         url = "http://%s:%s/newflowstarted" %(self._tec_ip, TEControllerJsonPort)
         requests.post(url, json = flow.toJSON())
-
 
     def createFlow(self, flow):
         """Calls _createFlow in a different Thread (for efficiency)
@@ -143,7 +143,7 @@ def trafficGeneratorCommandListener():
         
 if __name__ == '__main__':
     # Wait for the network to be created correcly: IP's assigned, etc.
-    sleep(20)
+    sleep(10)
     # Start the traffic generator object
     tg = TrafficGenerator()
 

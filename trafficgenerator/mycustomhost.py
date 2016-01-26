@@ -1,8 +1,26 @@
-import mininet.node as _node
-from fibbingnode.misc.mininetlib import get_logger
-from fibbingnode.trafficgenerator.trafficgenerator import TrafficGenerator
+"""This module defines a custom class for the hosts created in a mininet
+networ. Essentially redefines the mininet nodes by extending its
+__init__ method.
 
-TG_PATH = '/root/fibbingnode/fibbingnode/trafficgenerator/'
+We allow for 3 different types of MyCustomHost to be created:
+
+ - Normal custom hosts: they will spawn an iperf server daemon and a
+   custom daemon that listens for traffic generation orders from the
+   traffic generator.
+
+ - Traffic Generator: it spawns the traffic generator script inside
+   the newly created host.
+
+ - Traffic Engineering Controller. it spawns the traffic engineering
+   controller inside the newly created host.
+
+"""
+
+from fibbingnode.misc.mininetlib import get_logger
+import mininet.node as _node
+
+TG_PATH = '/tecontroller/trafficgenerator/'
+TEC_PATH = '/tecontroller/tecontroller/'
 
 logfolder = "./logs/"
 iperf_logfile = logfolder + "%s_iperf.log"
@@ -28,13 +46,18 @@ class MyCustomHost(_node.Host):
         if 'isTrafficGenerator' in kwargs.keys() and kwargs.get('isTrafficGenerator') == True:
             log.info("Starting Traffic Generator\n")
             tgl = open(tg_logfile, 'w')
-            traffic_generator = self.popen(TG_PATH+'trafficgenerator.py',
+            tg = self.popen(TG_PATH+'trafficgenerator.py',
                                            stdin=None, stdout=tgl, stderr=tgl)
-        else:
-            #now = datetime.datetime.now()
-            #s = now.strftime("%m-%d_%H:%M")
-            iperf_file = iperf_logfile % (self.name)#, s)
-            daemon_file = daemon_logfile % (self.name)#, s)
+            
+        elif 'isTrafficEngineeringController' in kwargs.keys() and kwargs.get('isTrafficEngineeringController') == True:
+            log.info("Starting Traffic Engineer Controller\n")
+            
+            tec = self.popen(TEC_PATH+'tecontroller.py', stdin=None,
+                             stdout=None, stderr=None)
+
+        else: #Just a normal host in the network
+            iperf_file = iperf_logfile % (self.name)
+            daemon_file = daemon_logfile % (self.name)
             i = open(iperf_file, 'w')
             d = open(daemon_file, 'w')
             
