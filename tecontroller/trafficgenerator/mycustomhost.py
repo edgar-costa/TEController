@@ -47,7 +47,7 @@ class MyCustomHost(_node.Host):
         elif 'isLBController' in kwargs.keys() and kwargs.get('isLBController') == True:
             log.info("Starting LoadBalancing Controller\n")
             
-            tec = self.popen(LBC_path+'lbcontroller.py', stdin=None,
+            tec = self.popen(dconf.LBC_path+'lbcontroller.py', stdin=None,
                              stdout=None, stderr=None)
             
         else: #Just a normal host in the network
