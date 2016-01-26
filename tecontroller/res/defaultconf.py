@@ -37,4 +37,4 @@ InitialWaitingTime = 10
 Hosts_DefaultIperfPort = '5001'
 
 # Log folder for the hosts
-Hosts_LogFolder = TG_path + "/logs/"
+Hosts_LogFolder = TG_path + "logs/"
