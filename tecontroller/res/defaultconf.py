@@ -28,7 +28,7 @@ Hosts_JsonPort = 5000
 
 # Path to the file where the flows definition for the Traffic
 # Generator are stored
-FlowFile = TG_path + 'flowfile.csv'
+FlowFile = TG_Path + 'flowfile.csv'
 
 # Waiting time (in seconds) for hosts to check their IP
 InitialWaitingTime = 10 
@@ -37,4 +37,4 @@ InitialWaitingTime = 10
 Hosts_DefaultIperfPort = '5001'
 
 # Log folder for the hosts
-Hosts_LogFolder = TG_path + "logs/"
+Hosts_LogFolder = TG_Path + "logs/"
