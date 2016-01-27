@@ -40,11 +40,13 @@ class Base(object):
         """
         #units = [('G', 1e9), ('M', 1e6), ('K', 1e3), ('B', 1)]
         units = [('M', 1e6), ('K', 1e3)] #only K and M are supported by iperf
-        string = "%.3f"
+        #string = "%.3f"
+        string = "%d"
         for (unit, value) in units:
             q, r = divmod(size, value)
             if q > 0.0:
-                val = (q*value + r)/value 
+                #val = (q*value + r)/value
+                val = int((q*value + r)/value) 
                 string = string % val
                 string = string + unit
                 return string
