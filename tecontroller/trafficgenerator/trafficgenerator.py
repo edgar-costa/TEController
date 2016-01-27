@@ -24,7 +24,7 @@ from tecontroller.trafficgenerator.flow import Flow, Base
 from tecontroller.res import defaultconf as dconf
 
 from threading import Thread 
-from time import sleep, time
+import time
 import requests
 import sched
 import json
