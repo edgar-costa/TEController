@@ -20,9 +20,9 @@ from tecontroller.res import defaultconf as dconf
 DB_path = '/tmp/db.topo'
 C1_cfg = '/tmp/c1.cfg'
 
-C1 = 'c1' #controller
-TG = dconf.TG_hostname #traffic generator
-LBC = dconf.LBC_hostname #Load Balancing controller
+C1 = 'c1' #fibbing controller
+TG = dconf.TG_Hostname #traffic generator
+LBC = dconf.LBC_Hostname #Load Balancing controller
 
 R1 = 'r1'
 R2 = 'r2'
