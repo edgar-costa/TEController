@@ -84,7 +84,7 @@ class TrafficGenerator(Base):
 
         """
         hostIP = flow['src']
-        url = "http://%s:%s/startflow" %(hostIP, dconf.Host_JsonPort)
+        url = "http://%s:%s/startflow" %(hostIP, dconf.Hosts_JsonPort)
         log.info('TrafficGenerator - starting Flow:\n')
         log.info('\t%s\n'%str(flow))
         requests.post(url, json = flow.toJSON())

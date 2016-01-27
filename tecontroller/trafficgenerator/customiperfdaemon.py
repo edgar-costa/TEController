@@ -16,7 +16,7 @@ from tecontroller.res import defaultconf as dconf
 from subprocess import Popen, PIPE
 import time
 import traceback
-
+import netifaces as ni
 
 import flask
 app = flask.Flask(__name__)
