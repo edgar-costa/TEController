@@ -14,7 +14,7 @@ generate the desired traffic in the network.
 from tecontroller.res import defaultconf as dconf
 
 from subprocess import Popen, PIPE
-from time import sleep
+import time
 import traceback
 
 
@@ -43,7 +43,7 @@ def trafficGeneratorSlave():
 
 if __name__ == "__main__":
     #Waiting for the IP's to be assigned...
-    sleep(tgconfig.InitialWaitingTime)
+    time.sleep(tgconfig.InitialWaitingTime)
     
     #Searching for host's own interfaces
     proc = Popen(['netstat', '-i'], stdout=PIPE)

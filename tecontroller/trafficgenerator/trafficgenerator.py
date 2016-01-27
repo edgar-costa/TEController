@@ -160,7 +160,7 @@ def trafficGeneratorCommandListener():
         
 if __name__ == '__main__':
     # Wait for the network to be created correcly: IP's assigned, etc.
-    sleep(dconf.InitialWaitingTime)
+    time.sleep(dconf.InitialWaitingTime)
     
     # Start the traffic generator object
     tg = TrafficGenerator()
