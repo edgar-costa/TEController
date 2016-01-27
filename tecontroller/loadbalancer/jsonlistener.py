@@ -1,4 +1,5 @@
 #!/usr/bin/python
+
 """This script is intended to be spawned as an independent thread by tecontroller.
 
 It basically listens for information sent by the traffic generator
@@ -10,6 +11,7 @@ shared queue eventQueue.
 from tecontroller.trafficgenerator.flow import Flow
 from tecontroller.loadbalancer.lbcontroller import eventQueue
 from tecontroller.res import defaultconf as dconf
+import netifaces as ni
 import time
 
 import flask 

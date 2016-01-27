@@ -1,6 +1,5 @@
-import Queue
-import threading
-
+"""
+"""
 from fibbingnode.algorithms.southbound_interface import SouthboundManager
 from fibbingnode.misc.igp_graph import IGPGraph
 
@@ -10,21 +9,33 @@ from fibbingnode import CFG
 from tecontroller.res import defaultconf as dconf
 
 import networkx as nx
+import threading
+import subprocess
 
+import shared
 
 C1_cfg = '/tmp/c1.cfg'
 
 HAS_INITIAL_GRAPH = threading.Event()
 
+lbcontroller_logfile = dconf.Hosts_LogFolder + "LBC_json.log"
+
+
+
+
 class MyGraphProvider(SouthboundManager):
+    """This class overrwides the received_initial_graph abstract method of
+    the SouthboundManager class. It is used to receive the initial
+    graph from the Fibbing controller.
 
+    The HAS_INITIAL_GRAPH is set when the method is called.
+
+    """
     def received_initial_graph(self):
-        HAS_INITIAL_GRAPH.set()
+        HAS_INITIAL_GRAPH.set()        
+
+
         
-
-eventQueue = Queue.Queue()
-
-
 class LBController(object):
     def __init__(self):
         """It basically reads the network topology from the MyGraphProvider,
@@ -34,21 +45,30 @@ class LBController(object):
         Here we are assuming that the topology does not change.        
         """
         self.flow_allocation = {}
-        self.eventQueue = eventQueue
-        self.timer = threading.Timer()
-        self._stop = threading.Event()
+        self.eventQueue = shared.eventQueue #From where to read events 
+        self.timer = threading.Timer() #Used to schedule flow alloc. removals
+        self._stop = threading.Event() #Used to stop the thread
         
-        CFG.read(C1_cfg)
-        db = TopologyDB(db=dconf.DB_path)
+        #CFG.read(C1_cfg)
+        #db = TopologyDB(db=dconf.DB_path)
+        
         sbmanager = MyGraphProvider(SouthboundManager)
         t = threading.Thread(target=sbmanager.run, name="Graph Listener")
         t.start()
-        HAS_INITIAL_GRAPH.wait()
+        HAS_INITIAL_GRAPH.wait() #Blocks until initial graph arrives
         self.network_graph = sbmanager.igp_graph
+
+        #spawn Json listener thread
+        lbc_lf = open(lbcontroller_logfile, 'w')
+        subprocess.Popen(['./jsonlistener.py'], stdin=None,
+                         stdout=lbc_lf, stderr=lbc_lf)
+        lbc_lf.close()
 
     def stop(self):
         """Stop the LBController correctly
         """
+        #Here we should deal with the handlers of the spawned threads
+        #and subprocesses...
         self._stop.set()
 
     def isStopped(self):
