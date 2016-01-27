@@ -5,23 +5,23 @@ Default configuration file
 PPATH = '/root/TEController/'
 
 # Hostname of the Traffic Engineering Controller host in the network.
-LBC_hostname = 'c3'
+LBC_Hostname = 'c3'
 
 # Hostname of the Traffic Generator host in the network.
-TG_hostname = 'c2'
+TG_Hostname = 'c2'
 
 #Port on which the JSON-aware thread of the LBC is listening
 LBC_JsonPort = 5000
 
 # Place where the topology information is being stored inside the vm
 # (and the hosts)
-DB_path = '/tmp/db.topo'
+DB_Path = '/tmp/db.topo'
 
 # Path of the Traffic Generator package
-TG_path = PPATH + 'tecontroller/trafficgenerator/'
+TG_Path = PPATH + 'tecontroller/trafficgenerator/'
 
 # Path to the Traffic Engineering controller package
-LBC_path = PPATH + 'tecontroller/loadbalancer/'
+LBC_Path = PPATH + 'tecontroller/loadbalancer/'
 
 # Default port for the json-daemons for the hosts in the network
 Hosts_JsonPort = 5000
