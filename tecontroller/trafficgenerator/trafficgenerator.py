@@ -45,10 +45,10 @@ class TrafficGenerator(Base):
         super(TrafficGenerator, self).__init__(*args, **kwargs)
         
         self.scheduler = sched.scheduler(time.time, time.sleep)
-        self.db = TopologyDB(db=cfg.DB_path)
+        self.db = TopologyDB(db=dconf.DB_path)
         
         #IP of the Traffic Engineering Controller.
-        self._lbc_ip = self.getHostIPByName(cfg.LBC_Hostname)
+        self._lbc_ip = self.getHostIPByName(dconf.LBC_Hostname)
 
 
     def getHostIPByName(self, hostname):

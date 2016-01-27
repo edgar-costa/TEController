@@ -43,7 +43,7 @@ def trafficGeneratorSlave():
 
 if __name__ == "__main__":
     #Waiting for the IP's to be assigned...
-    time.sleep(tgconfig.InitialWaitingTime)
+    time.sleep(dconf.InitialWaitingTime)
     
     #Searching for host's own interfaces
     proc = Popen(['netstat', '-i'], stdout=PIPE)
