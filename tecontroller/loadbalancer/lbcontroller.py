@@ -1,5 +1,15 @@
+#!/usr/bin/python
+
+"""Implements a flow-based load balancer using Fibbing. 
+
+Is built upon the Northbound controller, and balances the load of the
+network in terms of forwarding DAGs between source-destination pairs.
+
+Receives flow demands from the custom built Traffic Generator, through
+a Json-Rest interface.
+
 """
-"""
+
 from fibbingnode.algorithms.southbound_interface import SouthboundManager
 from fibbingnode.misc.igp_graph import IGPGraph
 
@@ -14,13 +24,9 @@ import subprocess
 
 import shared
 
-C1_cfg = '/tmp/c1.cfg'
-
 HAS_INITIAL_GRAPH = threading.Event()
 
 lbcontroller_logfile = dconf.Hosts_LogFolder + "LBC_json.log"
-
-
 
 
 class MyGraphProvider(SouthboundManager):
@@ -46,24 +52,27 @@ class LBController(object):
         """
         self.flow_allocation = {}
         self.eventQueue = shared.eventQueue #From where to read events 
-        self.timer = threading.Timer() #Used to schedule flow alloc. removals
+        self.timer_handlers = [] #threading.Timer() #Used to schedule flow alloc. removals
         self._stop = threading.Event() #Used to stop the thread
-        
-        #CFG.read(C1_cfg)
-        #db = TopologyDB(db=dconf.DB_path)
-        
-        sbmanager = MyGraphProvider(SouthboundManager)
+
+        CFG.read(dconf.C1_Cfg) #Must be called before create instance
+                               #of SouthboundManager
+        db = TopologyDB(db=dconf.DB_Path)
+
+        sbmanager = MyGraphProvider()
         t = threading.Thread(target=sbmanager.run, name="Graph Listener")
         t.start()
         HAS_INITIAL_GRAPH.wait() #Blocks until initial graph arrives
         self.network_graph = sbmanager.igp_graph
 
         #spawn Json listener thread
-        lbc_lf = open(lbcontroller_logfile, 'w')
-        subprocess.Popen(['./jsonlistener.py'], stdin=None,
-                         stdout=lbc_lf, stderr=lbc_lf)
-        lbc_lf.close()
+        #lbc_lf = open(lbcontroller_logfile, 'w')
+        #subprocess.Popen(['./jsonlistener.py'], stdin=None,
+        #                 stdout=lbc_lf, stderr=lbc_lf)
+        #lbc_lf.close()
 
+        import ipdb; ipdb.set_trace() #SET TRACEEEEEEEEEEEEEEEEEEEEEEEEE
+        
     def stop(self):
         """Stop the LBController correctly
         """
@@ -126,12 +135,6 @@ class LBController(object):
             self.flow_allocation[path].append(flow)
         else:
             self.flow_allocation[path] = [flow]
-
-
-
-
-
-
 
             
 class GreedyLBController(LBController):
