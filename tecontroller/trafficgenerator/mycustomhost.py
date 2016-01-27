@@ -39,13 +39,13 @@ class MyCustomHost(_node.Host):
         super(MyCustomHost, self).__init__(*args, **kwargs)
 
         if 'isTrafficGenerator' in kwargs.keys() and kwargs.get('isTrafficGenerator') == True:
-            log.info("Starting Traffic Generator\n")
+            log.info("\nStarting Traffic Generator\n")
             tgl = open(tg_logfile, 'w')
             tg = self.popen(dconf.TG_Path+'trafficgenerator.py',
                                            stdin=None, stdout=tgl, stderr=tgl)
             
         elif 'isLBController' in kwargs.keys() and kwargs.get('isLBController') == True:
-            log.info("Starting LoadBalancing Controller\n")
+            log.info("\nStarting LoadBalancing Controller\n")
             
             tec = self.popen(dconf.LBC_Path+'lbcontroller.py', stdin=None,
                              stdout=None, stderr=None)
@@ -57,18 +57,17 @@ class MyCustomHost(_node.Host):
             d = open(daemon_file, 'w')
             
             #Spawn the iperf server process
-            log.info('Host %s: Creating iperf server process, port %s\n'%(self.name, dconf.Hosts_DefaultIperfPort))
+            log.info('\nHost %s: Creating iperf server process, port %s\n'%(self.name, dconf.Hosts_DefaultIperfPort))
             iperf_server_process = self.popen('iperf', '-u', '-s',
                                               '-p', dconf.Hosts_DefaultIperfPort,
                                               '-i', '1', stdin=None,
                                               stdout=i, stderr=i)
             
             #Spawn the custom daemon process
-            log.info('Host %s: Creating custom daemon process\n'%self.name)
+            log.info('\nHost %s: Creating custom daemon process\n'%self.name)
             custom_daemon_process = self.popen(dconf.TG_Path +
                                                'customiperfdaemon.py',
                                                stdin=None, stdout=d,
                                                stderr=d)
-            
             i.close()
             d.close()

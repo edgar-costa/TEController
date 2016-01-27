@@ -122,7 +122,7 @@ class TrafficGenerator(Base):
                         start_time = s_t,
                         duration = dur)
             #Schedule flow creation
-            self.scheduler.enter(flow['start_time'], 1, self.createFlow, ([flow]))
+            self.scheduler.enter(flow['start_time'], 1, self._createFlow, ([flow]))
 
         self.scheduler.run()
 

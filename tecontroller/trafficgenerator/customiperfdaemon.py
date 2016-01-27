@@ -12,11 +12,13 @@ generate the desired traffic in the network.
 
 """
 from tecontroller.res import defaultconf as dconf
+from tecontroller.trafficgenerator import flow
 
 from subprocess import Popen, PIPE
 import time
 import traceback
 import netifaces as ni
+import sys
 
 import flask
 app = flask.Flask(__name__)
@@ -31,9 +33,12 @@ def trafficGeneratorSlave():
 
     """
     flow = flask.request.json
+    aux = flow.Base()
+    size = aux.setSizeToStr(flow['size'])    
+
     try:
         Popen(["iperf", "-c", flow['dst'], "-u",
-               "-b", str(flow['size']),
+               "-b", size,
                "-t", str(flow['duration']),
                "-p", str(flow['dport'])])
     except Exception, err:
@@ -61,5 +66,5 @@ if __name__ == "__main__":
     #Searching for the interface's IP addr
     ni.ifaddresses(MyETH0Iface)
     MyOwnIp = ni.ifaddresses(MyETH0Iface)[2][0]['addr']
-    print 'Interface: %s, IPaddr: %s'%(MyETH0Iface, MyOwnIp)
+    sys.stdout.write('Interface: %s, IPaddr: %s'%(MyETH0Iface, MyOwnIp))
     app.run(host=MyOwnIp, port=dconf.Hosts_JsonPort)

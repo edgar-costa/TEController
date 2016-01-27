@@ -38,7 +38,8 @@ class Base(object):
     def setSizeToStr(self, size):
         """Expects an integer representing number of bytes as input.
         """
-        units = [('G', 1e9), ('M', 1e6), ('K', 1e3), ('B', 1)]
+        #units = [('G', 1e9), ('M', 1e6), ('K', 1e3), ('B', 1)]
+        units = [('M', 1e6), ('K', 1e3)] #only K and M are supported by iperf
         string = "%.3f"
         for (unit, value) in units:
             q, r = divmod(size, value)
