@@ -11,7 +11,7 @@ generator and creates the corresponding iperf client sessions that
 generate the desired traffic in the network.
 
 """
-import tecontroller.res import defaultconf as dconf
+from tecontroller.res import defaultconf as dconf
 
 from subprocess import Popen, PIPE
 from time import sleep
