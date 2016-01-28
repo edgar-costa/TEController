@@ -17,6 +17,8 @@ from tecontroller.trafficgenerator.mycustomhost import MyCustomHost
 from tecontroller.trafficgenerator.trafficgenerator import TrafficGenerator
 from tecontroller.res import defaultconf as dconf
 
+import networkx as nx
+
 DB_path = '/tmp/db.topo'
 C1_cfg = '/tmp/c1.cfg'
 
@@ -33,7 +35,46 @@ S1 = 's1'
 S2 = 's2'
 D2 = 'd2'
 
-BW = 1  # Absurdly low bandwidth for easy congestion
+BW = 1  # Absurdly low bandwidth for easy congestion (in Mb)
+
+class SimpleTopo(IPTopo):
+    def build(self, *args, **kwargs):
+        """
+
+                  +---+
+               ___|R3 |__
+            2 /   +---+  \2
+             /            \
+ +--+      +----+   10   +---+        +--+
+ |S1|------| R1 |--------| R2|--------|D1|
+ +--+      +----+        +---+        +--+
+              |            |       
+            +---+        +---+     
+            |C1 |        |LBC|     
+            +---+        +---+     
+        """
+        r1 = self.addRouter(R1)
+        r2 = self.addRouter(R2)
+        r3 = self.addRouter(R3)
+        self.addLink(r1, r2, cost = 10)
+        self.addLink(r1, r3, cost = 3)
+        self.addLink(r3, r2, cost = 3)
+        
+        
+        s1 = self.addHost(S1)
+        d1 = self.addHost(D1)
+
+        self.addLink(s1, r1)
+        self.addLink(d1, r2)
+
+        # Adding Fibbing Controller
+        c1 = self.addController(C1, cfg_path=C1_cfg)
+        self.addLink(c1, r1, cost = 10000)
+
+        # Adding Traffic Engineering Controller
+        c3 = self.addHost(LBC, isLBController=True)
+        self.addLink(c3, r2)
+ 
 
 class SIGTopo(IPTopo):
     def build(self, *args, **kwargs):
@@ -68,20 +109,20 @@ class SIGTopo(IPTopo):
 
         s1 = self.addHost(S1)
         d1 = self.addHost(D1)
-        s2 = self.addHost(S2)
-        d2 = self.addHost(D2)
+        #s2 = self.addHost(S2)
+        #d2 = self.addHost(D2)
         self.addLink(s1, r1)
-        self.addLink(s2, r1)
+        #self.addLink(s2, r1)
         self.addLink(d1, r3)
-        self.addLink(d2, r3)
+        #self.addLink(d2, r3)
 
         # Adding Fibbing Controller
         c1 = self.addController(C1, cfg_path=C1_cfg)
-        self.addLink(c1, r4, cost=10000)
+        self.addLink(c1, r4, cost=999)
 
         # Adding Traffic Generator Host
-        c2 = self.addHost(TG, isTrafficGenerator=True) 
-        self.addLink(c2, r4)
+        #c2 = self.addHost(TG, isTrafficGenerator=True) 
+        #self.addLink(c2, r4)
 
         # Adding Traffic Engineering Controller
         c3 = self.addHost(LBC, isLBController=True)
@@ -89,7 +130,7 @@ class SIGTopo(IPTopo):
 
 
 def launch_network():
-    net = IPNet(topo=SIGTopo(),
+    net = IPNet(topo=SimpleTopo(),
                 debug=_lib.DEBUG_FLAG,
                 intf=custom(TCIntf, bw=BW),
                 host=MyCustomHost)
