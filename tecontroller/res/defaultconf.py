@@ -17,6 +17,10 @@ LBC_JsonPort = 5000
 # (and the hosts)
 DB_Path = '/tmp/db.topo'
 
+# File where the parameters to connect to the Southbound controller
+# are found
+C1_Cfg = '/tmp/c1.cfg'
+
 # Path of the Traffic Generator package
 TG_Path = PPATH + 'tecontroller/trafficgenerator/'
 
