@@ -43,7 +43,7 @@ class SimpleTopo(IPTopo):
 
                   +---+
                ___|R3 |__
-            2 /   +---+  \2
+            3 /   +---+  \3
              /            \
  +--+      +----+   10   +---+        +--+
  |S1|------| R1 |--------| R2|--------|D1|
@@ -69,7 +69,7 @@ class SimpleTopo(IPTopo):
 
         # Adding Fibbing Controller
         c1 = self.addController(C1, cfg_path=C1_cfg)
-        self.addLink(c1, r1, cost = 10000)
+        self.addLink(c1, r1, cost = 1000)
 
         # Adding Traffic Engineering Controller
         c3 = self.addHost(LBC, isLBController=True)
@@ -140,15 +140,12 @@ def launch_network():
     net.stop()
 
 
-
+# Not used
 def launch_controller():
     CFG.read(C1_cfg)
     db = TopologyDB(db=DB_path)
-
     manager = SouthboundManager(optimizer=OSPFSimple())
-    import ipdb; ipdb.set_trace() #TRACEEEEEEEEEEEEEEE
-
-    
+    import ipdb; ipdb.set_trace() #TRACEEEEEEEEEEEEEEE    
     manager.simple_path_requirement(db.subnet(R3, D1), [db.routerid(r)
                                                         for r in (R1, R2, R3)])
     manager.simple_path_requirement(db.subnet(R3, D2), [db.routerid(r)
