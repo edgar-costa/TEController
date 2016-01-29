@@ -17,6 +17,7 @@ from fibbingnode.misc.mininetlib.ipnet import TopologyDB
 from fibbingnode import CFG
 
 from tecontroller.res import defaultconf as dconf
+from tecontroller.res import path
 
 import networkx as nx
 import threading
@@ -137,6 +138,9 @@ class LBController(DatabaseHandler):
         # Fill the host2Ip and router2ip attributes
         self._createHost2IPBindings()
         self._createRouter2IPBindings()
+
+        # Create the key entries for the flow_allocation data structure
+        self._createInitialPaths()
         
         #spawn Json listener thread
         #lbc_lf = open(lbcontroller_logfile, 'w')
@@ -169,7 +173,7 @@ class LBController(DatabaseHandler):
                     ip_iface_host = self._db_getIPDBFromHostName(name)
                     ip_iface_router = self._db_getSubnetFromHostName(name)
                     self.hosts_to_ip[name] = {'iface_host': ip_iface_host,
-                                                     'iface_router': ip_iface_router}
+                                              'iface_router': ip_iface_router}
 
     def _createRouter2IPBindings(self):
         """Fills the dictionary self.routers_to_ip with the corresponding
@@ -181,7 +185,18 @@ class LBController(DatabaseHandler):
                 name = self._db_getNameFromIP(node_ip)
                 self.routers_to_ip[name] = node_ip
 
-                
+
+
+    def _createInitialPaths(self):
+        """
+        """
+        all_pairs = nx.all_pairs_dijkstra_path(self.network_graph)
+        for src, data in all_pairs.iteritems():
+            for dst, route in data.iteritems():
+                #self.network_graph.edge
+                new_path = path.Path(src=src, dst=dst, route=route)#, edges=edges)
+                #self.
+
     def getNodeName(self, ip):
         """Returns the name of the host/or subnet of hosts, given the IP.
 
