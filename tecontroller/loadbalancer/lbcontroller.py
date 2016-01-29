@@ -210,14 +210,20 @@ class LBController(DatabaseHandler):
 
 
     def _createInitialPaths(self):
-        """
+        """{(x, y):{'bw':1, 'weight':4},
+            (y, u):{...}
         """
         all_pairs = nx.all_pairs_dijkstra_path(self.network_graph)
         for src, data in all_pairs.iteritems():
             for dst, route in data.iteritems():
-                #self.network_graph.edge
-                new_path = path.Path(src=src, dst=dst, route=route)#, edges=edges)
-                #self.
+                edge_data = {}
+                for i, v in enumerate(route):
+                    if i<len(route)-1:
+                        edge_data[(route[i], route[i+1])] = self.network_graph.get_edge_data(route[i], route[i+1])
+                new_path = path.Path(src=src, dst=dst, route=route, edges=edge_data)
+                d = {}
+                d[new_path] = []
+                self.flow_allocation[(src, dst)] = d
 
     def getNodeName(self, ip):
         """Returns the name of the host/or subnet of hosts, given the IP.
