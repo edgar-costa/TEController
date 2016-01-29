@@ -130,7 +130,7 @@ class SIGTopo(IPTopo):
 
 
 def launch_network():
-    net = IPNet(topo=SimpleTopo(),
+    net = IPNet(topo=SIGTopo(),
                 debug=_lib.DEBUG_FLAG,
                 intf=custom(TCIntf, bw=BW),
                 host=MyCustomHost)
