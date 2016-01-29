@@ -10,26 +10,38 @@ class Path(object):
     network
 
     """
-    def __init__(self, nodes=[], edges={}):
-        self.nodes = nodes #Ordered list of nodes in the path. Nodes can
-                           #be prefixes or routers.
+    def __init__(self, src=None, dst=None, route=[], edges={}):
+        self.src=src
+        self.dst=dst
+        self.route = route #Ordered list of nodes in the path. Nodes
+                           #can be prefixes or routers.
         self.index = 0
         self.edges = edges #Dictionary containing information about the
                            #edges of the path: {(x, y):{'bw':1, 'weight':4},
                            #                    (y, u):{...}
 
     def __repr__(self):
-        return str(self.nodes)
+        S = "(%s -> %s)"
+        return S%(self.src, self.dst)#+str(self.route)
 
-    def getNodes(self):
-        return self.nodes
-
+    def getRoute(self):
+        return self.route
+    
+    def setRoute(self, route):
+        self.route = route
+        if nodes:
+            self.src = route[0]
+            self.dst = route[-1]
+        else:
+            self.src = None
+            self.dst = None
+            
     def getEdges(self):
         return self.edges
 
     def iter_nodes(self):
-        for index in range(len(self.nodes)):
-            yield self.nodes[index]
+        for index in range(len(self.route)):
+            yield self.route[index]
 
     def iter_edges(self):
         for (edge, data) in self.edges.iteritems():
