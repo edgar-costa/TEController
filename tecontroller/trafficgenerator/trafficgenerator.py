@@ -20,7 +20,7 @@ server to wait for further commands.
 from fibbingnode.misc.mininetlib.ipnet import TopologyDB
 from fibbingnode.misc.mininetlib import get_logger
 
-from tecontroller.trafficgenerator.flow import Flow, Base
+from tecontroller.res.flow import Flow, Base
 from tecontroller.res import defaultconf as dconf
 
 from threading import Thread 

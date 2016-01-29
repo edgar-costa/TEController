@@ -12,7 +12,7 @@ generate the desired traffic in the network.
 
 """
 from tecontroller.res import defaultconf as dconf
-from tecontroller.trafficgenerator import flow
+from tecontroller.res import flow
 
 from subprocess import Popen, PIPE
 import time
