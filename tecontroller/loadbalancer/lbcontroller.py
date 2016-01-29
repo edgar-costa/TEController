@@ -71,7 +71,8 @@ class DatabaseHandler(object):
                             if ip_iface.network == ip_iface2.network:
                                 return name
 
-    def _db_getIPDBFromHostName(self, name):
+
+    def _db_getIPFromHostName(self, name):
         """Given the name of the host/host subnet, it returns the ip address
         of the interface in the hosts side. It is obtained from TopoDB
 
@@ -83,6 +84,8 @@ class DatabaseHandler(object):
             ip = [ipaddress.ip_interface(v['ip']) for v in
                   values.values() if isinstance(v, dict)][0]
             return ip.compressed
+
+
         
     def _db_getSubnetFromHostName(self, hostname):
         """Given the hostname of a host (e.g 's1'), returns the subnet address
@@ -99,8 +102,24 @@ class DatabaseHandler(object):
                     return self.db.subnet(hostname, rname)
         else:
             raise TypeError("Routers can't")
+
+
+    def _db_getConnectedRouter(self, hostname):
+        """Get connected router information from hostname given its name.
+
+        """
+        hostinfo = [values for name, values in
+                    self.db.network.iteritems() if name == hostname
+                    and values['type'] != 'router'][0]
+        if hostinfo is not None:
+            for key, val in hostinfo.iteritems():
+                if isinstance(val, dict) and 'ip' in val.keys():
+                    router_name = key
+                    router_id = self._db_getIPFromHostName(router_name)
+                    return router_name, router_id
+
+
                 
-            
 class LBController(DatabaseHandler):
 
     def __init__(self):
@@ -170,10 +189,13 @@ class LBController(DatabaseHandler):
             if not self.network_graph.is_controller(node_ip) and not self.network_graph.is_router(node_ip):
                 name = self._db_getNameFromIP(node_ip)
                 if name:
-                    ip_iface_host = self._db_getIPDBFromHostName(name)
+                    ip_iface_host = self._db_getIPFromHostName(name)
                     ip_iface_router = self._db_getSubnetFromHostName(name)
+                    router_name, router_id = self._db_getConnectedRouter(name) 
                     self.hosts_to_ip[name] = {'iface_host': ip_iface_host,
-                                              'iface_router': ip_iface_router}
+                                              'iface_router': ip_iface_router,
+                                              'router_name': router_name,
+                                              'router_id': router_id}
 
     def _createRouter2IPBindings(self):
         """Fills the dictionary self.routers_to_ip with the corresponding
