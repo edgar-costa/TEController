@@ -93,7 +93,7 @@ class DatabaseHandler(object):
         
         if hostinfo is not None:
             for key, val in hostinfo.iteritems():
-                if isinstance(val, dict) and 'ip' in val.values():
+                if isinstance(val, dict) and 'ip' in val.keys():
                     rname = key
                     return self.db.subnet(hostname, rname)
         else:
@@ -116,7 +116,8 @@ class LBController(DatabaseHandler):
         self.timer_handlers = [] #threading.Timer() #Used to schedule
                                  #flow alloc. removals
         self._stop = threading.Event() #Used to stop the thread
-        self.hostsName2IpSubnet = {}
+        self.hosts_to_ip = {}
+        self.routers_to_ip = {}
         
         CFG.read(dconf.C1_Cfg) #Must be called before create instance
                                #of SouthboundManager
@@ -133,14 +134,16 @@ class LBController(DatabaseHandler):
         # Include BW data inside network graph
         self._readBwDataFromDB()
 
-        # Fill the name2Ip attribute
-        self._createName2IpBindings()
+        # Fill the host2Ip and router2ip attributes
+        self._createHost2IPBindings()
+        self._createRouter2IPBindings()
         
         #spawn Json listener thread
         #lbc_lf = open(lbcontroller_logfile, 'w')
         #subprocess.Popen(['./jsonlistener.py'], stdin=None,
         #                 stdout=lbc_lf, stderr=lbc_lf)
         #lbc_lf.close()
+
         
     def _readBwDataFromDB(self):
         """Introduces BW data from /tmp/db.topo into the network DiGraph
@@ -154,9 +157,10 @@ class LBController(DatabaseHandler):
             if xname and yname:
                 data['bw'] = self.db.bandwidth(xname, yname)
         
-    def _createName2IpBindings(self):
-        """Fills the dictionary self.name2Ip with the corresponding name-ip
-        pairs
+    def _createHost2IPBindings(self):
+        """Fills the dictionary self.hosts_to_ip with the corresponding
+        name-ip pairs
+
         """
         for node_ip in self.network_graph.nodes():
             if not self.network_graph.is_controller(node_ip) and not self.network_graph.is_router(node_ip):
@@ -164,13 +168,30 @@ class LBController(DatabaseHandler):
                 if name:
                     ip_iface_host = self._db_getIPDBFromHostName(name)
                     ip_iface_router = self._db_getSubnetFromHostName(name)
-                    self.hostsName2IpSubnet[name] = {'iface_host': ip_iface_host,
+                    self.hosts_to_ip[name] = {'iface_host': ip_iface_host,
                                                      'iface_router': ip_iface_router}
+
+    def _createRouter2IPBindings(self):
+        """Fills the dictionary self.routers_to_ip with the corresponding
+        name-ip pairs
+
+        """
+        for node_ip in self.network_graph.nodes():
+            if self.network_graph.is_router(node_ip):
+                name = self._db_getNameFromIP(node_ip)
+                self.routers_to_ip[name] = node_ip
+
                 
     def getNodeName(self, ip):
-        pass
-                
-                
+        """Returns the name of the host/or subnet of hosts, given the IP.
+
+        """
+        name = [name for name, values in
+                self.hostName2IpSubnet.iteritems() if ip in
+                values.values()][0]
+        return name
+    
+    
     def getEdgeBw(self, x, y):
         """
         Returns the total bandwidth of the link between x and y
@@ -207,9 +228,6 @@ class LBController(DatabaseHandler):
                 print "Unknown Event:"
                 print event
 
-
-
-                
     def assignFlowToPath(self, flow, path):
         pass
 
