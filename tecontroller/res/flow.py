@@ -3,6 +3,7 @@ This module defines the flow object
 """
 
 from tecontroller.res import defaultconf as dconf
+import ipaddress as ip
 import requests
 
 
@@ -92,54 +93,100 @@ class Flow(Base):
     """
     This class implements a flow object.
     """
-    def __init__(self, src = "0.0.0.0", dst = "0.0.0.0", sport = '5001',
-                 dport = '5001', size = 1, start_time = '10s',
-                 duration = '1m', *args, **kwargs):
+    def __init__(self, src = ip.ip_address('0.0.0.0'),
+                 dst = ip.ip_address("0.0.0.0"),
+                 sport = '5001', dport = '5001', size = 1,
+                 start_time = '10s', duration = '1m', *args, **kwargs):
+    
         super(Flow, self).__init__(*args, **kwargs)
-        self.src = src
-        self.dst = dst
+        self.src = self._setAddr(src)
+        self.dst = self._setAddr(dst)
         self.sport = sport
         self.dport = dport
         self.size = self.setSizeToInt(size)
         self.start_time = self.setTimeToInt(start_time)
         self.duration = self.setTimeToInt(duration)
 
+    def _setAddr(self, ipaddr):
+        if not isinstance(ipaddr, ip.IPv4Interface):
+            if not isinstance(ipaddr, ip.IPv4Address):
+                if '/' in ipaddr: #regarded as interface
+                    return ip.ip_interface(ipaddr)
+                else:
+                    return ip.ip_address(ipaddr)    
+            else:
+                return ipaddr
+        else:
+            return ipaddr
+
+                
     def __repr__(self):
+        a = "Flow(%s:%s->%s:%s)"
+        return a%(self.src.compressed, self.sport,
+                  self.dst.compressed, self.dport)
+        
+    def __str__(self):
         a = "Src: %s:%s, Dst: %s:%s, Size: %s, Start_time: %s, Duration: %s" 
-        return a%(self.src, self.sport, self.dst, self.dport,
-                  self.size, self.setTimeToStr(self.start_time),
+        return a%(self.src.compressed, self.sport,
+                  self.dst.compressed, self.dport,
+                  self.setSizeToStr(self.size),
+                  self.setTimeToStr(self.start_time),
                   self.setTimeToStr(self.duration))
 
     def __setitem__(self, key, value):
         if key not in ['src','dst','sport','dport','size','start_time','duration']:
             raise Error
+        elif key in ['src', 'dst']:
+            if not isinstance(value, ip.IPv4Interface):
+                if not isinstance(value, ip.IPv4Address):
+                    if '/' in value: #regarded as interface
+                        self.__setattr__(key, ip.ip_interface(value))
+                    else:
+                        self.__setattr__(key, ip.ip_address(value))
+                else:
+                    self.__setattr__(key, value)
+            else:
+                self.__setattr__(key, value)
         else:
             self.__setattr__(key, value)
 
+            
     def __getitem__(self, key):
         if key not in ['src','dst','sport','dport','size','start_time','duration']:
             raise Error
         else:
             return self.__getattribute__(key)
-        
+
+    def __eq__(self, other):
+        return (isinstance(other, self.__class__) and self.__dict__ == other.__dict__)
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+    
+
     def toJSON(self):
         """Returns the JSON-REST string that identifies this flow
         """
-        flow = {"src": self.src, "dst": self.dst, "sport":
+        flow = {"src": self.src.compressed, "dst": self.dst.compressed, "sport":
                 self.sport, "dport": self.dport, "size": self.size,
                 "start_time": self.start_time, "duration": self.duration}
         return flow
 
 
-    def informCustomDaemon(self, ip):
+    def informCustomDaemon(self, daemon_addr):
         """This method is only useful for testing !!! Normally the method
         under TrafficGenerator should be used instead.
-
+        
         Part of the code that deals with the JSON interface to inform to
         LBController a new flow created in the network.
 
         """
-        url = "http://%s:%s/startflow" %(ip, dconf.LBC_JsonPort)
+        if isinstance(daemon_addr, ip.IPv4Interface):
+            daemon_addr = daemon_addr.ip.compressed
+        elif isinstance(daemon_addr, ip.IPv4Address):
+            daemon_addr = daemon_addr.compressed
+
+        url = "http://%s:%s/startflow" %(daemon_addr, dconf.LBC_JsonPort)
         #log.info("URL OF Flow.informCustomDaemonu: %s\n"%url)
         requests.post(url, json = self.toJSON())
 

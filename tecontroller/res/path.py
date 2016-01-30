@@ -20,10 +20,24 @@ class Path(object):
                            #edges of the path: {(x, y):{'bw':1, 'weight':4},
                            #                    (y, u):{...}
 
-    def __repr__(self):
-        S = "(%s -> %s)"
-        return S%(self.src, self.dst)#+str(self.route)
+    def __eq__(self, other):
+         return (isinstance(other, self.__class__) and self.__dict__
+                 == other.__dict__)
+                           
+    def __ne__(self, other):
+        return not self.__eq__(other)
 
+    def __repr__(self):
+        S = "Path(%s)"
+        return S%(self.route)
+    
+    def __str__(self):
+        S = "(%s -> %s): "
+        return S%(self.src, self.dst)+str(self.route)
+
+    def coincidentPaths(self, other):
+        []
+    
     def getRoute(self):
         return self.route
     
