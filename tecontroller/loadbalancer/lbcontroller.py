@@ -72,12 +72,13 @@ class DatabaseHandler(object):
                                 return name
 
 
-    def _db_getIPFromHostName(self, name):
-        """Given the name of the host/host subnet, it returns the ip address
+    def _db_getIPFromHostName(self, hostname):
+        """Given the hostname of the host/host subnet, it returns the ip address
         of the interface in the hosts side. It is obtained from TopoDB
 
+        It can also be called with a router name i.e: 'r1'
         """
-        values = self.db.network[name]
+        values = self.db.network[hostname]
         if values['type'] == 'router':
             return ipaddress.ip_address(values['routerid']).compressed
         else:
@@ -131,7 +132,9 @@ class LBController(DatabaseHandler):
 
         """
         super(LBController, self).__init__()
-        self.flow_allocation = {}
+        self.flow_allocation = {} # {(srcA, dstB): {path1: [flow1,flow2,...], path2},
+                                  #  (srcC, dstD): {path1: [flow3, flow6]}}
+                                  
         self.eventQueue = shared.eventQueue #From where to read events 
         self.timer_handlers = [] #threading.Timer() #Used to schedule
                                  #flow alloc. removals
@@ -166,6 +169,14 @@ class LBController(DatabaseHandler):
         #subprocess.Popen(['./jsonlistener.py'], stdin=None,
         #                 stdout=lbc_lf, stderr=lbc_lf)
         #lbc_lf.close()
+
+
+    def getPathFromFlow(self, flow):
+        dataflow.['src']
+        pass
+
+    def getFlowListFromPath(self, path):
+        pass
 
         
     def _readBwDataFromDB(self):
@@ -266,11 +277,13 @@ class LBController(DatabaseHandler):
             event = self.eventQueue.get() #Should be blocking?
             if event['type'] == 'newFlowStarted':
                 flow = event['data']
-                self.dealWithNewFlow(flow, algorithm='greedy')
+                self.dealWithNewFlow(flow)
             else:
                 print "Unknown Event:"
                 print event
 
+    
+                
     def assignFlowToPath(self, flow, path):
         pass
 
