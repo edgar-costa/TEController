@@ -109,12 +109,12 @@ class SIGTopo(IPTopo):
 
         s1 = self.addHost(S1)
         d1 = self.addHost(D1)
-        #s2 = self.addHost(S2)
-        #d2 = self.addHost(D2)
+        s2 = self.addHost(S2)
+        d2 = self.addHost(D2)
         self.addLink(s1, r1)
-        #self.addLink(s2, r1)
+        self.addLink(s2, r1)
         self.addLink(d1, r3)
-        #self.addLink(d2, r3)
+        self.addLink(d2, r3)
 
         # Adding Fibbing Controller
         c1 = self.addController(C1, cfg_path=C1_cfg)
@@ -130,7 +130,7 @@ class SIGTopo(IPTopo):
 
 
 def launch_network():
-    net = IPNet(topo=SIGTopo(),
+    net = IPNet(topo=SimpleTopo(),
                 debug=_lib.DEBUG_FLAG,
                 intf=custom(TCIntf, bw=BW),
                 host=MyCustomHost)
