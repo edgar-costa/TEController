@@ -133,8 +133,8 @@ class LBController(DatabaseHandler):
 
         """
         super(LBController, self).__init__()
-        self.flow_allocation = {} # {(srcA, dstB): {path1: [flow1,flow2,...], path2},
-                                  #  (srcC, dstD): {path1: [flow3, flow6]}}
+        self.flow_allocation = {} # {route1: {'path': path1, 'flows': [flow1,flow2]},
+                                  #  route2: {'path': path2, 'flows': [flow3, flow6]}}
                                   
         self.eventQueue = shared.eventQueue #From where to read events 
         self.timer_handlers = [] #threading.Timer() #Used to schedule
@@ -172,12 +172,23 @@ class LBController(DatabaseHandler):
     def getPathFromFlow(self, flow):
         """
         """
-        pass
+        path = [data['path'] for route, data
+                self.flow_allocation.iteritems() if flow in data['flows']]
+        if path != []:
+            return path[0]
+        else:
+            return []
 
     def getFlowListFromPath(self, path):
         """
         """
-        pass
+        flowlist = [data['flows'] for route, data
+                    self.flow_allocation.iteritems() if data['path']
+                    == path]
+        if flowlist != []:
+            return flowlist[0]
+        else:
+            return []
 
         
     def _readBwDataFromDB(self):
@@ -191,8 +202,8 @@ class LBController(DatabaseHandler):
             yname = self._db_getNameFromIP(y)
             if xname and yname:
                 bw = self.db.bandwidth(xname, yname)
-                data['bw'] = bw
-                data['capacity'] = bw
+                data['bw'] = bw*1e6
+                data['capacity'] = bw*1e6
         
     def _createHost2IPBindings(self):
         """Fills the dictionary self.hosts_to_ip with the corresponding
@@ -319,9 +330,12 @@ class LBController(DatabaseHandler):
         return edges
         
     def getMinCapacity(self, path):
+        """Returns the capacity of the lowest-capacity edge along the path.
         """
-        """
-        pass
+        edges_in_path = [self.network_graph.get_edge_data(path.route[i],
+                        path.route[i+1])['capacity'] for i in
+                        range(len(path)-1)]
+        return min(edges_in_path)
     
     def addFlowToPath(self, path, flow):
         """
