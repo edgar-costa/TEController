@@ -172,8 +172,9 @@ class LBController(DatabaseHandler):
     def getPathFromFlow(self, flow):
         """
         """
-        path = [data['path'] for route, data
-                self.flow_allocation.iteritems() if flow in data['flows']]
+        path = [data['path'] for route, data in
+                self.flow_allocation.iteritems() if flow in
+                data['flows']]
         if path != []:
             return path[0]
         else:
@@ -182,7 +183,7 @@ class LBController(DatabaseHandler):
     def getFlowListFromPath(self, path):
         """
         """
-        flowlist = [data['flows'] for route, data
+        flowlist = [data['flows'] for route, data in
                     self.flow_allocation.iteritems() if data['path']
                     == path]
         if flowlist != []:
@@ -319,7 +320,6 @@ class LBController(DatabaseHandler):
         return self.getMinCapacity(path) >= flow.size
 
 
-
     def getEdgesInfoFromRoute(self, route):
         """
         """
@@ -328,7 +328,8 @@ class LBController(DatabaseHandler):
                           route and y in route and
                           abs(route.index(x)-route.index(y)) == 1}
         return edges
-        
+
+    
     def getMinCapacity(self, path):
         """Returns the capacity of the lowest-capacity edge along the path.
         """
@@ -336,6 +337,7 @@ class LBController(DatabaseHandler):
                         path.route[i+1])['capacity'] for i in
                         range(len(path)-1)]
         return min(edges_in_path)
+
     
     def addFlowToPath(self, path, flow):
         """
@@ -347,24 +349,25 @@ class LBController(DatabaseHandler):
                                                 'path': path}
 
         # Substract flow size from edges capacity
-        for (x, y, data) in path.route[i]self.network_graph.edges(data=True):
-            if x in path.route and y in path.route and abs(path.route.index(x)-path.route.index())==1:
+        for (x, y, data) in self.network_graph.edges(data=True):
+            if x in path.route and y in path.route and abs(path.route.index(x)-path.route.index(y))==1:
                 data['capacity'] -= flow.size
 
         # Schedule flow removal
         self.scheduler.enter(flow['duration'], 1, self.removeFlowFromPath, ([path, flow]))
 
     def removeFlowFromPath(self, path, flow):        
+        """
+        """
         if path.route in self.flow_allocation.keys() and self.flow_allocation[path.route]['path'] == path: #exists already
             self.flow_allocation[path.route]['flows'].remove(flow)
         else:
             raise KeyError("The flow is not in the Path")
 
         # Add again flow size from edges capacity
-        for (x, y, data) in path.route[i]self.network_graph.edges(data=True):
-            if x in path.route and y in path.route and abs(path.route.index(x)-path.route.index())==1:
+        for (x, y, data) in self.network_graph.edges(data=True):
+            if x in path.route and y in path.route and abs(path.route.index(x)-path.route.index(y))==1:
                 data['capacity'] += flow.size
-
 
                 
     @abc.abstractmethod
@@ -384,9 +387,6 @@ class GreedyLBController(LBController):
         """
         pass
         
-
-
-
 
 
 
