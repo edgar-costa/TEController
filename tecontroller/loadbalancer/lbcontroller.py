@@ -133,8 +133,8 @@ class LBController(DatabaseHandler):
 
         """
         super(LBController, self).__init__()
-        self.flow_allocation = {} # {route1: {'path': path1, 'flows': [flow1,flow2]},
-                                  #  route2: {'path': path2, 'flows': [flow3, flow6]}}
+        self.flow_allocation = {} # {(route1): {'path': path1, 'flows': [flow1,flow2]},
+                                  #  (route2): {'path': path2, 'flows': [flow3, flow6]}}
                                   
         self.eventQueue = shared.eventQueue #From where to read events 
         self.timer_handlers = [] #threading.Timer() #Used to schedule
@@ -306,7 +306,7 @@ class LBController(DatabaseHandler):
         src_router_name, src_router_id = self._db_getConnectedRouter(src_name)
         dst_router_name, dst_router_id = self._db_getConnectedRouter(dst_name)
         
-        route = nx.dijkstra_path(self.network_graph, src_router_id, dst_router_id)
+        route = tuple(nx.dijkstra_path(self.network_graph, src_router_id, dst_router_id))
         edges = self.getEdgesInfoFromRoute(route)
         path = IPNetPath(route=route, edges=edges)
         return path
@@ -340,14 +340,38 @@ class LBController(DatabaseHandler):
     def addFlowToPath(self, path, flow):
         """
         """
-        pass
+        if path.route in self.flow_allocation.keys() and self.flow_allocation[path.route]['path'] == path: #exists already
+            self.flow_allocation[path.route]['flows'].append(flow)
+        else:
+            self.flow_allocation[path.route] = {'flows': [flow],
+                                                'path': path}
 
+        # Substract flow size from edges capacity
+        for (x, y, data) in path.route[i]self.network_graph.edges(data=True):
+            if x in path.route and y in path.route and abs(path.route.index(x)-path.route.index())==1:
+                data['capacity'] -= flow.size
+
+        # Schedule flow removal
+        self.scheduler.enter(flow['duration'], 1, self.removeFlowFromPath, ([path, flow]))
+
+    def removeFlowFromPath(self, path, flow):        
+        if path.route in self.flow_allocation.keys() and self.flow_allocation[path.route]['path'] == path: #exists already
+            self.flow_allocation[path.route]['flows'].remove(flow)
+        else:
+            raise KeyError("The flow is not in the Path")
+
+        # Add again flow size from edges capacity
+        for (x, y, data) in path.route[i]self.network_graph.edges(data=True):
+            if x in path.route and y in path.route and abs(path.route.index(x)-path.route.index())==1:
+                data['capacity'] += flow.size
+
+
+                
     @abc.abstractmethod
     def flowAllocationAlgorithm(self, flow):
         """
         """
-
-
+        
         
 class GreedyLBController(LBController):
     def __init__(self, *args, **kwargs):
