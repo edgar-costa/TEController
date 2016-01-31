@@ -24,6 +24,9 @@ import threading
 import subprocess
 import ipaddress
 import shared
+import sched
+import time
+import abc
 
 HAS_INITIAL_GRAPH = threading.Event()
 
@@ -141,7 +144,7 @@ class LBController(DatabaseHandler):
         self._stop = threading.Event() #Used to stop the thread
         self.hosts_to_ip = {}
         self.routers_to_ip = {}
-        
+        self.scheduler = sched.scheduler(time.time, time.sleep)
         CFG.read(dconf.C1_Cfg) #Must be called before create instance
                                #of SouthboundManager
 
@@ -161,8 +164,6 @@ class LBController(DatabaseHandler):
         self._createHost2IPBindings()
         self._createRouter2IPBindings()
 
-        # Create the key entries for the flow_allocation data structure
-        self._createInitialPaths()
         
         #spawn Json listener thread
         #lbc_lf = open(lbcontroller_logfile, 'w')
@@ -172,16 +173,19 @@ class LBController(DatabaseHandler):
 
 
     def getPathFromFlow(self, flow):
-        dataflow.['src']
+        """
+        """
         pass
 
     def getFlowListFromPath(self, path):
+        """
+        """
         pass
 
         
     def _readBwDataFromDB(self):
-        """Introduces BW data from /tmp/db.topo into the network DiGraph
-
+        """Introduces BW data from /tmp/db.topo into the network DiGraph and
+        sets the capacity to the link bandwidth.
         """
         for (x, y, data) in self.network_graph.edges(data=True):
             if 'C' in x or 'C' in y: # means is the controller...
@@ -189,12 +193,13 @@ class LBController(DatabaseHandler):
             xname = self._db_getNameFromIP(x)
             yname = self._db_getNameFromIP(y)
             if xname and yname:
-                data['bw'] = self.db.bandwidth(xname, yname)
+                bw = self.db.bandwidth(xname, yname)
+                data['bw'] = bw
+                data['capacity'] = bw
         
     def _createHost2IPBindings(self):
         """Fills the dictionary self.hosts_to_ip with the corresponding
         name-ip pairs
-
         """
         for node_ip in self.network_graph.nodes():
             if not self.network_graph.is_controller(node_ip) and not self.network_graph.is_router(node_ip):
@@ -211,7 +216,6 @@ class LBController(DatabaseHandler):
     def _createRouter2IPBindings(self):
         """Fills the dictionary self.routers_to_ip with the corresponding
         name-ip pairs
-
         """
         for node_ip in self.network_graph.nodes():
             if self.network_graph.is_router(node_ip):
@@ -220,25 +224,8 @@ class LBController(DatabaseHandler):
 
 
 
-    def _createInitialPaths(self):
-        """{(x, y):{'bw':1, 'weight':4},
-            (y, u):{...}
-        """
-        all_pairs = nx.all_pairs_dijkstra_path(self.network_graph)
-        for src, data in all_pairs.iteritems():
-            for dst, route in data.iteritems():
-                edge_data = {}
-                for i, v in enumerate(route):
-                    if i<len(route)-1:
-                        edge_data[(route[i], route[i+1])] = self.network_graph.get_edge_data(route[i], route[i+1])
-                new_path = path.Path(src=src, dst=dst, route=route, edges=edge_data)
-                d = {}
-                d[new_path] = []
-                self.flow_allocation[(src, dst)] = d
-
-    def getNodeName(self, ip):
+     def getNodeName(self, ip):
         """Returns the name of the host/or subnet of hosts, given the IP.
-
         """
         name = [name for name, values in
                 self.hostName2IpSubnet.iteritems() if ip in
@@ -248,11 +235,17 @@ class LBController(DatabaseHandler):
     
     def getEdgeBw(self, x, y):
         """
-        Returns the total bandwidth of the link between x and y
+        Returns the total bandwidth of the network edge between x and y
         """
         return self.network_graph.get_edge_data(x,y)['bw']
     
-        
+
+    def getEdgeCapacity(self, x, y):
+        """Returns the capacity of the network edge between x and y
+        """
+        return self.network_graph.get_edge_data(x,y)['capacity']
+
+    
     def stop(self):
         """Stop the LBController correctly
         """
@@ -281,28 +274,22 @@ class LBController(DatabaseHandler):
             else:
                 print "Unknown Event:"
                 print event
-
-    
                 
-    def assignFlowToPath(self, flow, path):
-        pass
-
-    def removeFlowFromPath(self, flow, path):
-        pass
-
-    def deletePathFromGraph(self, path):
-        pass
-    
     def dealWithNewFlow(self, flow):
-        currentPath = self.getCurrentPath(flow.src, flow.dst)
-        if self.canAllocateFlow(currentPath, flow):
-            updateFlowAllocationTable(currentPath, flow)
+        """
+        Treat new incoming flow.
+        """
+        defaultPath = self.getDefaultDijkstraPath(flow)
+        
+        if self.canAllocateFlow(defaultPath, flow):
+            self.addFlowToPath(defaultPath, flow)
         else:
-            path = self.getNewCongestionFreePath(flow)            
+            self.flowAllocationAlgorithm(flow)            
 
-    def getCurrentPath(self, src, dst):
+    def getDefaultDijkstraPath(self, flow):
         """Gives the current path from src to dest
         """
+        
         pass
 
     def canAllocateFlow(self, path, flow):
@@ -310,13 +297,18 @@ class LBController(DatabaseHandler):
         all links along the path from flow.src to src.dst,
 
         """
+        return self.getMinCapacity(path) >= flow.size
+
+
+    def getMinCapacity(self, path):
+        """
+        """
         pass
     
-    def updateFlowAllocationTable(path, flow):
-        if path in self.flow_allocation.keys():
-            self.flow_allocation[path].append(flow)
-        else:
-            self.flow_allocation[path] = [flow]
+    def addFlowToPath(self, path, flow):
+        """
+        """
+        pass
 
             
 class GreedyLBController(LBController):
@@ -324,6 +316,35 @@ class GreedyLBController(LBController):
         super(GreedyLBControllerLB, self).__init__(*args, **kwargs)
 
     
+    def flowAllocationAlgorithm(self, flow):
+        """
+        Implements abstract method
+        """
+        pass
+        
 
 
 
+
+
+
+
+"""
+ # Create the key entries for the flow_allocation data structure
+ self._createInitialPaths()
+
+
+    def _createInitialPaths(self):
+        all_pairs = nx.all_pairs_dijkstra_path(self.network_graph)
+        for src, data in all_pairs.iteritems():
+            for dst, route in data.iteritems():
+                edge_data = {}
+                for i, v in enumerate(route):
+                    if i<len(route)-1:
+                        edge_data[(route[i], route[i+1])] = self.network_graph.get_edge_data(route[i], route[i+1])
+                new_path = path.Path(src=src, dst=dst, route=route, edges=edge_data)
+                d = {}
+                d[new_path] = []
+                self.flow_allocation[(src, dst)] = d
+
+"""
