@@ -39,7 +39,6 @@ log = get_logger()
 
 class TrafficGenerator(Base):
     """Object that creates a Traffic Generator in the network.
-
     """
     def __init__(self, *args, **kwargs):
         super(TrafficGenerator, self).__init__(*args, **kwargs)
@@ -101,7 +100,6 @@ class TrafficGenerator(Base):
         """Creates a random schedule of random flows in the network. This will
         be useful later to evaluate the performance of the
         LBController.
-
         """
         pass
 
