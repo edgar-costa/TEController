@@ -17,7 +17,7 @@ from fibbingnode.misc.mininetlib.ipnet import TopologyDB
 from fibbingnode import CFG
 
 from tecontroller.res import defaultconf as dconf
-from tecontroller.res import path
+from tecontroller.res.path import IPNetPath
 
 import networkx as nx
 import threading
@@ -89,7 +89,6 @@ class DatabaseHandler(object):
                   values.values() if isinstance(v, dict)][0]
             return ip.compressed
 
-
         
     def _db_getSubnetFromHostName(self, hostname):
         """Given the hostname of a host (e.g 's1'), returns the subnet address
@@ -115,6 +114,7 @@ class DatabaseHandler(object):
         hostinfo = [values for name, values in
                     self.db.network.iteritems() if name == hostname
                     and values['type'] != 'router'][0]
+        
         if hostinfo is not None:
             for key, val in hostinfo.iteritems():
                 if isinstance(val, dict) and 'ip' in val.keys():
@@ -122,10 +122,8 @@ class DatabaseHandler(object):
                     router_id = self._db_getIPFromHostName(router_name)
                     return router_name, router_id
 
-
                 
 class LBController(DatabaseHandler):
-
     def __init__(self):
         """It basically reads the network topology from the MyGraphProvider,
         which is running in another thread because
@@ -153,17 +151,16 @@ class LBController(DatabaseHandler):
         t.start()
 
         HAS_INITIAL_GRAPH.wait() #Blocks until initial graph arrives
-
+                
         # Retreieve network from Fibbing Controller
         self.network_graph = sbmanager.igp_graph
-
+        
         # Include BW data inside network graph
         self._readBwDataFromDB()
-
+        
         # Fill the host2Ip and router2ip attributes
         self._createHost2IPBindings()
         self._createRouter2IPBindings()
-
         
         #spawn Json listener thread
         #lbc_lf = open(lbcontroller_logfile, 'w')
@@ -224,7 +221,7 @@ class LBController(DatabaseHandler):
 
 
 
-     def getNodeName(self, ip):
+    def getNodeName(self, ip):
         """Returns the name of the host/or subnet of hosts, given the IP.
         """
         name = [name for name, values in
@@ -244,7 +241,6 @@ class LBController(DatabaseHandler):
         """Returns the capacity of the network edge between x and y
         """
         return self.network_graph.get_edge_data(x,y)['capacity']
-
     
     def stop(self):
         """Stop the LBController correctly
@@ -279,18 +275,30 @@ class LBController(DatabaseHandler):
         """
         Treat new incoming flow.
         """
+        # Get the default OSFP Dijkstra path
         defaultPath = self.getDefaultDijkstraPath(flow)
-        
+
+        # If it can be allocated, no Fibbing is needed
         if self.canAllocateFlow(defaultPath, flow):
             self.addFlowToPath(defaultPath, flow)
         else:
+            # Otherwise, call the abstract method
             self.flowAllocationAlgorithm(flow)            
 
     def getDefaultDijkstraPath(self, flow):
         """Gives the current path from src to dest
         """
+        # We assume here that Flow is well formed, and that the
+        # interface addresses of the hosts are given.
+        src_name = self._db_getNameFromIP(flow['src'].compressed)
+        dst_name = self._db_getNameFromIP(flow['dst'].compressed)
+        src_router_name, src_router_id = self._db_getConnectedRouter(src_name)
+        dst_router_name, dst_router_id = self._db_getConnectedRouter(dst_name)
         
-        pass
+        route = nx.dijkstra_path(self.network_graph, src_router_id, dst_router_id)
+        edges = self.getEdgesInfoFromRoute(route)
+        path = IPNetPath(route=route, edges=edges)
+        return path
 
     def canAllocateFlow(self, path, flow):
         """Returns true if there is at least flow.size bandwidth available in
@@ -300,6 +308,16 @@ class LBController(DatabaseHandler):
         return self.getMinCapacity(path) >= flow.size
 
 
+
+    def getEdgesInfoFromRoute(self, route):
+        """
+        """
+        edges = {(x, y): data for (x, y, data) in
+                          self.network_graph.edges(data=True) if x in
+                          route and y in route and
+                          abs(route.index(x)-route.index(y)) == 1}
+        return edges
+        
     def getMinCapacity(self, path):
         """
         """
@@ -310,7 +328,13 @@ class LBController(DatabaseHandler):
         """
         pass
 
-            
+    @abc.abstractmethod
+    def flowAllocationAlgorithm(self, flow):
+        """
+        """
+
+
+        
 class GreedyLBController(LBController):
     def __init__(self, *args, **kwargs):
         super(GreedyLBControllerLB, self).__init__(*args, **kwargs)
