@@ -7,9 +7,8 @@ import ipaddress as ip
 class Path(object):
     """Implements the abstract path object representing the between nodes
     in a (general) network.
-
     """
-    def __init__(self, route=[], edges={}):
+    def __init__(self, route=(), edges={}):
 
         self.route = route #Ordered list of nodes in the path. Nodes
                            #can be prefixes or routers.
@@ -38,14 +37,16 @@ class Path(object):
             return self.__getattribute__(key)
 
     def _setSrc(self, route):
-        if route != []:
+        if route != ():
             return route[0]
         else:
             return None
 
+    def __len__(self):
+        return len(self.route)
 
     def _setDst(self, route):
-        if route != []:
+        if route != ():
             return route[-1]
         else:
             return None
@@ -58,13 +59,13 @@ class Path(object):
         return not self.__eq__(other)
 
     def __repr__(self):
-        S = "Path(%s)"
-        return S%(self.route)
+        #EEEEEEEERRRRRRRRRORR
+        S = "%s(%s)"
+        return S%(seself.route)
     
     def __str__(self):
         S = "(%s -> %s): "
         return S%(self.src, self.dst)+str(self.route)
-
 
     def coincidentPaths(self, other):
         """Checks if two paths coincede in some edge along their
@@ -76,7 +77,6 @@ class Path(object):
                    other.getEdges().keys()]
         return result != []
 
-
     def getCoincidentEdges(self, other):
         """Given two paths, returns the edge information of those edges
         present in both paths. Returns empty dictionary otherwise.
@@ -87,7 +87,6 @@ class Path(object):
                    other.getEdges().keys()}
         return result
                 
-
     def getEdgeInfo(self, x, y):
         """Given edge (x,y), searches (x,y) or (y,x) in path and returns edge
         information.
@@ -108,11 +107,10 @@ class Path(object):
         for (edge, data) in self.edges.iteritems():
             yield (edge, data)
 
-
 class IPNetPath(Path):
-    def __init__(self, route=[], edges={}):
+    def __init__(self, route=(), edges={}):
         super(IPNetPath, self).__init__(route, edges)          
-            
+
     def getMinBw(self):
         """Returns the lowest bandwidth found on links of the path
         """
