@@ -33,14 +33,10 @@ def newFlowStarted():
                 req['size'], req['start_time'], req['duration'])
     newFlowStartedEvent = {'type': 'newFlowStarted', 'data': flow}
     shared.eventQueue.put(newFlowStartedEvent, block=True)
+    log.info("DO I GET HERE? YES\n")
     shared.eventQueue.task_done()
 
 if __name__ == "__main__":
-    #Wait a bit until IP addresses have been assigned. We can do that,
-    #since the Traffic Generator also waits some time before starting
-    #to orchestraste traffic.
-    time.sleep(dconf.InitialWaitingTime)
-    
     #Searching for the interface's IP addr
     MyETH0Iface = 'c3-eth0'
     ni.ifaddresses(MyETH0Iface)
