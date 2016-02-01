@@ -151,10 +151,10 @@ class LBController(DatabaseHandler):
         sbmanager = MyGraphProvider()
         t = threading.Thread(target=sbmanager.run, name="Graph Listener")
         t.start()
-        log.info("Graph Listener thread started\n")
+        log.info("LOG: Graph Listener thread started\n")
 
         HAS_INITIAL_GRAPH.wait() #Blocks until initial graph arrives
-        log.info("Initial graph received\n")
+        log.info("LOG: Initial graph received\n")
                  
         # Retreieve network from Fibbing Controller
         self.network_graph = sbmanager.igp_graph
@@ -171,11 +171,11 @@ class LBController(DatabaseHandler):
         try:
             subprocess.Popen(['./jsonlistener.py'], stdin=None,
                              stdout=lbc_lf, stderr=lbc_lf)
-            log.info("Json listener thread created\n")
+            log.info("LOG: Json listener thread created\n")
+            lbc_lf.close()
             
         except Exception:
-            print "ERROR spawning jsonlistener.py"
-        lbc_lf.close()
+            log.info("LOG: ERROR spawning jsonlistener.py\n")                     
         
 
     def getRouteFromFlow(self, flow):
@@ -280,7 +280,7 @@ class LBController(DatabaseHandler):
         """
         while not self.isStopped():
             event = self.eventQueue.get(block=True)
-            log.info("New event in the queue: (type: %s, data:%s)\n"%(event['type'], event['data']))
+            log.info("LOG: New event in the queue: (type: %s, data:%s)\n"%(event['type'], event['data']))
             if event['type'] == 'newFlowStarted':
                 flow = event['data']
                 self.dealWithNewFlow(flow)
@@ -392,29 +392,11 @@ class GreedyLBController(LBController):
         pass
         
 
-
-
 if __name__ == '__main__':
+    log.info("LBController")
+    log.info("-"*60+"\n")
+    time.sleep(dconf.InitialWaitingTime)
+    
     lb = GreedyLBController()
     lb.run()
 
-
-"""
- # Create the key entries for the flow_allocation data structure
- self._createInitialPaths()
-
-
-    def _createInitialPaths(self):
-        all_pairs = nx.all_pairs_dijkstra_path(self.network_graph)
-        for src, data in all_pairs.iteritems():
-            for dst, route in data.iteritems():
-                edge_data = {}
-                for i, v in enumerate(route):
-                    if i<len(route)-1:
-                        edge_data[(route[i], route[i+1])] = self.network_graph.get_edge_data(route[i], route[i+1])
-                new_path = path.Path(src=src, dst=dst, route=route, edges=edge_data)
-                d = {}
-                d[new_path] = []
-                self.flow_allocation[(src, dst)] = d
-
-"""
