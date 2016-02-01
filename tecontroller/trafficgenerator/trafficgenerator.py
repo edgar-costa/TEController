@@ -29,6 +29,7 @@ import requests
 import sched
 import json
 import copy
+import sys, traceback
 
 import flask
 app = flask.Flask(__name__)
@@ -64,10 +65,18 @@ class TrafficGenerator(Base):
         LBController a new flow created in the network.
         """
         url = "http://%s:%s/newflowstarted" %(self._lbc_ip, dconf.LBC_JsonPort)
-        log.info('Informing LBController:')
-        log.info('\tURL: %s\n'%url)
-        log.info('\tFlow: %s\n'%str(flow))
-        requests.post(url, json = flow.toJSON())
+        log.info('Informing LBController...')
+        log.info(' URL: %s\n'%url)
+        log.info(' Flow: %s\n'%str(flow))
+        try:
+            requests.post(url, json = flow.toJSON())
+        except Exception:
+            log.info(" could not be sent!")
+            print "Exception in user code:"
+            print '-'*60
+            traceback.print_exc(file=sys.stdout)
+            print '-'*60
+            
 
     def createFlow(self, flow):
         """Calls _createFlow in a different Thread (for efficiency)
@@ -127,9 +136,9 @@ class TrafficGenerator(Base):
 
         self.scheduler.run()
 
-def create_app(app, traffic_generator):
+def create_app(appl, traffic_generator):
     app.config['TG'] = traffic_generator
-    return app
+    return appl
 
 @app.route("/startflow", methods = ['POST'])
 def trafficGeneratorCommandListener():
@@ -164,13 +173,15 @@ if __name__ == '__main__':
     
     # Start the traffic generator object
     tg = TrafficGenerator()
-
+    
     # Get Traffic Generator hosts's IP.
-    MyOwnIp = tg.getHostIPByName(dconf.TG_Hostname)
+    MyOwnIp = tg.getHostIPByName(dconf.TG_Hostname).split('/')[0]
+    print "MyOwnIP: %s"%str(MyOwnIp)
     
     # Schedule flows from file
     tg.scheduleFileFlows(dconf.FlowFile)
-
+    print "Scheduled flow file!"
+    
     # Go start the JSON API server and listen for commands
     app = create_app(app, tg)
     app.run(host=MyOwnIp)
