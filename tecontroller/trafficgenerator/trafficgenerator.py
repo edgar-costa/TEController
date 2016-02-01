@@ -177,7 +177,7 @@ if __name__ == '__main__':
     
     # Get Traffic Generator hosts's IP.
     MyOwnIp = tg.getHostIPByName(dconf.TG_Hostname).split('/')[0]
-    log.info("TRAFFIC GENERATOR - HOST %s\n"%(MyOwnIp)
+    log.info("TRAFFIC GENERATOR - HOST %s\n"%(MyOwnIp))
     log.info("-"*60+"\n")
 
     # Schedule flows from file
