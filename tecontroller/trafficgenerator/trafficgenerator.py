@@ -65,17 +65,18 @@ class TrafficGenerator(Base):
         LBController a new flow created in the network.
         """
         url = "http://%s:%s/newflowstarted" %(self._lbc_ip, dconf.LBC_JsonPort)
-        log.info('Informing LBController...')
-        log.info(' URL: %s\n'%url)
-        log.info(' Flow: %s\n'%str(flow))
+        log.info('LOG: Informing LBController...\n')
+        log.info(' * URL: %s\n'%url)
+        log.info(' * Flow: %s\n'%str(flow))
         try:
             requests.post(url, json = flow.toJSON())
         except Exception:
             log.info(" could not be sent!")
-            print "Exception in user code:"
-            print '-'*60
-            traceback.print_exc(file=sys.stdout)
-            print '-'*60
+            log.info("LOG: Exception in user code:\n")
+            log.info('-'*60+'\n')
+            log.info(traceback.print_exc())
+            log.info('-'*60+'\n')
+
             
 
     def createFlow(self, flow):
@@ -96,7 +97,7 @@ class TrafficGenerator(Base):
         
         url = "http://%s:%s/startflow" %(flow_cpy['src'], dconf.Hosts_JsonPort)
         log.info('TrafficGenerator - starting Flow:\n')
-        log.info('\t%s\n'%str(flow))
+        log.info(' * %s\n'%str(flow))
         requests.post(url, json = flow_cpy.toJSON())
 
         # Call to informLBController 
@@ -176,11 +177,12 @@ if __name__ == '__main__':
     
     # Get Traffic Generator hosts's IP.
     MyOwnIp = tg.getHostIPByName(dconf.TG_Hostname).split('/')[0]
-    print "MyOwnIP: %s"%str(MyOwnIp)
-    
+    log.info("TRAFFIC GENERATOR - HOST %s\n"%(MyOwnIp)
+    log.info("-"*60+"\n")
+
     # Schedule flows from file
     tg.scheduleFileFlows(dconf.FlowFile)
-    print "Scheduled flow file!"
+    log.info("LOG: Scheduled flow file!\n")
     
     # Go start the JSON API server and listen for commands
     app = create_app(app, tg)
