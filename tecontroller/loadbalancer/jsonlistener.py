@@ -9,7 +9,8 @@ Upon receiving a new flow notificaiton, puts the event inside the
 shared queue eventQueue.
 """
 from tecontroller.res.flow import Flow
-from tecontroller.loadbalancer.lbcontroller import DataBaseHandler, eventQueue
+from tecontroller.loadbalancer.lbcontroller import DatabaseHandler
+from tecontroller.loadbalancer import shared
 from tecontroller.res import defaultconf as dconf
 import netifaces as ni
 import time
@@ -27,8 +28,8 @@ def newFlowStarted():
                 req['size'], req['start_time'], req['duration'])
 
     newFlowStartedEvent = {'type': 'newFlowStarted', 'data': flow}
-    eventQueue.put(newFlowStartedEvent, block=True)
-    eventQueue.task_done()
+    shared.eventQueue.put(newFlowStartedEvent, block=True)
+    shared.eventQueue.task_done()
 
 if __name__ == "__main__":
     #Wait a bit until IP addresses have been assigned. We can do that,
