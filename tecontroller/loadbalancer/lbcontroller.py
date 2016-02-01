@@ -19,22 +19,25 @@ from fibbingnode import CFG
 
 from tecontroller.res import defaultconf as dconf
 from tecontroller.res.path import IPNetPath
+from tecontroller.loadbalancer.jsonlistener import JsonListener
 
 import networkx as nx
 import threading
 import subprocess
 import ipaddress
-import shared
 import sched
 import time
 import abc
 import traceback
+import Queue
 
 HAS_INITIAL_GRAPH = threading.Event()
 
 lbcontroller_logfile = dconf.Hosts_LogFolder + "LBC_json.log"
 
 log = get_logger()
+
+eventQueue = Queue.Queue()
 
 class MyGraphProvider(SouthboundManager):
     """This class overrwides the received_initial_graph abstract method of
@@ -139,7 +142,7 @@ class LBController(DatabaseHandler):
         self.flow_allocation = {} # {(route1): [flow1,flow2],
                                   #  (route2): [flow3, flow6]}
                                   
-        self.eventQueue = shared.eventQueue #From where to read events 
+        self.eventQueue = eventQueue #From where to read events 
         self.timer_handlers = [] #threading.Timer() #Used to schedule
                                  #flow alloc. removals
         self._stop = threading.Event() #Used to stop the thread
@@ -152,10 +155,10 @@ class LBController(DatabaseHandler):
         sbmanager = MyGraphProvider()
         t = threading.Thread(target=sbmanager.run, name="Graph Listener")
         t.start()
-        log.info("LOG: Graph Listener thread started\n")
+        log.info("LBC: Graph Listener thread started\n")
 
         HAS_INITIAL_GRAPH.wait() #Blocks until initial graph arrives
-        log.info("LOG: Initial graph received\n")
+        log.info("LBC: Initial graph received\n")
                  
         # Retreieve network from Fibbing Controller
         self.network_graph = sbmanager.igp_graph
@@ -168,15 +171,19 @@ class LBController(DatabaseHandler):
         self._createRouter2IPBindings()
         
         #spawn Json listener thread
-        lbc_lf = open(lbcontroller_logfile, 'w')
-        try:
-            subprocess.Popen([dconf.LBC_Path+'jsonlistener.py'], stdin=None,
-                             stdout=lbc_lf, stderr=lbc_lf)
-            log.info("LOG: Json listener thread created\n")
-            lbc_lf.close()    
-        except Exception:
-            log.info("LOG: ERROR spawning jsonlistener.py\n")                     
-            log.info(traceback.print_exc())
+        jl = JsonListener(eventQueue)
+        jl.start()
+        log.info("LBC: Json listener thread created\n")
+        
+        #lbc_lf = open(lbcontroller_logfile, 'w')
+        #try:
+        #    subprocess.Popen([dconf.LBC_Path+'jsonlistener.py'], stdin=None,
+        #                     stdout=lbc_lf, stderr=lbc_lf)
+        #    
+        #    lbc_lf.close()    
+        #except Exception:
+        #    log.info("LOG: ERROR spawning jsonlistener.py\n")                     
+        #log.info(traceback.print_exc())
 
     def getRouteFromFlow(self, flow):
         """
@@ -279,9 +286,11 @@ class LBController(DatabaseHandler):
         """Main loop that deals with new incoming events
         """
         while not self.isStopped():
-            log.info("LOG: Let's go to the blocking-read\n")
-            event = self.eventQueue.get(block=True)
-            log.info("LOG: New event in the queue: (type: %s, data:%s)\n"%(event['type'], event['data']))
+            event = self.eventQueue.get()
+            log.info("LBC: New event in the queue\n")
+            log.info("LBC:  * Type: %s\n"%event['type'])
+            log.info("LBC:  * Data: %s)\n"%event['data'])
+            
             if event['type'] == 'newFlowStarted':
                 flow = event['data']
                 self.dealWithNewFlow(flow)
