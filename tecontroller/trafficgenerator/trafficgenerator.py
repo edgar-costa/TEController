@@ -46,13 +46,11 @@ class TrafficGenerator(Base):
         self.scheduler = sched.scheduler(time.time, time.sleep)
         self.db = TopologyDB(db=dconf.DB_Path)
         
-        #IP of the Traffic Engineering Controller.
-        self._lbc_ip = self.getHostIPByName(dconf.LBC_Hostname)
-
+        #IP of the Load Balancer Controller host.
+        self._lbc_ip = self.getHostIPByName(dconf.LBC_Hostname).split('/')[0]
 
     def getHostIPByName(self, hostname):
         """Searches in the topology database for the hostname's ip address.
-
         """
         if hostname not in self.db.network.keys():
             return None
@@ -60,13 +58,12 @@ class TrafficGenerator(Base):
             routers = [r for r in self.db.network.keys() if 'r' in r]
             ip = [self.db.interface(hostname, r) for r in routers if r
                   in self.db.network[hostname].keys()]
-            return str(ip[0]).split('/')[0]    
+            return str(ip[0])    
 
 
     def informLBController(self, flow):
         """Part of the code that deals with the JSON interface to inform to
         LBController a new flow created in the network.
-
         """
         url = "http://%s:%s/newflowstarted" %(self._lbc_ip, LBC_JsonPort)
         requests.post(url, json = flow.toJSON())
@@ -82,13 +79,19 @@ class TrafficGenerator(Base):
         self.informLBController!
 
         """
-        hostIP = flow['src']
-        url = "http://%s:%s/startflow" %(hostIP, dconf.Hosts_JsonPort)
+        # Remove the interface mask part from the addresses, because
+        # hosts only recognise their IP, not their interface ip.
+        flow_cpy = flow
+        flow_cpy['src'] = flow['src'].split('/')[0]
+        flow_cpy['dst'] = flow['dst'].split('/')[0]
+        
+        url = "http://%s:%s/startflow" %(flow_cpy['src'], dconf.Hosts_JsonPort)
         log.info('TrafficGenerator - starting Flow:\n')
         log.info('\t%s\n'%str(flow))
-        requests.post(url, json = flow.toJSON())
-        # TODO: a call to informLBController should be added here
-        #self.informController(flow)
+        requests.post(url, json = flow_cpy.toJSON())
+
+        # Call to informLBController 
+        self.informController(flow)
         
     def createRandomFlow(self):
         """Creates a random flow in the network
@@ -128,7 +131,6 @@ def create_app(app, traffic_generator):
     app.config['TG'] = traffic_generator
     return app
 
-
 @app.route("/startflow", methods = ['POST'])
 def trafficGeneratorCommandListener():
     """This function will be running in each of the hosts in our
@@ -150,7 +152,7 @@ def trafficGeneratorCommandListener():
     flow = Flow(src, dst, flow_tmp['sport'], flow_tmp['dport'],
                 flow_tmp['size'], flow_tmp['start_time'], flow_tmp['duration'])
     try:
-        tg.createFlow(flow)
+        tg._createFlow(flow)
     except Exception, err:
         print flow
         print(traceback.format_exc())
