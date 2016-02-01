@@ -125,9 +125,18 @@ class Flow(Base):
         return a%(self.src.compressed, self.sport,
                   self.dst.compressed, self.dport)
         
-    def __deepcopy__(self, flow):
-        return Flow(copy.deepcopy(dict(self)))
-
+    def __copy__(self):
+        src_c = type(self.src)(self.src)
+        dst_c = type(self.dst)(self.dst)
+        size_c = type(self.dst)(self.dst)
+        dport_c = type(self.dport)(self.dport)
+        sport_c = type(self.sport)(self.sport)
+        time_c = type(self.start_time)(self.start_time)
+        duration_c = type(self.duration)(self.duration)
+        return Flow(src=src_c, dst=dst_c, sport=sport_c,
+                    dport=dport_c, size=size_c, start_time=time_c,
+                    duration=duration_c)
+    
     def __str__(self):
         a = "Src: %s:%s, Dst: %s:%s, Size: %s, Start_time: %s, Duration: %s" 
         return a%(self.src.compressed, self.sport,
@@ -138,7 +147,7 @@ class Flow(Base):
 
     def __setitem__(self, key, value):
         if key not in ['src','dst','sport','dport','size','start_time','duration']:
-            raise Error
+            raise KeyError
         elif key in ['src', 'dst']:
             if not isinstance(value, ip.IPv4Interface):
                 if not isinstance(value, ip.IPv4Address):
@@ -156,7 +165,7 @@ class Flow(Base):
             
     def __getitem__(self, key):
         if key not in ['src','dst','sport','dport','size','start_time','duration']:
-            raise Error
+            raise KeyError
         else:
             return self.__getattribute__(key)
 
