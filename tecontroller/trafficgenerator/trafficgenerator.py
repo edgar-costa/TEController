@@ -65,19 +65,17 @@ class TrafficGenerator(Base):
         LBController a new flow created in the network.
         """
         url = "http://%s:%s/newflowstarted" %(self._lbc_ip, dconf.LBC_JsonPort)
-        log.info('LOG: Informing LBController...\n')
-        log.info(' * URL: %s\n'%url)
-        log.info(' * Flow: %s\n'%str(flow))
+        log.info(' * Informing LBController...\n')
+        log.info('   - Flow: %s\n'%str(flow))
+        log.info('   - URL: %s\n'%url)
         try:
             requests.post(url, json = flow.toJSON())
         except Exception:
-            log.info(" could not be sent!")
+            log.info("ERROR: LBC could not be informed!\n")
             log.info("LOG: Exception in user code:\n")
             log.info('-'*60+'\n')
             log.info(traceback.print_exc())
-            log.info('-'*60+'\n')
-
-            
+            log.info('-'*60+'\n')            
 
     def createFlow(self, flow):
         """Calls _createFlow in a different Thread (for efficiency)
@@ -96,16 +94,26 @@ class TrafficGenerator(Base):
         flow_cpy['dst'] = flow['dst'].compressed.split('/')[0]
         
         url = "http://%s:%s/startflow" %(flow_cpy['src'], dconf.Hosts_JsonPort)
-        log.info('TrafficGenerator - starting Flow:\n')
-        log.info(' * %s\n'%str(flow))
-        requests.post(url, json = flow_cpy.toJSON())
+        log.info('LOG: TrafficGenerator - starting Flow:\n')
+        log.info(' * Sending request to host\n')
+        log.info('   - FLOW (sent to Host): %s\n'%str(flow_cpy))
+        log.info('   - URL: %s\n'%url)
 
+        # Send request to host to start new iperf client session
+        try:
+            requests.post(url, json = flow_cpy.toJSON())
+        except Exception:
+            log.info("ERROR: Request could not be sent to Host!\n")
+            log.info("LOG: Exception in user code:\n")
+            log.info('-'*60+'\n')
+            log.info(traceback.print_exc())
+            log.info('-'*60+'\n')
+            
         # Call to informLBController 
         self.informLBController(flow)
         
     def createRandomFlow(self):
         """Creates a random flow in the network
-
         """
         pass
 
@@ -164,8 +172,9 @@ def trafficGeneratorCommandListener():
     try:
         tg._createFlow(flow)
     except Exception, err:
-        print flow
-        print(traceback.format_exc())
+        log.info("ERROR: could not create flow:\n")
+        log.info(" * %s\n"%flow)
+        log.info(traceback.format_exc())
 
         
 if __name__ == '__main__':
