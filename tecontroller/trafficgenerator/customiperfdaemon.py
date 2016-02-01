@@ -12,8 +12,8 @@ generate the desired traffic in the network.
 
 """
 from tecontroller.res import defaultconf as dconf
-from tecontroller.res import flow
-
+from tecontroller.res.flow import Base
+from fibbingnode.misc.mininetlib import get_logger
 from subprocess import Popen, PIPE
 import time
 import traceback
@@ -23,7 +23,10 @@ import sys
 import flask
 app = flask.Flask(__name__)
 
+log = get_logger()
+
 @app.route("/startflow", methods = ['POST'])
+
 def trafficGeneratorSlave():
     """This function will be running in each of the hosts in our
     network. It essentially waits for commands from the
@@ -33,9 +36,11 @@ def trafficGeneratorSlave():
 
     """
     flow = flask.request.json
-    aux = flow.Base()
-    size = aux.setSizeToStr(flow['size'])    
-
+    aux = Base()
+    log.info("LOG: (Type) and Size of the flow: (%s) %s\n"%(str(type(flow['size'])), flow['size']))
+    size = aux.setSizeToStr(flow['size'])
+    log.info("LOG: Size set to string: %s"%size)
+    
     try:
         Popen(["iperf", "-c", flow['dst'], "-u",
                "-b", size,
@@ -66,5 +71,6 @@ if __name__ == "__main__":
     #Searching for the interface's IP addr
     ni.ifaddresses(MyETH0Iface)
     MyOwnIp = ni.ifaddresses(MyETH0Iface)[2][0]['addr']
-    sys.stdout.write('Interface: %s, IPaddr: %s'%(MyETH0Iface, MyOwnIp))
+    log.info("CUSTOM DAEMON - HOST %s - IFACE %s\n"%(MyOwnIp, MyETH0Iface))
+    log.info("-"*60+"\n")
     app.run(host=MyOwnIp, port=dconf.Hosts_JsonPort)
