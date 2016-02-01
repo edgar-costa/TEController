@@ -19,6 +19,7 @@ from fibbingnode import CFG
 
 from tecontroller.res import defaultconf as dconf
 from tecontroller.res.path import IPNetPath
+from tecontroller.res.flow import Flow
 from tecontroller.loadbalancer.jsonlistener import JsonListener
 
 import networkx as nx
@@ -218,11 +219,16 @@ class LBController(DatabaseHandler):
                 continue
             xname = self._db_getNameFromIP(x)
             yname = self._db_getNameFromIP(y)
+
             if xname and yname:
                 bw = self.db.bandwidth(xname, yname)
                 data['bw'] = int(bw*1e6)
                 data['capacity'] = int(bw*1e6)
-        
+
+            else:
+                log.info("LBC: ERROR -> _readBwDataFromDB(self): did not find xname and yname")
+                
+            
     def _createHost2IPBindings(self):
         """Fills the dictionary self.hosts_to_ip with the corresponding
         name-ip pairs
@@ -365,6 +371,7 @@ class LBController(DatabaseHandler):
         # Substract flow size from edges capacity
         for (x, y, data) in self.network_graph.edges(data=True):
             if x in path.route and y in path.route and abs(path.route.index(x)-path.route.index(y))==1:
+                log.info('%s\n'%str(data))
                 data['capacity'] -= flow.size
 
         # Schedule flow removal
@@ -394,12 +401,11 @@ class GreedyLBController(LBController):
     def __init__(self, *args, **kwargs):
         super(GreedyLBController, self).__init__(*args, **kwargs)
 
-    
     def flowAllocationAlgorithm(self, flow):
         """
         Implements abstract method
         """
-        pass
+        log.info("Greedy Algorithm was run\n")
         
 
 if __name__ == '__main__':
