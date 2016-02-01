@@ -11,7 +11,7 @@ LBC_Hostname = 'c3'
 TG_Hostname = 'c2'
 
 #Port on which the JSON-aware thread of the LBC is listening
-LBC_JsonPort = 5000
+LBC_JsonPort = "5000"
 
 # Place where the topology information is being stored inside the vm
 # (and the hosts)
@@ -28,7 +28,7 @@ TG_Path = PPATH + 'tecontroller/trafficgenerator/'
 LBC_Path = PPATH + 'tecontroller/loadbalancer/'
 
 # Default port for the json-daemons for the hosts in the network
-Hosts_JsonPort = 5000
+Hosts_JsonPort = "5000"
 
 # Path to the file where the flows definition for the Traffic
 # Generator are stored

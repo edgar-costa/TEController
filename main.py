@@ -19,7 +19,6 @@ from tecontroller.res import defaultconf as dconf
 
 import networkx as nx
 
-DB_path = '/tmp/db.topo'
 C1_cfg = '/tmp/c1.cfg'
 
 C1 = 'c1' #fibbing controller
@@ -39,19 +38,17 @@ BW = 1  # Absurdly low bandwidth for easy congestion (in Mb)
 
 class SimpleTopo(IPTopo):
     def build(self, *args, **kwargs):
-        """
-
-                  +---+
+        """       +---+
                ___|R3 |__
             3 /   +---+  \3
              /            \
  +--+      +----+   10   +---+        +--+
  |S1|------| R1 |--------| R2|--------|D1|
- +--+      +----+        +---+        +--+
-              |            |       
-            +---+        +---+     
-            |C1 |        |LBC|     
-            +---+        +---+     
+ +--+      +----+        +---+_       +--+
+              |            |   \_  
+            +---+        +---+   +---+
+            |C1 |        |LBC|   |TG |
+            +---+        +---+   +---+
         """
         r1 = self.addRouter(R1)
         r2 = self.addRouter(R2)
@@ -71,6 +68,11 @@ class SimpleTopo(IPTopo):
         c1 = self.addController(C1, cfg_path=C1_cfg)
         self.addLink(c1, r1, cost = 1000)
 
+
+        # Adding Traffic Generator Host
+        c2 = self.addHost(TG, isTrafficGenerator=True) 
+        self.addLink(c2, r2)
+        
         # Adding Traffic Engineering Controller
         c3 = self.addHost(LBC, isLBController=True)
         self.addLink(c3, r2)
@@ -121,8 +123,8 @@ class SIGTopo(IPTopo):
         self.addLink(c1, r4, cost=999)
 
         # Adding Traffic Generator Host
-        #c2 = self.addHost(TG, isTrafficGenerator=True) 
-        #self.addLink(c2, r4)
+        c2 = self.addHost(TG, isTrafficGenerator=True) 
+        self.addLink(c2, r4)
 
         # Adding Traffic Engineering Controller
         c3 = self.addHost(LBC, isLBController=True)
@@ -134,13 +136,21 @@ def launch_network():
                 debug=_lib.DEBUG_FLAG,
                 intf=custom(TCIntf, bw=BW),
                 host=MyCustomHost)
-    TopologyDB(net=net).save(DB_path)
+    TopologyDB(net=net).save(dconf.DB_Path)
     net.start()
     FibbingCLI(net)
     net.stop()
 
 
-# Not used
+
+
+
+
+
+
+
+
+    # Not used
 def launch_controller():
     CFG.read(C1_cfg)
     db = TopologyDB(db=DB_path)

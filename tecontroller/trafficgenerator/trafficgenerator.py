@@ -28,14 +28,13 @@ import time
 import requests
 import sched
 import json
-
+import copy
 
 import flask
 app = flask.Flask(__name__)
 
 # logger to log to the mininet cli
 log = get_logger()
-
 
 class TrafficGenerator(Base):
     """Object that creates a Traffic Generator in the network.
@@ -60,12 +59,14 @@ class TrafficGenerator(Base):
                   in self.db.network[hostname].keys()]
             return str(ip[0])    
 
-
     def informLBController(self, flow):
         """Part of the code that deals with the JSON interface to inform to
         LBController a new flow created in the network.
         """
-        url = "http://%s:%s/newflowstarted" %(self._lbc_ip, LBC_JsonPort)
+        url = "http://%s:%s/newflowstarted" %(self._lbc_ip, dconf.LBC_JsonPort)
+        log.info('Informing LBController:')
+        log.info('\tURL: %s\n'%url)
+        log.info('\tFlow: %s\n'%str(flow))
         requests.post(url, json = flow.toJSON())
 
     def createFlow(self, flow):
@@ -77,13 +78,12 @@ class TrafficGenerator(Base):
         """Creates the corresponding iperf command to actually install the
         given flow in the network.  This function has to call
         self.informLBController!
-
         """
         # Remove the interface mask part from the addresses, because
         # hosts only recognise their IP, not their interface ip.
-        flow_cpy = flow
-        flow_cpy['src'] = flow['src'].split('/')[0]
-        flow_cpy['dst'] = flow['dst'].split('/')[0]
+        flow_cpy = copy.deepcopy(flow)
+        flow_cpy['src'] = flow['src'].compressed.split('/')[0]
+        flow_cpy['dst'] = flow['dst'].compressed.split('/')[0]
         
         url = "http://%s:%s/startflow" %(flow_cpy['src'], dconf.Hosts_JsonPort)
         log.info('TrafficGenerator - starting Flow:\n')
@@ -91,7 +91,7 @@ class TrafficGenerator(Base):
         requests.post(url, json = flow_cpy.toJSON())
 
         # Call to informLBController 
-        self.informController(flow)
+        self.informLBController(flow)
         
     def createRandomFlow(self):
         """Creates a random flow in the network

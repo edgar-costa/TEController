@@ -23,6 +23,7 @@ import mininet.node as _node
 iperf_logfile = dconf.Hosts_LogFolder + "%s_iperf.log"
 daemon_logfile = dconf.Hosts_LogFolder + "%s_daemon.log"
 tg_logfile = dconf.Hosts_LogFolder + "TG.log"
+lbc_logfile = dconf.Hosts_LogFolder + "LBC.log"
 
 log = get_logger()
 
@@ -43,11 +44,14 @@ class MyCustomHost(_node.Host):
             tgl = open(tg_logfile, 'w')
             tg = self.popen(dconf.TG_Path+'trafficgenerator.py',
                                            stdin=None, stdout=tgl, stderr=tgl)
+            tgl.close()
             
         elif 'isLBController' in kwargs.keys() and kwargs.get('isLBController') == True:
             log.info("\nStarting LoadBalancing Controller\n")
-            #tec = self.popen(dconf.LBC_Path+'lbcontroller.py', stdin=None,
-            #                 stdout=None, stderr=None)
+            lbcl = open(lbc_logfile, 'w')
+            tec = self.popen(dconf.LBC_Path+'lbcontroller.py', stdin=None,
+                             stdout=lbcl, stderr=lbcl)
+            lbcl.close()
             
         else: #Just a normal host in the network
             iperf_file = iperf_logfile % (self.name)

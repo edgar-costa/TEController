@@ -5,7 +5,7 @@ This module defines the flow object
 from tecontroller.res import defaultconf as dconf
 import ipaddress as ip
 import requests
-
+import copy
 
 class Base(object):
     """
@@ -125,6 +125,9 @@ class Flow(Base):
         return a%(self.src.compressed, self.sport,
                   self.dst.compressed, self.dport)
         
+    def __deepcopy__(self, flow):
+        return Flow(copy.deepcopy(dict(self)))
+
     def __str__(self):
         a = "Src: %s:%s, Dst: %s:%s, Size: %s, Start_time: %s, Duration: %s" 
         return a%(self.src.compressed, self.sport,
