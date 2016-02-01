@@ -178,11 +178,11 @@ def trafficGeneratorCommandListener():
 
         
 if __name__ == '__main__':
-    # Wait for the network to be created correcly: IP's assigned, etc.
-    time.sleep(dconf.InitialWaitingTime)
-    
     # Start the traffic generator object
     tg = TrafficGenerator()
+
+    # Wait for the network to be created correcly: IP's assigned, etc.
+    time.sleep(dconf.TG_InitialWaitingTime)
     
     # Get Traffic Generator hosts's IP.
     MyOwnIp = tg.getHostIPByName(dconf.TG_Hostname).split('/')[0]
