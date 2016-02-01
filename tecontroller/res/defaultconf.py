@@ -35,7 +35,9 @@ Hosts_JsonPort = "5000"
 FlowFile = TG_Path + 'flowfile.csv'
 
 # Waiting time (in seconds) for hosts to check their IP
-InitialWaitingTime = 10 
+Hosts_InitialWaitingTime = 5
+LBC_InitialWaitingTime = 12
+TG_InitialWaitingTime = 15 
 
 # Default port for which IPERF server is listening in the custom hosts
 Hosts_DefaultIperfPort = '5001'
