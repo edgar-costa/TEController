@@ -279,6 +279,7 @@ class LBController(DatabaseHandler):
         """Main loop that deals with new incoming events
         """
         while not self.isStopped():
+            log.info("LOG: Let's go to the blocking-read\n")
             event = self.eventQueue.get(block=True)
             log.info("LOG: New event in the queue: (type: %s, data:%s)\n"%(event['type'], event['data']))
             if event['type'] == 'newFlowStarted':
@@ -393,10 +394,9 @@ class GreedyLBController(LBController):
         
 
 if __name__ == '__main__':
-    time.sleep(dconf.InitialWaitingTime)
-
     log.info("LOAD BALANCER CONTROLLER\n")
     log.info("-"*60+"\n")
+    time.sleep(dconf.LBC_InitialWaitingTime)
     
     lb = GreedyLBController()
     lb.run()
