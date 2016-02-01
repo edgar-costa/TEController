@@ -38,7 +38,7 @@ if __name__ == "__main__":
     time.sleep(dconf.InitialWaitingTime)
     
     #Searching for the interface's IP addr
-    myETH0Iface = 'c3-eth0'
+    MyETH0Iface = 'c3-eth0'
     ni.ifaddresses(MyETH0Iface)
     MyOwnIp = ni.ifaddresses(MyETH0Iface)[2][0]['addr']
 
