@@ -9,10 +9,12 @@ Upon receiving a new flow notificaiton, puts the event inside the
 shared queue eventQueue.
 """
 from tecontroller.res.flow import Flow
-from tecontroller.loadbalancer.lbcontroller import eventQueue
+from tecontroller.loadbalancer.lbcontroller import DataBaseHandler, eventQueue
 from tecontroller.res import defaultconf as dconf
 import netifaces as ni
 import time
+
+from tecontroller.res import defaultconf as dconf
 
 import flask 
 app = flask.Flask(__name__)
