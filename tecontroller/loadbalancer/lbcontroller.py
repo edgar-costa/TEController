@@ -12,6 +12,7 @@ a Json-Rest interface.
 
 from fibbingnode.algorithms.southbound_interface import SouthboundManager
 from fibbingnode.misc.igp_graph import IGPGraph
+from fibbingnode.misc.mininetlib import get_logger
 
 from fibbingnode.misc.mininetlib.ipnet import TopologyDB
 from fibbingnode import CFG
@@ -31,6 +32,8 @@ import abc
 HAS_INITIAL_GRAPH = threading.Event()
 
 lbcontroller_logfile = dconf.Hosts_LogFolder + "LBC_json.log"
+
+log = get_logger()
 
 class MyGraphProvider(SouthboundManager):
     """This class overrwides the received_initial_graph abstract method of
@@ -163,9 +166,14 @@ class LBController(DatabaseHandler):
         
         #spawn Json listener thread
         lbc_lf = open(lbcontroller_logfile, 'w')
-        subprocess.Popen(['./jsonlistener.py'], stdin=None,
-                         stdout=lbc_lf, stderr=lbc_lf)
+        try:
+            subprocess.Popen(['./jsonlistener.py'], stdin=None,
+                             stdout=lbc_lf, stderr=lbc_lf)
+        except Exception:
+            print "ERROR spawning jsonlistener.py"
+
         lbc_lf.close()
+        
 
     def getRouteFromFlow(self, flow):
         """
@@ -264,7 +272,7 @@ class LBController(DatabaseHandler):
         """
         return self._stop.isSet()
 
-    def run():
+    def run(self):
         """Main loop that deals with new incoming events
         """
         while not self.isStopped():
@@ -375,7 +383,7 @@ class LBController(DatabaseHandler):
         
 class GreedyLBController(LBController):
     def __init__(self, *args, **kwargs):
-        super(GreedyLBControllerLB, self).__init__(*args, **kwargs)
+        super(GreedyLBController, self).__init__(*args, **kwargs)
 
     
     def flowAllocationAlgorithm(self, flow):
@@ -386,6 +394,10 @@ class GreedyLBController(LBController):
         
 
 
+
+if __name__ == '__main__':
+    lb = GreedyLBController()
+    lb.run()
 
 
 """
