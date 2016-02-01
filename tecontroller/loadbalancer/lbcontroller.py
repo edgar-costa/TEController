@@ -151,9 +151,11 @@ class LBController(DatabaseHandler):
         sbmanager = MyGraphProvider()
         t = threading.Thread(target=sbmanager.run, name="Graph Listener")
         t.start()
+        log.info("Graph Listener thread started\n")
 
         HAS_INITIAL_GRAPH.wait() #Blocks until initial graph arrives
-                
+        log.info("Initial graph received\n")
+                 
         # Retreieve network from Fibbing Controller
         self.network_graph = sbmanager.igp_graph
         
@@ -169,9 +171,10 @@ class LBController(DatabaseHandler):
         try:
             subprocess.Popen(['./jsonlistener.py'], stdin=None,
                              stdout=lbc_lf, stderr=lbc_lf)
+            log.info("Json listener thread created\n")
+            
         except Exception:
             print "ERROR spawning jsonlistener.py"
-
         lbc_lf.close()
         
 
@@ -276,12 +279,8 @@ class LBController(DatabaseHandler):
         """Main loop that deals with new incoming events
         """
         while not self.isStopped():
-            
-            #Wait until there's something in the queue
-            while self.eventQueue.empty(): 
-                pass
-        
-            event = self.eventQueue.get() #Should be blocking?
+            event = self.eventQueue.get(block=True)
+            log.info("New event in the queue: (type: %s, data:%s)\n"%(event['type'], event['data']))
             if event['type'] == 'newFlowStarted':
                 flow = event['data']
                 self.dealWithNewFlow(flow)
