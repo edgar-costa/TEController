@@ -52,19 +52,18 @@ class Path(object):
             return None
 
     def __eq__(self, other):
-         return (isinstance(other, self.__class__) and self.__dict__
-                 == other.__dict__)
+        return (isinstance(other, self.__class__) and self.route
+                 == other.route)
                            
     def __ne__(self, other):
         return not self.__eq__(other)
 
     def __repr__(self):
-        #EEEEEEEERRRRRRRRRORR
-        S = "%s(%s)"
-        return S%(seself.route)
+        S = "Path[%s]"
+        return S%(str(self.route))
     
     def __str__(self):
-        S = "(%s -> %s): "
+        S = "[%s -> %s]: "
         return S%(self.src, self.dst)+str(self.route)
 
     def coincidentPaths(self, other):
@@ -118,3 +117,7 @@ class IPNetPath(Path):
         datas = [data for (_, data) in self.iter_edges()]
         bws = [d['bw'] for d in datas] 
         return min(bws)
+
+    def __repr__(self):
+        S = "IPNetPath[%s]"
+        return S%(str(self.route))
