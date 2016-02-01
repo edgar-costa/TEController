@@ -142,14 +142,6 @@ def launch_network():
     net.stop()
 
 
-
-
-
-
-
-
-
-
     # Not used
 def launch_controller():
     CFG.read(C1_cfg)
