@@ -28,6 +28,7 @@ import shared
 import sched
 import time
 import abc
+import traceback
 
 HAS_INITIAL_GRAPH = threading.Event()
 
@@ -169,14 +170,13 @@ class LBController(DatabaseHandler):
         #spawn Json listener thread
         lbc_lf = open(lbcontroller_logfile, 'w')
         try:
-            subprocess.Popen(['./jsonlistener.py'], stdin=None,
+            subprocess.Popen([dconf.LBC_Path+'jsonlistener.py'], stdin=None,
                              stdout=lbc_lf, stderr=lbc_lf)
             log.info("LOG: Json listener thread created\n")
-            lbc_lf.close()
-            
+            lbc_lf.close()    
         except Exception:
             log.info("LOG: ERROR spawning jsonlistener.py\n")                     
-        
+            log.info(traceback.print_exc())
 
     def getRouteFromFlow(self, flow):
         """
@@ -393,9 +393,10 @@ class GreedyLBController(LBController):
         
 
 if __name__ == '__main__':
-    log.info("LBController")
-    log.info("-"*60+"\n")
     time.sleep(dconf.InitialWaitingTime)
+
+    log.info("LOAD BALANCER CONTROLLER\n")
+    log.info("-"*60+"\n")
     
     lb = GreedyLBController()
     lb.run()

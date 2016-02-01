@@ -26,10 +26,11 @@ log = get_logger()
 @app.route("/newflowstarted", methods = ['POST'])
 def newFlowStarted():
     req = flask.request.json
-
+    log.info("LOG: newFlowStarted was executed\n")
+    log.info(" * Request received: %s\n"%str(req))
+    
     flow = Flow(req['src'], req['dst'], req['sport'], req['dport'],
                 req['size'], req['start_time'], req['duration'])
-
     newFlowStartedEvent = {'type': 'newFlowStarted', 'data': flow}
     shared.eventQueue.put(newFlowStartedEvent, block=True)
     shared.eventQueue.task_done()
