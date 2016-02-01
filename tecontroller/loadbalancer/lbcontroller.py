@@ -43,7 +43,6 @@ class MyGraphProvider(SouthboundManager):
     def received_initial_graph(self):
         HAS_INITIAL_GRAPH.set()        
 
-
 class DatabaseHandler(object):
     def __init__(self):
         # Read the topology info from DB_Path
@@ -133,8 +132,8 @@ class LBController(DatabaseHandler):
 
         """
         super(LBController, self).__init__()
-        self.flow_allocation = {} # {(route1): {'path': path1, 'flows': [flow1,flow2]},
-                                  #  (route2): {'path': path2, 'flows': [flow3, flow6]}}
+        self.flow_allocation = {} # {(route1): [flow1,flow2],
+                                  #  (route2): [flow3, flow6]}
                                   
         self.eventQueue = shared.eventQueue #From where to read events 
         self.timer_handlers = [] #threading.Timer() #Used to schedule
@@ -163,29 +162,29 @@ class LBController(DatabaseHandler):
         self._createRouter2IPBindings()
         
         #spawn Json listener thread
-        #lbc_lf = open(lbcontroller_logfile, 'w')
-        #subprocess.Popen(['./jsonlistener.py'], stdin=None,
-        #                 stdout=lbc_lf, stderr=lbc_lf)
-        #lbc_lf.close()
+        lbc_lf = open(lbcontroller_logfile, 'w')
+        subprocess.Popen(['./jsonlistener.py'], stdin=None,
+                         stdout=lbc_lf, stderr=lbc_lf)
+        lbc_lf.close()
 
-
-    def getPathFromFlow(self, flow):
+    def getRouteFromFlow(self, flow):
         """
         """
-        path = [data['path'] for route, data in
+        path = [route for route, data in
                 self.flow_allocation.iteritems() if flow in
-                data['flows']]
+                data]
         if path != []:
             return path[0]
         else:
             return []
 
-    def getFlowListFromPath(self, path):
+    def getFlowListFromRoute(self, path):
         """
         """
-        flowlist = [data['flows'] for route, data in
-                    self.flow_allocation.iteritems() if data['path']
-                    == path]
+        flowlist = [data for route, data in
+                    self.flow_allocation.iteritems() if route ==
+                    path.route]
+        
         if flowlist != []:
             return flowlist[0]
         else:
@@ -203,8 +202,8 @@ class LBController(DatabaseHandler):
             yname = self._db_getNameFromIP(y)
             if xname and yname:
                 bw = self.db.bandwidth(xname, yname)
-                data['bw'] = bw*1e6
-                data['capacity'] = bw*1e6
+                data['bw'] = int(bw*1e6)
+                data['capacity'] = int(bw*1e6)
         
     def _createHost2IPBindings(self):
         """Fills the dictionary self.hosts_to_ip with the corresponding
@@ -230,7 +229,6 @@ class LBController(DatabaseHandler):
             if self.network_graph.is_router(node_ip):
                 name = self._db_getNameFromIP(node_ip)
                 self.routers_to_ip[name] = node_ip
-
 
 
     def getNodeName(self, ip):
@@ -342,11 +340,10 @@ class LBController(DatabaseHandler):
     def addFlowToPath(self, path, flow):
         """
         """
-        if path.route in self.flow_allocation.keys() and self.flow_allocation[path.route]['path'] == path: #exists already
-            self.flow_allocation[path.route]['flows'].append(flow)
+        if path.route in self.flow_allocation.keys(): #exists already
+            self.flow_allocation[path.route].append(flow)
         else:
-            self.flow_allocation[path.route] = {'flows': [flow],
-                                                'path': path}
+            self.flow_allocation[path.route] = [flow]
 
         # Substract flow size from edges capacity
         for (x, y, data) in self.network_graph.edges(data=True):
@@ -359,8 +356,8 @@ class LBController(DatabaseHandler):
     def removeFlowFromPath(self, path, flow):        
         """
         """
-        if path.route in self.flow_allocation.keys() and self.flow_allocation[path.route]['path'] == path: #exists already
-            self.flow_allocation[path.route]['flows'].remove(flow)
+        if path.route in self.flow_allocation.keys(): #exists already
+            self.flow_allocation[path.route].remove(flow)
         else:
             raise KeyError("The flow is not in the Path")
 
@@ -368,8 +365,8 @@ class LBController(DatabaseHandler):
         for (x, y, data) in self.network_graph.edges(data=True):
             if x in path.route and y in path.route and abs(path.route.index(x)-path.route.index(y))==1:
                 data['capacity'] += flow.size
-
                 
+
     @abc.abstractmethod
     def flowAllocationAlgorithm(self, flow):
         """
