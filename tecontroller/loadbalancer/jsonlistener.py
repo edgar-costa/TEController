@@ -10,6 +10,7 @@ shared queue eventQueue.
 """
 from tecontroller.res.flow import Flow
 from tecontroller.loadbalancer.lbcontroller import DatabaseHandler
+from fibbingnode.misc.mininetlib import get_logger
 from tecontroller.loadbalancer import shared
 from tecontroller.res import defaultconf as dconf
 import netifaces as ni
@@ -19,6 +20,8 @@ from tecontroller.res import defaultconf as dconf
 
 import flask 
 app = flask.Flask(__name__)
+
+log = get_logger()
 
 @app.route("/newflowstarted", methods = ['POST'])
 def newFlowStarted():
@@ -43,5 +46,6 @@ if __name__ == "__main__":
     MyOwnIp = ni.ifaddresses(MyETH0Iface)[2][0]['addr']
 
     #Start the flesk app under public ip and default json port
-    print 'Interface: %s, IPaddr: %s'%(MyETH0Iface, MyOwnIp)
+    log.info('LBC JSON LISTENER - HOST %s - IFACE %s\n'%(MyOwnIp, MyETH0Iface))
+    log.info("-"*60+"\n")
     app.run(host=MyOwnIp, port=dconf.LBC_JsonPort)
