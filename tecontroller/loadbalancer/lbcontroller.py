@@ -319,7 +319,7 @@ class LBController(DatabaseHandler):
             self.addFlowToPath(defaultPath, flow)
         else:
             # Otherwise, call the abstract method
-            self.flowAllocationAlgorithm(flow)            
+            self.flowAllocationAlgorithm(flow, defaultPath)            
 
     def getDefaultDijkstraPath(self, network_graph, flow):
         """Gives the current path from src to dest
@@ -456,15 +456,15 @@ class GreedyLBController(LBController):
         (ex, ey) = self.getMinCapacityEdge(initial_path)
         tmp_nw = self.getNetworkWithoutEdge(self.network_graph, ex, ey)
         # Calculate new default dijkstra path
-        next_default_dijkstra_path = self.getDefaultDijkstraPath(tmp_nw)
+        next_default_dijkstra_path = self.getDefaultDijkstraPath(tmp_nw, flow)
 
         # Repeat it until path is found that can allocate flow
-        while not canAllocateFlow(next_default_dijkstra_path, flow):
+        while not self.canAllocateFlow(next_default_dijkstra_path, flow):
             i = i + 1
             initial_path = next_default_dijkstra_path
             (ex, ey) = self.getMinCapacityEdge(initial_path)
             tmp_nw = self.getNetworkWithoutEdge(tmp_nw, ex, ey)
-            next_default_dijkstra_path = self.getDefaultDijkstraPath(tmp_nw)
+            next_default_dijkstra_path = self.getDefaultDijkstraPath(tmp_nw, flow)
 
         # Allocate flow to Path
         self.addFlowToPath(next_default_dijkstra_path, flow)
@@ -475,8 +475,7 @@ class GreedyLBController(LBController):
 
         # Call to FIBBING Controller should be here
         #self.sbmanager.simple_path_requirement(flow['dst']
-        
-        
+                
 
 if __name__ == '__main__':
     log.info("LOAD BALANCER CONTROLLER\n")
