@@ -155,6 +155,10 @@ class LBController(DatabaseHandler):
                                #of SouthboundManager
 
         self.sbmanager = MyGraphProvider()
+
+        # Wait a bit more please...
+        time.sleep(dconf.Hosts_InitialWaitingTime)
+
         t = threading.Thread(target=self.sbmanager.run, name="Graph Listener")
         t.start()
         log.info("LBC: Graph Listener thread started\n")
@@ -167,13 +171,24 @@ class LBController(DatabaseHandler):
         
         # Include BW data inside network graph
         self._readBwDataFromDB()
-        log.info("LBC: Bandwidths written in network_graph\n")
+        if not self._bwInAllEdges():
+            self._readBwDataFromDB()
+
+        log.info("%s\n"%str(self.network_graph.edges(data=True)))
         
+        log.info("LBC: Bandwidths written in network_graph\n")
+
         # Fill the host2Ip and router2ip attributes
         self._createHost2IPBindings()
         self._createRouter2IPBindings()
         log.info("LBC: Created IP-names bindings\n")
-        
+        for name, data in self.hosts_to_ip.iteritems():
+            log.info("  Hostname: %s\n"%name)
+            log.info("    iface_host: %s\n"%data['iface_host'])
+            log.info("    iface_router: %s\n"%data['iface_router'])
+            log.info("    router_name: %s\n"%data['router_name'])
+            log.info("    router_id: %s\n"%data['router_id'])
+
         #spawn Json listener thread
         jl = JsonListener(eventQueue)
         jl.start()
@@ -231,7 +246,10 @@ class LBController(DatabaseHandler):
             else:
                 log.info("LBC: ERROR -> _readBwDataFromDB(self): did not find xname and yname")
                 
-            
+    def _bwInAllEdges(self):
+        ep = [True if 'capacity' in data.keys() and 'bw' in data.keys() else False for (x, y, data) in self.network_graph.edges(data=True)]
+        return False not in ep
+                
     def _createHost2IPBindings(self):
         """Fills the dictionary self.hosts_to_ip with the corresponding
         name-ip pairs
@@ -357,10 +375,23 @@ class LBController(DatabaseHandler):
     def getMinCapacity(self, path):
         """Returns the capacity of the lowest-capacity edge along the path.
         """
-        edges_in_path = [self.network_graph.get_edge_data(path.route[i],
-                        path.route[i+1])['capacity'] for i in
-                        range(len(path)-1)]
-        return min(edges_in_path)
+        #        edges_in_path = [self.network_graph.get_edge_data(path.route[i],
+        #                        path.route[i+1])['capacity'] for i in
+        #                        range(len(path)-1)]
+        log.info("\n\nLBC: Entered in getMinCapacity\n")
+        log.info("LBC:  - Path: %s\n"%str(path))
+        log.info("LBC:  - NetGraph: %s\n\n"%str(self.network_graph.edges(data=True)))
+        
+        caps_in_path = []
+        for i in range(len(path.route)-1):
+            edge_data = self.network_graph.get_edge_data(path.route[i], path.route[i+1])
+            if 'capacity' not in edge_data.keys():
+                log.info("LBC: ERROR: capacity not in edge_data:\n")
+                log.info("LBC: (%s, %s):%s\n"%(path.route[i], path.route[i+1], str(edge_data)))
+            else:
+                caps_in_path.append(edge_data['capacity'])
+        return min(caps_in_path)
+
 
     def getMinCapacityEdge(self, path):
         """Returns the capacity of the lowest-capacity edge along the path.
@@ -449,15 +480,18 @@ class GreedyLBController(LBController):
         Implements abstract method.
         """
         log.info("LBC: Greedy Algorithm started\n")
-
         start_time = time.time()
         i = 1
+
         # Remove edge with least capacity from path
         (ex, ey) = self.getMinCapacityEdge(initial_path)
         tmp_nw = self.getNetworkWithoutEdge(self.network_graph, ex, ey)
         # Calculate new default dijkstra path
         next_default_dijkstra_path = self.getDefaultDijkstraPath(tmp_nw, flow)
 
+        if tmp_nw.edges() == self.network_graph.edges():
+            log.info("LBC: ERROR: copy of network graph is wrongly done \n")
+        
         # Repeat it until path is found that can allocate flow
         while not self.canAllocateFlow(next_default_dijkstra_path, flow):
             i = i + 1
@@ -474,8 +508,8 @@ class GreedyLBController(LBController):
         log.info("LBC:  - Iterations: %ds\n"%i)
 
         # Call to FIBBING Controller should be here
-        #self.sbmanager.simple_path_requirement(flow['dst']
-                
+        self.sbmanager.simple_path_requirement(flow['dst'].compressed, list(next_default_dijkstra_path.route))
+        log.info("LBC: Forced forwarding DAG in Southbound Manager\n")
 
 if __name__ == '__main__':
     log.info("LOAD BALANCER CONTROLLER\n")
