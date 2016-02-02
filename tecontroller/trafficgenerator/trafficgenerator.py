@@ -142,7 +142,7 @@ class TrafficGenerator(Base):
                         duration = dur)
             #Schedule flow creation
             self.scheduler.enter(flow['start_time'], 1, self._createFlow, ([flow]))
-
+            
         self.scheduler.run()
 
 def create_app(appl, traffic_generator):
