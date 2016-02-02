@@ -174,8 +174,6 @@ class LBController(DatabaseHandler):
         if not self._bwInAllEdges():
             self._readBwDataFromDB()
 
-        log.info("%s\n"%str(self.network_graph.edges(data=True)))
-        
         log.info("LBC: Bandwidths written in network_graph\n")
 
         # Fill the host2Ip and router2ip attributes
@@ -183,11 +181,7 @@ class LBController(DatabaseHandler):
         self._createRouter2IPBindings()
         log.info("LBC: Created IP-names bindings\n")
         for name, data in self.hosts_to_ip.iteritems():
-            log.info("  Hostname: %s\n"%name)
-            log.info("    iface_host: %s\n"%data['iface_host'])
-            log.info("    iface_router: %s\n"%data['iface_router'])
-            log.info("    router_name: %s\n"%data['router_name'])
-            log.info("    router_id: %s\n"%data['router_id'])
+            log.info("    Hostname: %s --> %s:%s\n"%(name,data['router_name'], data['router_id']))
 
         #spawn Json listener thread
         jl = JsonListener(eventQueue)
@@ -316,7 +310,7 @@ class LBController(DatabaseHandler):
             event = self.eventQueue.get()
             log.info("LBC: NEW event in the queue\n")
             log.info("LBC:  * Type: %s\n"%event['type'])
-            log.info("LBC:  * Data: %s)\n"%repr(event['data']))
+            #log.info("LBC:  * Data: %s)\n"%repr(event['data']))
             
             if event['type'] == 'newFlowStarted':
                 flow = event['data']
@@ -378,16 +372,21 @@ class LBController(DatabaseHandler):
         #        edges_in_path = [self.network_graph.get_edge_data(path.route[i],
         #                        path.route[i+1])['capacity'] for i in
         #                        range(len(path)-1)]
-        log.info("\n\nLBC: Entered in getMinCapacity\n")
-        log.info("LBC:  - Path: %s\n"%str(path))
-        log.info("LBC:  - NetGraph: %s\n\n"%str(self.network_graph.edges(data=True)))
+        #log.info("\n\nLBC: Entered in getMinCapacity\n")
+        #log.info("LBC:  - Path: %s\n"%str(path))
+        #log.info("LBC:  - NetGraph: %s\n\n"%str(self.network_graph.edges(data=True)))
         
         caps_in_path = []
         for i in range(len(path.route)-1):
             edge_data = self.network_graph.get_edge_data(path.route[i], path.route[i+1])
             if 'capacity' not in edge_data.keys():
-                log.info("LBC: ERROR: capacity not in edge_data:\n")
-                log.info("LBC: (%s, %s):%s\n"%(path.route[i], path.route[i+1], str(edge_data)))
+                #log.info("LBC: ERROR: capacity not in edge_data:\n")
+                #log.info("LBC: (%s, %s):%s\n"%(path.route[i], path.route[i+1], str(edge_data)))
+
+                #pass: it enters here because it considers as edges
+                #the links between interfaces (ip's) of the routers
+                pass
+
             else:
                 caps_in_path.append(edge_data['capacity'])
         return min(caps_in_path)
@@ -408,7 +407,6 @@ class LBController(DatabaseHandler):
                     minim_c = c
                     minim_edge = (x,y)
             return minim_edge
-
         
     def addFlowToPath(self, path, flow):
         """
@@ -422,10 +420,20 @@ class LBController(DatabaseHandler):
         log.info("LBC: Flow ALLOCATED to Path - %s:\n"%t)
         log.info("LBC:  * Path: %s\n"%str(path.route))
         log.info("LBC:  * Flow: %s\n"%str(flow))
+        
         # Substract flow size from edges capacity
         for (x, y, data) in self.network_graph.edges(data=True):
             if x in path.route and y in path.route and abs(path.route.index(x)-path.route.index(y))==1:
-                data['capacity'] -= flow.size
+                if 'capacity' not in data.keys():
+                    #log.info("LBC: (addFlowToPath): capacity not in keys:\n")
+                    #log.info("LBC:   * (x, y): (%s, %s)\n"%(str(x), str(y)))
+                    #log.info("LBC:   * data: %s\n"%str(data))
+
+                    #pass: it enters here because it considers as edges
+                    #the links between interfaces (ip's) of the routers
+                    pass
+                else:
+                    data['capacity'] -= flow.size
 
         t = threading.Thread(target=self.removeFlowFromPath, args=(path, flow, flow['duration']))
         self.thread_handlers[flow] = t
@@ -452,8 +460,16 @@ class LBController(DatabaseHandler):
         # Add again flow size from edges capacity
         for (x, y, data) in self.network_graph.edges(data=True):
             if x in path.route and y in path.route and abs(path.route.index(x)-path.route.index(y))==1:
-                data['capacity'] += flow.size
+                if 'capacity' not in data.keys():
+                    #log.info("LBC: (addFlowToPath): capacity not in keys:\n")
+                    #log.info("LBC:   * (x, y): (%s, %s)\n"%(str(x), str(y)))
+                    #log.info("LBC:   * data: %s\n"%str(data))
 
+                    #pass: it enters here because it considers as edges
+                    #the links between interfaces (ip's) of the routers
+                    pass
+                else:
+                    data['capacity'] += flow.size
 
     def getNetworkWithoutEdge(self, network_graph, x, y):
         """Returns a nx.DiGraph representing the network graph without the
@@ -504,12 +520,12 @@ class GreedyLBController(LBController):
         self.addFlowToPath(next_default_dijkstra_path, flow)
         elapsed_time = time.time() - start_time 
         log.info("LBC: Greedy Algorithm Finished:\n")
-        log.info("LBC:  - Elapsed time: %ds\n"%elapsed_time)
-        log.info("LBC:  - Iterations: %ds\n"%i)
+        log.info("      - Elapsed time: %ds\n"%elapsed_time)
+        log.info("      - Iterations: %ds\n"%i)
 
         # Call to FIBBING Controller should be here
-        self.sbmanager.simple_path_requirement(flow['dst'].compressed, list(next_default_dijkstra_path.route))
-        log.info("LBC: Forced forwarding DAG in Southbound Manager\n")
+        self.sbmanager.simple_path_requirement(flow['dst'].network.compressed, list(next_default_dijkstra_path.route))
+        log.info("LBC: Forcing forwarding DAG in Southbound Manager\n")
 
 if __name__ == '__main__':
     log.info("LOAD BALANCER CONTROLLER\n")
