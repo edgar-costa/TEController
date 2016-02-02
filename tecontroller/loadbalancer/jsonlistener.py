@@ -39,8 +39,8 @@ class JsonListener(threading.Thread):
 
     def newFlowStarted(self):
         req = flask.request.json
-        log.info("JSONLISTENER: newFlowStarted was executed\n")
-        log.info("JSONLISTENER:  * Request received: %s\n"%str(req))
+        #log.info("JSONLISTENER: newFlowStarted was executed\n")
+        #log.info("JSONLISTENER:  * Request received: %s\n"%str(req))
         
         flow = Flow(req['src'], req['dst'], req['sport'], req['dport'],
                     req['size'], req['start_time'], req['duration'])

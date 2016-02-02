@@ -31,6 +31,7 @@ import time
 import abc
 import traceback
 import Queue
+import copy
 
 HAS_INITIAL_GRAPH = threading.Event()
 
@@ -144,17 +145,17 @@ class LBController(DatabaseHandler):
                                   #  (route2): [flow3, flow6]}
                                   
         self.eventQueue = eventQueue #From where to read events 
-        self.timer_handlers = [] #threading.Timer() #Used to schedule
+        self.thread_handlers = {} #threading.Timer() #Used to schedule
                                  #flow alloc. removals
         self._stop = threading.Event() #Used to stop the thread
         self.hosts_to_ip = {}
         self.routers_to_ip = {}
-        self.scheduler = sched.scheduler(time.time, time.sleep)
+        #self.scheduler = sched.scheduler(time.time, time.sleep)
         CFG.read(dconf.C1_Cfg) #Must be called before create instance
                                #of SouthboundManager
 
-        sbmanager = MyGraphProvider()
-        t = threading.Thread(target=sbmanager.run, name="Graph Listener")
+        self.sbmanager = MyGraphProvider()
+        t = threading.Thread(target=self.sbmanager.run, name="Graph Listener")
         t.start()
         log.info("LBC: Graph Listener thread started\n")
 
@@ -162,14 +163,16 @@ class LBController(DatabaseHandler):
         log.info("LBC: Initial graph received\n")
                  
         # Retreieve network from Fibbing Controller
-        self.network_graph = sbmanager.igp_graph
+        self.network_graph = self.sbmanager.igp_graph
         
         # Include BW data inside network graph
         self._readBwDataFromDB()
+        log.info("LBC: Bandwidths written in network_graph\n")
         
         # Fill the host2Ip and router2ip attributes
         self._createHost2IPBindings()
         self._createRouter2IPBindings()
+        log.info("LBC: Created IP-names bindings\n")
         
         #spawn Json listener thread
         jl = JsonListener(eventQueue)
@@ -293,9 +296,9 @@ class LBController(DatabaseHandler):
         """
         while not self.isStopped():
             event = self.eventQueue.get()
-            log.info("LBC: New event in the queue\n")
+            log.info("LBC: NEW event in the queue\n")
             log.info("LBC:  * Type: %s\n"%event['type'])
-            log.info("LBC:  * Data: %s)\n"%event['data'])
+            log.info("LBC:  * Data: %s)\n"%repr(event['data']))
             
             if event['type'] == 'newFlowStarted':
                 flow = event['data']
@@ -309,7 +312,7 @@ class LBController(DatabaseHandler):
         Treat new incoming flow.
         """
         # Get the default OSFP Dijkstra path
-        defaultPath = self.getDefaultDijkstraPath(flow)
+        defaultPath = self.getDefaultDijkstraPath(self.network_graph, flow)
 
         # If it can be allocated, no Fibbing is needed
         if self.canAllocateFlow(defaultPath, flow):
@@ -318,7 +321,7 @@ class LBController(DatabaseHandler):
             # Otherwise, call the abstract method
             self.flowAllocationAlgorithm(flow)            
 
-    def getDefaultDijkstraPath(self, flow):
+    def getDefaultDijkstraPath(self, network_graph, flow):
         """Gives the current path from src to dest
         """
         # We assume here that Flow is well formed, and that the
@@ -328,7 +331,7 @@ class LBController(DatabaseHandler):
         src_router_name, src_router_id = self._db_getConnectedRouter(src_name)
         dst_router_name, dst_router_id = self._db_getConnectedRouter(dst_name)
         
-        route = tuple(nx.dijkstra_path(self.network_graph, src_router_id, dst_router_id))
+        route = tuple(nx.dijkstra_path(network_graph, src_router_id, dst_router_id))
         edges = self.getEdgesInfoFromRoute(route)
         path = IPNetPath(route=route, edges=edges)
         return path
@@ -359,7 +362,23 @@ class LBController(DatabaseHandler):
                         range(len(path)-1)]
         return min(edges_in_path)
 
-    
+    def getMinCapacityEdge(self, path):
+        """Returns the capacity of the lowest-capacity edge along the path.
+        """
+        edges_in_path = [((path.route[i], path.route[i+1]),
+                          self.network_graph.get_edge_data(path.route[i],
+                                                           path.route[i+1])['capacity']) for i in
+                         range(len(path)-1)]
+        if edges_in_path:
+            minim_c = edges_in_path[0][1]
+            minim_edge = edges_in_path[0][0]
+            for ((x,y), c) in edges_in_path:
+                if c < minim_c:
+                    minim_c = c
+                    minim_edge = (x,y)
+            return minim_edge
+
+        
     def addFlowToPath(self, path, flow):
         """
         """
@@ -368,44 +387,95 @@ class LBController(DatabaseHandler):
         else:
             self.flow_allocation[path.route] = [flow]
 
+        t = time.strftime("%H:%M:%S", time.gmtime())
+        log.info("LBC: Flow ALLOCATED to Path - %s:\n"%t)
+        log.info("LBC:  * Path: %s\n"%str(path.route))
+        log.info("LBC:  * Flow: %s\n"%str(flow))
         # Substract flow size from edges capacity
         for (x, y, data) in self.network_graph.edges(data=True):
             if x in path.route and y in path.route and abs(path.route.index(x)-path.route.index(y))==1:
-                log.info('%s\n'%str(data))
                 data['capacity'] -= flow.size
 
+        t = threading.Thread(target=self.removeFlowFromPath, args=(path, flow, flow['duration']))
+        self.thread_handlers[flow] = t
+        t.start()
         # Schedule flow removal
-        self.scheduler.enter(flow['duration'], 1, self.removeFlowFromPath, ([path, flow]))
-
-    def removeFlowFromPath(self, path, flow):        
+        #self.scheduler.enter(flow['duration'], 1, self.removeFlowFromPath, ([path, flow]))
+        #self.scheduler.run()
+        
+    def removeFlowFromPath(self, path, flow, after):        
         """
         """
+        time.sleep(after) #wait for after seconds
+        
         if path.route in self.flow_allocation.keys(): #exists already
             self.flow_allocation[path.route].remove(flow)
         else:
             raise KeyError("The flow is not in the Path")
 
+        t = time.strftime("%H:%M:%S", time.gmtime())
+        log.info("LBC: Flow REMOVED from Path - %s:\n"%t)
+        log.info("LBC:  * Path: %s\n"%str(path.route))
+        log.info("LBC:  * Flow: %s\n"%repr(flow))
+
         # Add again flow size from edges capacity
         for (x, y, data) in self.network_graph.edges(data=True):
             if x in path.route and y in path.route and abs(path.route.index(x)-path.route.index(y))==1:
                 data['capacity'] += flow.size
-                
 
-    @abc.abstractmethod
-    def flowAllocationAlgorithm(self, flow):
+
+    def getNetworkWithoutEdge(self, network_graph, x, y):
+        """Returns a nx.DiGraph representing the network graph without the
+        (x,y) edge.
+
         """
-        """
+        ng_temp = copy.deepcopy(network_graph)
+        ng_temp.remove_edge(x, y)
+        return ng_temp
+
         
+                
+    @abc.abstractmethod
+    def flowAllocationAlgorithm(self, flow, initial_path):
+        """
+        """
         
 class GreedyLBController(LBController):
     def __init__(self, *args, **kwargs):
         super(GreedyLBController, self).__init__(*args, **kwargs)
 
-    def flowAllocationAlgorithm(self, flow):
+    def flowAllocationAlgorithm(self, flow, initial_path):
         """
-        Implements abstract method
+        Implements abstract method.
         """
-        log.info("Greedy Algorithm was run\n")
+        log.info("LBC: Greedy Algorithm started\n")
+
+        start_time = time.time()
+        i = 1
+        # Remove edge with least capacity from path
+        (ex, ey) = self.getMinCapacityEdge(initial_path)
+        tmp_nw = self.getNetworkWithoutEdge(self.network_graph, ex, ey)
+        # Calculate new default dijkstra path
+        next_default_dijkstra_path = self.getDefaultDijkstraPath(tmp_nw)
+
+        # Repeat it until path is found that can allocate flow
+        while not canAllocateFlow(next_default_dijkstra_path, flow):
+            i = i + 1
+            initial_path = next_default_dijkstra_path
+            (ex, ey) = self.getMinCapacityEdge(initial_path)
+            tmp_nw = self.getNetworkWithoutEdge(tmp_nw, ex, ey)
+            next_default_dijkstra_path = self.getDefaultDijkstraPath(tmp_nw)
+
+        # Allocate flow to Path
+        self.addFlowToPath(next_default_dijkstra_path, flow)
+        elapsed_time = time.time() - start_time 
+        log.info("LBC: Greedy Algorithm Finished:\n")
+        log.info("LBC:  - Elapsed time: %ds\n"%elapsed_time)
+        log.info("LBC:  - Iterations: %ds\n"%i)
+
+        # Call to FIBBING Controller should be here
+        #self.sbmanager.simple_path_requirement(flow['dst']
+        
         
 
 if __name__ == '__main__':
