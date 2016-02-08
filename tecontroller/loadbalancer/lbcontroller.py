@@ -41,6 +41,9 @@ log = get_logger()
 
 eventQueue = Queue.Queue()
 
+lineend = "-"*60+'\n'
+
+
 class MyGraphProvider(SouthboundManager):
     """This class overrwides the received_initial_graph abstract method of
     the SouthboundManager class. It is used to receive the initial
@@ -308,8 +311,8 @@ class LBController(DatabaseHandler):
         """
         while not self.isStopped():
             event = self.eventQueue.get()
-            log.info("LBC: NEW event in the queue\n")
-            log.info("LBC:  * Type: %s\n"%event['type'])
+            log.info("LBC: NEW event in the queue "+lineend)
+            log.info("      * Type: %s\n"%event['type'])
             #log.info("LBC:  * Data: %s)\n"%repr(event['data']))
             
             if event['type'] == 'newFlowStarted':
@@ -417,9 +420,9 @@ class LBController(DatabaseHandler):
             self.flow_allocation[path.route] = [flow]
 
         t = time.strftime("%H:%M:%S", time.gmtime())
-        log.info("LBC: Flow ALLOCATED to Path - %s:\n"%t)
-        log.info("LBC:  * Path: %s\n"%str(path.route))
-        log.info("LBC:  * Flow: %s\n"%str(flow))
+        log.info(("LBC: Flow ALLOCATED to Path - %s "+lineend)%t)
+        log.info("      * Path: %s\n"%str(path.route))
+        log.info("      * Flow: %s\n"%str(flow))
         
         # Substract flow size from edges capacity
         for (x, y, data) in self.network_graph.edges(data=True):
@@ -453,9 +456,9 @@ class LBController(DatabaseHandler):
             raise KeyError("The flow is not in the Path")
 
         t = time.strftime("%H:%M:%S", time.gmtime())
-        log.info("LBC: Flow REMOVED from Path - %s:\n"%t)
-        log.info("LBC:  * Path: %s\n"%str(path.route))
-        log.info("LBC:  * Flow: %s\n"%repr(flow))
+        log.info(("LBC: Flow REMOVED from Path - %s "+lineend)%t)
+        log.info("      * Path: %s\n"%str(path.route))
+        log.info("      * Flow: %s\n"%repr(flow))
 
         # Add again flow size from edges capacity
         for (x, y, data) in self.network_graph.edges(data=True):
@@ -519,9 +522,9 @@ class GreedyLBController(LBController):
         # Allocate flow to Path
         self.addFlowToPath(next_default_dijkstra_path, flow)
         elapsed_time = time.time() - start_time 
-        log.info("LBC: Greedy Algorithm Finished:\n")
-        log.info("      - Elapsed time: %ds\n"%elapsed_time)
-        log.info("      - Iterations: %ds\n"%i)
+        log.info("LBC: Greedy Algorithm Finished "+lineend)
+        log.info("      * Elapsed time: %ds\n"%elapsed_time)
+        log.info("      * Iterations: %ds\n"%i)
 
         # Call to FIBBING Controller should be here
         self.sbmanager.simple_path_requirement(flow['dst'].network.compressed, list(next_default_dijkstra_path.route))
