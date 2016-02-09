@@ -14,6 +14,8 @@ from mininet.util import custom
 from mininet.link import TCIntf
 
 from tecontroller.trafficgenerator.mycustomhost import MyCustomHost
+from tecontroller.res.mycustomrouter import MyCustomRouter
+
 from tecontroller.trafficgenerator.trafficgenerator import TrafficGenerator
 from tecontroller.res import defaultconf as dconf
 
@@ -35,6 +37,49 @@ S2 = 's2'
 D2 = 'd2'
 
 BW = 1  # Absurdly low bandwidth for easy congestion (in Mb)
+
+
+
+# Setting global data
+SNMP_START_CMD = '/usr/sbin/snmpd -Lsd -Lf /dev/null -u snmp -I -smux -p /var/run/snmpd.pid -c /etc/snmp/snmpd.conf'
+
+SNMP_WALK_CMD = 'snmpwalk -v 1 -c public -O e '
+
+SNMP_WALK_OUT = 'dump.out'
+
+COMMAND_BANNER = '\n\n*******************************************************************\n             MININET - SNMP WALK - DEMO APPLICATION                \n*******************************************************************\n\n'
+
+
+class snmpTestTopo(IPTopo):
+    def build(self, *args, **kwargs):
+        """       +---+
+               ___|R3 |__
+            3 /   +---+  \3
+             /            \
+ +--+      +----+   10   +---+        +--+
+ |S1|------| R1 |--------| R2|--------|D1|
+ +--+      +----+        +---+_       +--+
+              |            |   \_  
+            +---+        +---+   +---+
+            |C1 |        |LBC|   |TG |
+            +---+        +---+   +---+
+        """
+        r1 = self.addRouter(R1, cls=MyCustomRouter)
+        r2 = self.addRouter(R2, cls=MyCustomRouter)
+        r3 = self.addRouter(R3, cls=MyCustomRouter)
+        self.addLink(r1, r2, cost = 10)
+        self.addLink(r1, r3, cost = 3)
+        self.addLink(r3, r2, cost = 3)
+        
+        s1 = self.addHost(S1)
+        d1 = self.addHost(D1)
+
+        self.addLink(s1, r1)
+        self.addLink(d1, r2)
+
+        # Adding Fibbing Controller
+        c1 = self.addController(C1, cfg_path=C1_cfg)
+        self.addLink(c1, r1, cost = 1000)
 
 class SimpleTopo(IPTopo):
     def build(self, *args, **kwargs):
@@ -123,16 +168,16 @@ class SIGTopo(IPTopo):
         self.addLink(c1, r4, cost=999)
 
         # Adding Traffic Generator Host
-        c2 = self.addHost(TG, isTrafficGenerator=True) 
-        self.addLink(c2, r4)
+        #c2 = self.addHost(TG, isTrafficGenerator=True) 
+        #self.addLink(c2, r4)
 
         # Adding Traffic Engineering Controller
-        c3 = self.addHost(LBC, isLBController=True)
-        self.addLink(c3, r4)
+        #c3 = self.addHost(LBC, isLBController=True)
+        #self.addLink(c3, r4)
 
 
 def launch_network():
-    net = IPNet(topo=SIGTopo(),
+    net = IPNet(topo=snmpTestTopo(),
                 debug=_lib.DEBUG_FLAG,
                 intf=custom(TCIntf, bw=BW),
                 host=MyCustomHost)
