@@ -15,7 +15,6 @@ We allow for 3 different types of MyCustomHost to be created:
    controller inside the newly created host.
 
 """
-
 from fibbingnode.misc.mininetlib import get_logger
 from tecontroller.res import defaultconf as dconf
 import mininet.node as _node
@@ -58,7 +57,6 @@ class MyCustomHost(_node.Host):
             daemon_file = daemon_logfile % (self.name)
             i = open(iperf_file, 'w')
             d = open(daemon_file, 'w')
-            
             #Spawn the iperf server process
             log.info('\nHost %s: Creating iperf server process, port %s\n'%(self.name, dconf.Hosts_DefaultIperfPort))
             iperf_server_process = self.popen('iperf', '-u', '-s',
