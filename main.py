@@ -13,7 +13,7 @@ from fibbingnode.algorithms.ospf_simple import OSPFSimple
 from mininet.util import custom
 from mininet.link import TCIntf
 
-from tecontroller.trafficgenerator.mycustomhost import MyCustomHost
+from tecontroller.res.mycustomhost import MyCustomHost
 from tecontroller.res.mycustomrouter import MyCustomRouter
 
 from tecontroller.trafficgenerator.trafficgenerator import TrafficGenerator
