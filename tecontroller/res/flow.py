@@ -51,6 +51,23 @@ class Base(object):
                 string = string % val
                 string = string + unit
                 return string
+
+            
+    def setSizeToStr2(self, size):
+        """Expects an integer representing number of bytes as input.
+        """
+        units = [('G', 1e9), ('M', 1e6), ('K', 1e3), ('B', 1)]
+        #units = [('M', 1e6), ('K', 1e3)] #only K and M are supported by iperf
+        string = "%.2f "
+        #string = "%d"
+        for (unit, value) in units:
+            q, r = divmod(size, value)
+            if q > 0.0:
+                val = (q*value + r)/value
+                #val = int((q*value + r)/value) 
+                string = string % val
+                string = string + unit
+                return string
             
     def setTimeToInt(self, duration = '1m'):
         """Transforms the time notation into an integer representing the time
