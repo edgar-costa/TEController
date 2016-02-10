@@ -80,3 +80,36 @@ class DatabaseHandler(object):
                     router_id = self._db_getIPFromHostName(router_name)
                     return router_name, router_id
 
+
+    def _db_getRouters(self):
+        """Returns a list of name-routerid bindings: [('r1', '192.153.2.2'),
+        ...]
+        """
+        return [(node, data['routerid']) for node, data in
+                self.db.network.iteritems() if data['type'] == 'router']
+
+    def _db_getEdge(self, x, y):
+        """x and y are assumed to be strings representing the name of the
+        network nodes (either routers, hosts or controllers: 'r1',
+        'c1', 's1'...
+        """
+        return self.db.network[x][y]
+    
+    def _db_getAllEdges(self):
+        """Returns all edge information from the network. It is used in the
+        Links Monitor object.
+        """
+        i = 0
+        edges = {}
+        for node, data in self.db.network.iteritems():
+            if data['type'] == 'router':
+                for neighbor, ndata in data.iteritems():
+                    if neighbor != 'type' and neighbor != 'routerid':
+                        edgeData = self._db_getEdge(node, neighbor)
+                        linkname = "L%d"%i
+                        i += 1
+                        edges[linkname] = {'edge': (node, neighbor),
+                                           'bw': edgeData['bw']*1e6,
+                                           'load': 0,
+                                           'interface': edgeData['name']} 
+        return edges
