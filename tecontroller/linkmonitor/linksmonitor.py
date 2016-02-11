@@ -44,7 +44,6 @@ class LinksMonitor(DatabaseHandler):
         s += '\n'
         return s    
 
-
     def _startCounters(self):
         routers = self._db_getRouters()
         counters_dict = {name:{'routerid':rid, 'counter': SnmpCounters(routerIp=rid)} for name, rid in routers}
@@ -95,9 +94,9 @@ class LinksMonitor(DatabaseHandler):
             currentPercentages = np.multiply(loads/(np.multiply(bandwidths, elapsed_time)), 100)
 
 
-            print "Elapsed time: %s"%elapsed_time
-            print "Loads: %s"%str(loads)
-            print "Bws: %s"%str(bandwidths)
+            #print "Elapsed time: %s"%elapsed_time
+            #print "Loads: %s"%str(loads)
+            #print "Bws: %s"%str(bandwidths)
             
             # Set link loads by interface name
             for i, iface_name in enumerate(iface_names):
@@ -117,11 +116,9 @@ class LinksMonitor(DatabaseHandler):
                 continue
             taken.append((x,y))
             load = data['load']
-            s += ",(%s,%.2f%%)"%(link, load)
+            s += ",(%s %.3f%%)"%(link, load)
         s += '\n'
-        print s
         f.write(s)    
-
             
     def run(self):
         """
