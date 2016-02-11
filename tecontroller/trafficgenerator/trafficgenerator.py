@@ -133,7 +133,7 @@ class TrafficGenerator(Base):
             [s, d, sp, dp, size, s_t, dur] = flowline.strip('\n').split(',')
             srcip = self.getHostIPByName(s)
             dstip = self.getHostIPByName(d)
-            if srcip =! None and dstip =! None:
+            if srcip != None and dstip != None:
                 flow = Flow(src = srcip,
                             dst = dstip,
                             sport = sp,
