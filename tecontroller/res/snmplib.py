@@ -7,9 +7,7 @@ from tecontroller.res.flow import Base
 import subprocess
 import time
 import datetime
-
-
-max_capacity = (100e6)/8
+import numpy as np
 
 class SnmpCounters(Base):
     def __init__(self, routerIp = "127.0.0.1", port = 161):
@@ -17,35 +15,40 @@ class SnmpCounters(Base):
         
         self.routerIp = routerIp
         self.port = port
-        self.lastUpdated = time.time()
+        self.lastUpdated = 0
         self.interfaces = self.getInterfaces()
-        # set counters to initial state
-        self.updateCounters32()
+        self.counters = np.array([0]*len(self.interfaces))
+        self.timeDiff = 0
+        self.countersDiff = np.array([0]*len(self.interfaces))
 
+        self.setRefreshTimeToMinimum()
+        
     def __repr__(self):
         return "SNMPCounter(%s)"%self.routerIp
 
     def __str__(self):
+        """
+        """
         st = datetime.datetime.fromtimestamp(self.lastUpdated).strftime('%Y-%m-%d %H:%M:%S')
         s = "%s at %s:\n"%(self.routerIp, st)
-        for mac, data in self.interfaces.iteritems():
-            duration = data['duration_last_period']
-            bytes_observed = data['load_last_period']
-            avg_usage = int(bytes_observed/float(duration))
+        duration = self.timeDiff
+        for i, data in enumerate(self.interfaces):
+            mac = data['mac']
+            bytes_observed = self.countersDiff[i]
             
-            s += "    Iface Number: %s  Name: %s\tMAC: %s\tTotal: %s\tPeriod length: %s\tAvg.Usage: %s/s\n"%(data['number'],data['name'],mac, self.setSizeToStr2(bytes_observed), self.setTimeToStr(duration), self.setSizeToStr2(avg_usage))
+            s += "    Iface Number: %s\tName: %s\tMAC: %s\tTraffic Observed: %s\tPeriod length: %s\n"%(data['number'],data['name'],mac, self.setSizeToStr2(bytes_observed), self.setTimeToStr(duration))
         return s
 
 
-    def getLoadByIfaceName(self, iface_name):
-        loads = [data['load'] for mac, data in self.interfaces.iteritems() if data['name'] == iface_name]
-        if loads != []:
-            load = loads[0]
-            return load
-        else:
-            raise KeyError("iface_name: %s does not belong to any router interface"%iface_name)
+    
+    def setRefreshTimeToMinimum(self):
+        p = subprocess.Popen(['snmpset', self.routerIp, 'nsCacheTimeout.1.3.6.1.2.1.2.2', 'i', '1'],
+                             stdout=subprocess.PIPE,
+                             stderr=subprocess.PIPE)
+        out, err = p.communicate()
 
-            
+
+    
     def getInterfaces(self):
         """
         """
@@ -83,10 +86,9 @@ class SnmpCounters(Base):
                   len(a.split(" = ")) == 2 and out.split('\n').index(a) != 0]
         macs = [a[a.index(':')+2:] for a in macs_t if a]
         
-        ifaces_dict = {macs[i]:{'number': ifaces[i], 'name':names[i],
-                                'mtu':mtus[i], 'load_last_period': 0,
-                                'duration_last_period':0, 'total':0}
-                       for i in range(len(macs))}
+        ifaces_dict = [{'number': ifaces[i], 'mac':macs[i],
+                        'name':names[i], 'mtu':mtus[i]} for i
+                       in range(len(macs))]
         return ifaces_dict
 
     
@@ -106,7 +108,7 @@ class SnmpCounters(Base):
         numbers = [a[a.index('.')+1:] for a in numbers_t if a][1:]
         
         in_counters_t = [a.split(" = ")[1] for a in out.split('\n') if len(a.split(" = ")) == 2]
-        in_counters = [a[a.index(':')+2:] for a in in_counters_t if a][1:]
+        in_counters = np.asarray([int(a[a.index(':')+2:]) for a in in_counters_t if a][1:])
         
         # ifOutOctets
         # call snmpwalk
@@ -117,35 +119,38 @@ class SnmpCounters(Base):
         
         # process snmpwalk output
         out_counters_t = [a.split(" = ")[1] for a in out.split('\n') if len(a.split(" = ")) == 2]
-        out_counters = [a[a.index(':')+2:] for a in out_counters_t if a][1:]
-        
-        data = [(numbers[i], in_counters[i], out_counters[i]) for i in range(len(out_counters))]
+        out_counters = np.asarray([int(a[a.index(':')+2:]) for a in out_counters_t if a][1:])
 
+        # Treated as np.arrays from here on
+        total_counters = np.multiply((in_counters + out_counters), 8) # in bits
+        
         # update interfaces data structure
         updateTime=time.time()
-
-        for (num, i, o) in data:
-            mac = [mac for mac, data in self.interfaces.iteritems() if data['number'] == num][0]
-            
-            total_bytes = self.interfaces[mac]['total']
-            previous_load = self.interfaces[mac]['load_last_period']
-
-            sumio = int(i) + int(o)
-            difference = sumio - total_bytes
-
-            if difference != 0:
-                # Counters have been updated, so change data
-                self.interfaces[mac]['total'] += difference
-                self.interfaces[mac]['load_last_period'] = difference
-                self.interfaces[mac]['duration_last_period'] = updateTime - self.lastUpdated
-                
-                # Update last timestamp
-                self.lastUpdated = updateTime
-            else:
-                # Counters haven't been updated
-                break
-
+        self.timeDiff = updateTime - self.lastUpdated
+        self.countersDiff = total_counters - self.counters
+        self.counters = total_counters
+        
+        # Update last timestamp
+        self.lastUpdated = updateTime
         
     def fromLastLecture(self):
         return time.time() - self.lastUpdated
 
+
+    def getLoads(self):
+        """Returns the current loads of the router's interfaces
+        """
+        return self.countersDiff
+    
+    def getLoadByIfaceName(self, iface_name):
+        """Return load of specific router interface. iface_name is assumed to
+        be similar as: r1-eth0
+        """
+        load = [self.countersDiff[int(data['number'])-2] for data in
+                self.interfaces if data['name'] == iface_name]
+        if load != []:
+            return load[0]
+        else:
+            raise KeyError("iface_name: %s does not belong to any router interface"%iface_name)
+
+            
