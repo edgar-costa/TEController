@@ -3,12 +3,20 @@
 host. This host will periodically monitor the load of all links in the
 network and will log the corresponding data.
 
+TODO:
+ * Add logs to module
 """
+from fibbingnode.misc.mininetlib import get_logger
+
 from tecontroller.res.snmplib import SnmpCounters
 from tecontroller.res.dbhandler import DatabaseHandler
 from tecontroller.res import defaultconf as dconf
+
 import time
 import numpy as np
+
+log = get_logger()
+#log.info("\n")
 
 class LinksMonitor(DatabaseHandler):
     """
@@ -16,10 +24,13 @@ class LinksMonitor(DatabaseHandler):
     """
     def __init__(self, interval=1, logfile = dconf.LinksMonitor_LogFile):
         super(LinksMonitor, self).__init__()
+        log.info("LINKS MONITOR\n")
+        log.info("-"*60+"\n")
         self.links = self._db_getAllEdges()
         self.interval = interval
         self.counters = self._startCounters()
         self.logfile = logfile
+        self.printLinksToEdges()
 
     def printLinksToEdges(self):
         s = "Links to edges\n==============\n"
@@ -125,7 +136,7 @@ class LinksMonitor(DatabaseHandler):
         """
         """
         f = open(self.logfile, 'w')
-        
+        log.info("Going inside the run() loop...\n")
         while True:
             # Update links with fresh data from the counters
             self.updateLinks()
@@ -139,6 +150,5 @@ if __name__ == '__main__':
     lm = LinksMonitor(interval=refreshInterval)
     lm.printLinksToEdges()
     lm.run()
-
 
     
