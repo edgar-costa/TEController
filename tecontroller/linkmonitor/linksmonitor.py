@@ -24,13 +24,16 @@ class LinksMonitor(DatabaseHandler):
     """
     def __init__(self, interval=1, logfile = dconf.LinksMonitor_LogFile):
         super(LinksMonitor, self).__init__()
-        log.info("LINKS MONITOR\n")
+        log.info("LINKS MONITOR -- interval:%s\n"%str(interval))
         log.info("-"*60+"\n")
+        log.info("Read all edges from network...\n")
         self.links = self._db_getAllEdges()
         self.interval = interval
+        log.info("Start all counters...\n")
         self.counters = self._startCounters()
         self.logfile = logfile
-        self.printLinksToEdges()
+        log.info("Network edges:\n")
+        log.info("%s\n"%self.printLinksToEdges())
 
     def printLinksToEdges(self):
         s = "Links to edges\n==============\n"
@@ -42,7 +45,7 @@ class LinksMonitor(DatabaseHandler):
             taken.append((x,y))
             s += link+' -> '+str(data['edge'])+'\n'
         s += '\n\n'
-        print s
+        return s
 
     def __str__(self):
         s = ""
@@ -115,11 +118,12 @@ class LinksMonitor(DatabaseHandler):
                 iface_load = currentPercentages[i]
                 self._setLinkLoad(iface_name, iface_load)
 
-    def log(self, f):
+    def log(self):
         """This function logs the state of the links. f is supposed to be an
         open python file with write access
 
         """
+        f = open(self.logfile, 'w')
         s = "%s"%time.time()
         taken = []
         for link, data in self.links.iteritems():
@@ -131,24 +135,25 @@ class LinksMonitor(DatabaseHandler):
             s += ",(%s %.3f%%)"%(link, load)
         s += '\n'
         f.write(s)    
-            
+        f.close()
+
+        
     def run(self):
         """
         """
-        f = open(self.logfile, 'w')
         log.info("Going inside the run() loop...\n")
         while True:
             # Update links with fresh data from the counters
             self.updateLinks()
             # Log new values to logfile
-            self.log(f)
+            self.log()
             # Go to sleep for some interval time
             time.sleep(self.interval/2)
                 
 if __name__ == '__main__':
     refreshInterval = 1.05 #seconds
     lm = LinksMonitor(interval=refreshInterval)
-    lm.printLinksToEdges()
+    print lm.printLinksToEdges()
     lm.run()
 
     
