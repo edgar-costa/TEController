@@ -44,6 +44,7 @@ Hosts_DefaultIperfPort = '5001'
 
 # Log folder for the hosts
 Hosts_LogFolder = PPATH + "logs/"
+
 # Log file for linksmonitor
 LinksMonitor_LogFile = PPATH + "logs/links.log"
 
