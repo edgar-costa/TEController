@@ -35,19 +35,9 @@ D1 = 'd1'
 S1 = 's1'
 S2 = 's2'
 D2 = 'd2'
+M1 = 'm1'
 
 BW = 1  # Absurdly low bandwidth for easy congestion (in Mb)
-
-
-
-# Setting global data
-SNMP_START_CMD = '/usr/sbin/snmpd -Lsd -Lf /dev/null -u snmp -I -smux -p /var/run/snmpd.pid -c /etc/snmp/snmpd.conf'
-
-SNMP_WALK_CMD = 'snmpwalk -v 1 -c public -O e '
-
-SNMP_WALK_OUT = 'dump.out'
-
-COMMAND_BANNER = '\n\n*******************************************************************\n             MININET - SNMP WALK - DEMO APPLICATION                \n*******************************************************************\n\n'
 
 
 class snmpTestTopo(IPTopo):
@@ -81,6 +71,9 @@ class snmpTestTopo(IPTopo):
         c1 = self.addController(C1, cfg_path=C1_cfg)
         self.addLink(c1, r1, cost = 1000)
 
+
+
+        
 class SimpleTopo(IPTopo):
     def build(self, *args, **kwargs):
         """       +---+
@@ -89,15 +82,15 @@ class SimpleTopo(IPTopo):
              /            \
  +--+      +----+   10   +---+        +--+
  |S1|------| R1 |--------| R2|--------|D1|
- +--+      +----+        +---+_       +--+
-              |            |   \_  
-            +---+        +---+   +---+
-            |C1 |        |LBC|   |TG |
-            +---+        +---+   +---+
+ +--+     _+----+        +---+_       +--+
+        _/    |            |   \_  
+   +---+    +---+        +---+   +---+
+   |M1 |    |C1 |        |LBC|   |TG |
+   +---+    +---+        +---+   +---+
         """
-        r1 = self.addRouter(R1)
-        r2 = self.addRouter(R2)
-        r3 = self.addRouter(R3)
+        r1 = self.addRouter(R1, cls=MyCustomRouter)
+        r2 = self.addRouter(R2, cls=MyCustomRouter)
+        r3 = self.addRouter(R3, cls=MyCustomRouter)
         self.addLink(r1, r2, cost = 10)
         self.addLink(r1, r3, cost = 3)
         self.addLink(r3, r2, cost = 3)
@@ -113,6 +106,9 @@ class SimpleTopo(IPTopo):
         c1 = self.addController(C1, cfg_path=C1_cfg)
         self.addLink(c1, r1, cost = 1000)
 
+        # Add Link Monitorer
+        m1 = self.addHost(M1, isMonitorer=True)
+        self.addLink(m1, r1)
 
         # Adding Traffic Generator Host
         c2 = self.addHost(TG, isTrafficGenerator=True) 
@@ -138,16 +134,16 @@ class SIGTopo(IPTopo):
               |   /        |
  +--+      +----+'       +---+        +--+
  |S1|------| R1 |--------| R4|--------|C1|
- +--+      +----+        +---+_       +--+
-              |            |   \__
-            +---+        +---+    \+---+
-            |S2 |        |TG |     |LBC|
-            +---+        +---+     +---+
+ +--+     _+----+        +---+_       +--+
+        _/    |            |   \__
+   +---+    +---+        +---+    \+---+
+   | M1|    |S2 |        |TG |     |LBC|
+   +---+    +---+        +---+     +---+
         """
-        r1 = self.addRouter(R1)
-        r2 = self.addRouter(R2)
-        r3 = self.addRouter(R3)
-        r4 = self.addRouter(R4)
+        r1 = self.addRouter(R1, cls=MyCustomRouter)
+        r2 = self.addRouter(R2, cls=MyCustomRouter)
+        r3 = self.addRouter(R3, cls=MyCustomRouter)
+        r4 = self.addRouter(R4, cls=MyCustomRouter)
         self.addLink(r1, r2, cost=10)
         self.addLink(r1, r4)
         self.addLink(r2, r3)
@@ -167,20 +163,25 @@ class SIGTopo(IPTopo):
         c1 = self.addController(C1, cfg_path=C1_cfg)
         self.addLink(c1, r4, cost=999)
 
+        # Add Link Monitorer
+        m1 = self.addHost(M1, isMonitorer=True)
+        self.addLink(m1, r1)
+
         # Adding Traffic Generator Host
-        #c2 = self.addHost(TG, isTrafficGenerator=True) 
-        #self.addLink(c2, r4)
+        c2 = self.addHost(TG, isTrafficGenerator=True) 
+        self.addLink(c2, r4)
 
         # Adding Traffic Engineering Controller
-        #c3 = self.addHost(LBC, isLBController=True)
-        #self.addLink(c3, r4)
+        c3 = self.addHost(LBC, isLBController=True)
+        self.addLink(c3, r4)
 
 
 def launch_network():
-    net = IPNet(topo=snmpTestTopo(),
+    net = IPNet(topo=SIGTopo(),
                 debug=_lib.DEBUG_FLAG,
                 intf=custom(TCIntf, bw=BW),
                 host=MyCustomHost)
+    
     TopologyDB(net=net).save(dconf.DB_Path)
     net.start()
     FibbingCLI(net)
