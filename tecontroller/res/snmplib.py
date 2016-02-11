@@ -9,10 +9,14 @@ import time
 import datetime
 import numpy as np
 
+from fibbingnode.misc.mininetlib import get_logger
+
+time_info = True
+log = get_logger()
+
 class SnmpCounters(Base):
     def __init__(self, routerIp = "127.0.0.1", port = 161):
         super(SnmpCounters, self).__init__()
-        
         self.routerIp = routerIp
         self.port = port
         self.lastUpdated = 0
@@ -20,7 +24,6 @@ class SnmpCounters(Base):
         self.counters = np.array([0]*len(self.interfaces))
         self.timeDiff = 0
         self.countersDiff = np.array([0]*len(self.interfaces))
-
         self.setRefreshTimeToMinimum()
         
     def __repr__(self):
@@ -42,16 +45,20 @@ class SnmpCounters(Base):
 
     
     def setRefreshTimeToMinimum(self):
+        start = time.time()
         p = subprocess.Popen(['snmpset', self.routerIp, 'nsCacheTimeout.1.3.6.1.2.1.2.2', 'i', '1'],
                              stdout=subprocess.PIPE,
                              stderr=subprocess.PIPE)
         out, err = p.communicate()
-
+        if time_info:
+            log.info("snmplib.py: setRefreshTimeToMinimum() took: %d seconds\n"%(time.time()-start))
 
     
     def getInterfaces(self):
         """
         """
+        start = time.time()
+        
         # get the interface names
         OID = 'ifDescr'
         p = subprocess.Popen(['snmpwalk',self.routerIp, OID],
@@ -89,6 +96,10 @@ class SnmpCounters(Base):
         ifaces_dict = [{'number': ifaces[i], 'mac':macs[i],
                         'name':names[i], 'mtu':mtus[i]} for i
                        in range(len(macs))]
+
+        if time_info:
+            log.info("snmplib.py: getInterfaces() took: %d seconds\n"%(time.time()-start))
+
         return ifaces_dict
 
     
@@ -96,6 +107,7 @@ class SnmpCounters(Base):
         """This function should use pySnmp library instead. But due to a bug,
         we are using snmpwalk now.
         """
+        start = time.time()
         # ifInOctets
         # call snmpwalk
         p = subprocess.Popen(['snmpwalk', self.routerIp, 'ifInOctets'],
@@ -132,7 +144,11 @@ class SnmpCounters(Base):
         
         # Update last timestamp
         self.lastUpdated = updateTime
-        
+
+        if time_info:
+            log.info("snmplib.py: updateCounters32() took: %d seconds\n"%(time.time()-start))
+
+
     def fromLastLecture(self):
         return time.time() - self.lastUpdated
 
