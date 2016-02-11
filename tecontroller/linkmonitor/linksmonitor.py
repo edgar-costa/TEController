@@ -1,3 +1,4 @@
+#!/usr/bin/python
 """This is a python script that will run in a dedicated mininet
 host. This host will periodically monitor the load of all links in the
 network and will log the corresponding data.
