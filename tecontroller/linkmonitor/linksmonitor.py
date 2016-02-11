@@ -16,7 +16,7 @@ import time
 import numpy as np
 
 log = get_logger()
-#log.info("\n")
+time_info = True
 
 class LinksMonitor(DatabaseHandler):
     """
@@ -24,7 +24,7 @@ class LinksMonitor(DatabaseHandler):
     """
     def __init__(self, interval=1, logfile = dconf.LinksMonitor_LogFile):
         super(LinksMonitor, self).__init__()
-        log.info("LINKS MONITOR -- interval:%s\n"%str(interval))
+        log.info("LINKS MONITOR -- interval: %s -- logfile: %s --\n"%(str(interval),logfile))
         log.info("-"*60+"\n")
         log.info("Read all edges from network...\n")
         self.links = self._db_getAllEdges()
@@ -32,11 +32,10 @@ class LinksMonitor(DatabaseHandler):
         log.info("Start all counters...\n")
         self.counters = self._startCounters()
         self.logfile = logfile
-        log.info("Network edges:\n")
         log.info("%s\n"%self.printLinksToEdges())
 
     def printLinksToEdges(self):
-        s = "Links to edges\n==============\n"
+        s = "Links to edges:\n"
         taken = []
         for link, data in self.links.iteritems():
             (x, y) = data['edge']
@@ -60,6 +59,7 @@ class LinksMonitor(DatabaseHandler):
         return s    
 
     def _startCounters(self):
+        log.info(
         routers = self._db_getRouters()
         counters_dict = {name:{'routerid':rid, 'counter': SnmpCounters(routerIp=rid)} for name, rid in routers}
         return counters_dict
@@ -107,8 +107,6 @@ class LinksMonitor(DatabaseHandler):
                     
             bandwidths = np.asarray(bandwidths)
             currentPercentages = np.multiply(loads/(np.multiply(bandwidths, elapsed_time)), 100)
-
-
             #print "Elapsed time: %s"%elapsed_time
             #print "Loads: %s"%str(loads)
             #print "Bws: %s"%str(bandwidths)
@@ -123,7 +121,7 @@ class LinksMonitor(DatabaseHandler):
         open python file with write access
 
         """
-        f = open(self.logfile, 'w')
+        f = open(self.logfile, 'a')
         s = "%s"%time.time()
         taken = []
         for link, data in self.links.iteritems():
@@ -145,12 +143,20 @@ class LinksMonitor(DatabaseHandler):
         while True:
             # Update links with fresh data from the counters
             self.updateLinks()
+            log.info("Links updated...\n")
+
             # Log new values to logfile
+            log.info("Logging...\n")
             self.log()
+            
             # Go to sleep for some interval time
+            log.info("Going to sleep...\n")
             time.sleep(self.interval/2)
                 
 if __name__ == '__main__':
+    #Waiting for the IP's to be assigned...
+    time.sleep(dconf.Hosts_InitialWaitingTime)
+    
     refreshInterval = 1.05 #seconds
     lm = LinksMonitor(interval=refreshInterval)
     print lm.printLinksToEdges()
