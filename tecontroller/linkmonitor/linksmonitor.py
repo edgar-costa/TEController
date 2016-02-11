@@ -7,6 +7,7 @@ from tecontroller.res.snmplib import SnmpCounters
 from tecontroller.res.dbhandler import DatabaseHandler
 from tecontroller.res import defaultconf as dconf
 import time
+import numpy as np
 
 class LinksMonitor(DatabaseHandler):
     """
@@ -18,7 +19,7 @@ class LinksMonitor(DatabaseHandler):
         self.interval = interval
         self.counters = self._startCounters()
         self.logfile = logfile
-        
+
     def printLinksToEdges(self):
         s = "Links to edges\n==============\n"
         taken = []
@@ -43,13 +44,21 @@ class LinksMonitor(DatabaseHandler):
         s += '\n'
         return s    
 
+
     def _startCounters(self):
         routers = self._db_getRouters()
         counters_dict = {name:{'routerid':rid, 'counter': SnmpCounters(routerIp=rid)} for name, rid in routers}
         return counters_dict
 
     def _updateCounters(self):
-        action = [data['counter'].updateCounters32() for r, data in self.counters.iteritems()]
+        """Reads all counters of the routers in the network. Blocks until the
+        counters have been updated.
+        """
+        for r, data in self.counters.iteritems():
+            counter = data['counter']
+            while (counter.fromLastLecture() < self.interval):
+                pass
+            counter.updateCounters32()  
 
     def _setLinkLoad(self, iface_name, load):
         name = [name for name, data in self.links.iteritems() if
@@ -57,6 +66,7 @@ class LinksMonitor(DatabaseHandler):
         if name != []:
             name = name[0]
         self.links[name]['load'] = load
+
         
     def updateLinks(self):
         # Update the counters first
@@ -69,12 +79,30 @@ class LinksMonitor(DatabaseHandler):
             # Get the router id for the counter
             routerid = counter.routerIp
             # Get ifaces name and load for each router interface
-            tmp = [(data['name'], data['load_last_period']) for mac,
-                   data in counter.interfaces.iteritems()]
-            # Set link loads by interface name
-            tmp2 = [self._setLinkLoad(iface_name, load) for
-                    iface_name, load in tmp]
+            iface_names = [data['name'] for data in counter.interfaces]
+            loads = counter.getLoads()
+            elapsed_time = counter.timeDiff
 
+            bandwidths = []
+            for ifacename in iface_names:
+                bw_tmp= [data['bw'] for link, data in
+                         self.links.iteritems() if data['interface']
+                         == ifacename]
+                if bw_tmp != []:
+                    bandwidths.append(bw_tmp[0])
+                    
+            bandwidths = np.asarray(bandwidths)
+            currentPercentages = np.multiply(loads/(np.multiply(bandwidths, elapsed_time)), 100)
+
+
+            print "Elapsed time: %s"%elapsed_time
+            print "Loads: %s"%str(loads)
+            print "Bws: %s"%str(bandwidths)
+            
+            # Set link loads by interface name
+            for i, iface_name in enumerate(iface_names):
+                iface_load = currentPercentages[i]
+                self._setLinkLoad(iface_name, iface_load)
 
     def log(self, f):
         """This function logs the state of the links. f is supposed to be an
@@ -89,10 +117,7 @@ class LinksMonitor(DatabaseHandler):
                 continue
             taken.append((x,y))
             load = data['load']
-            bw = data['bw']
-            elapsed_time = self.interval
-            percent = 100*(load/(bw*elapsed_time))
-            s += ",(%s,%.2f%%)"%(link, percent)
+            s += ",(%s,%.2f%%)"%(link, load)
         s += '\n'
         print s
         f.write(s)    
@@ -106,20 +131,13 @@ class LinksMonitor(DatabaseHandler):
         while True:
             # Update links with fresh data from the counters
             self.updateLinks()
-            print "Links updated"
-            
             # Log new values to logfile
             self.log(f)
-            print "Links logged"
-
             # Go to sleep for some interval time
-            print "Going to sleep"
-            time.sleep(self.interval)
-            
+            time.sleep(self.interval/2)
                 
-        
 if __name__ == '__main__':
-    refreshInterval = 3 #second
+    refreshInterval = 1.05 #seconds
     lm = LinksMonitor(interval=refreshInterval)
     lm.printLinksToEdges()
     lm.run()
