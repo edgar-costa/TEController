@@ -59,20 +59,26 @@ class LinksMonitor(DatabaseHandler):
         return s    
 
     def _startCounters(self):
-        log.info(
+        start = time.time()
         routers = self._db_getRouters()
         counters_dict = {name:{'routerid':rid, 'counter': SnmpCounters(routerIp=rid)} for name, rid in routers}
+        if time_info:
+            log.info("linksmonitor.py: _startCounters() took %d seconds\n"%(time.time()-start))
+                        
         return counters_dict
 
     def _updateCounters(self):
         """Reads all counters of the routers in the network. Blocks until the
         counters have been updated.
         """
+        start = time.time()
         for r, data in self.counters.iteritems():
             counter = data['counter']
             while (counter.fromLastLecture() < self.interval):
                 pass
-            counter.updateCounters32()  
+            counter.updateCounters32()
+        if time_info:
+            log.info("linksmonitor.py: _updateCounters() took %d seconds\n"%(time.time()-start))
 
     def _setLinkLoad(self, iface_name, load):
         name = [name for name, data in self.links.iteritems() if
@@ -84,6 +90,7 @@ class LinksMonitor(DatabaseHandler):
         
     def updateLinks(self):
         # Update the counters first
+        start = time.time()
         self._updateCounters()
 
         # Iterate the counters
@@ -115,6 +122,10 @@ class LinksMonitor(DatabaseHandler):
             for i, iface_name in enumerate(iface_names):
                 iface_load = currentPercentages[i]
                 self._setLinkLoad(iface_name, iface_load)
+
+        if time_info:
+            log.info("linksmonitor.py: updateLinks() took %d seconds\n"%(time.time()-start))
+
 
     def log(self):
         """This function logs the state of the links. f is supposed to be an
