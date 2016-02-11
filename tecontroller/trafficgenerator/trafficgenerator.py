@@ -133,16 +133,19 @@ class TrafficGenerator(Base):
             [s, d, sp, dp, size, s_t, dur] = flowline.strip('\n').split(',')
             srcip = self.getHostIPByName(s)
             dstip = self.getHostIPByName(d)
-            flow = Flow(src = srcip,
-                        dst = dstip,
-                        sport = sp,
-                        dport = dp,
-                        size = size,
-                        start_time = s_t,
-                        duration = dur)
-            #Schedule flow creation
-            self.scheduler.enter(flow['start_time'], 1, self._createFlow, ([flow]))
-            
+            if srcip =! None and dstip =! None:
+                flow = Flow(src = srcip,
+                            dst = dstip,
+                            sport = sp,
+                            dport = dp,
+                            size = size,
+                            start_time = s_t,
+                            duration = dur)
+                #Schedule flow creation
+                self.scheduler.enter(flow['start_time'], 1, self._createFlow, ([flow]))
+            else:
+                log.info("ERROR! Hosts %s and/or %s do not exist in the network!\n"%(s, d))
+                
         self.scheduler.run()
 
 def create_app(appl, traffic_generator):
