@@ -27,6 +27,9 @@ TG_Path = PPATH + 'tecontroller/trafficgenerator/'
 # Path to the Traffic Engineering controller package
 LBC_Path = PPATH + 'tecontroller/loadbalancer/'
 
+# Path to Link Monitorer package
+LM_Path = PPATH + 'tecontroller/linkmonitor/'
+
 # Default port for the json-daemons for the hosts in the network
 Hosts_JsonPort = "5000"
 

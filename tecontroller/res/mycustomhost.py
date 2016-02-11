@@ -23,6 +23,7 @@ iperf_logfile = dconf.Hosts_LogFolder + "%s_iperf.log"
 daemon_logfile = dconf.Hosts_LogFolder + "%s_daemon.log"
 tg_logfile = dconf.Hosts_LogFolder + "TG.log"
 lbc_logfile = dconf.Hosts_LogFolder + "LBC.log"
+lm_logfile =  dconf.Hosts_LogFolder + "LM.log"
 
 log = get_logger()
 
@@ -51,6 +52,14 @@ class MyCustomHost(_node.Host):
             tec = self.popen(dconf.LBC_Path+'lbcontroller.py',
                              stdin=None, stdout=lbcl, stderr=lbcl)
             lbcl.close()
+
+
+        elif 'isMonitorer' in kwargs.keys() and kwargs.get('isMonitorer') == True:
+            log.info("\nStarting Links-Monitor host\n")
+            lml = open(lm_logfile, 'w')
+            lm = self.popen(dconf.LM_Path+'linksmonitor.py',
+                             stdin=None, stdout=lml, stderr=lml)
+            lml.close()
             
         else: #Just a normal host in the network
             iperf_file = iperf_logfile % (self.name)
