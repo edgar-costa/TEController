@@ -9,13 +9,13 @@ Receives flow demands from the custom built Traffic Generator, through
 a Json-Rest interface.
 
 """
-
 from fibbingnode.algorithms.southbound_interface import SouthboundManager
 from fibbingnode.misc.igp_graph import IGPGraph
 from fibbingnode.misc.mininetlib import get_logger
+from fibbingnode import CFG
 
 from tecontroller.res import defaultconf as dconf
-from tecontroller.res.dbhandler import DatbaseHandler
+from tecontroller.res.dbhandler import DatabaseHandler
 
 from tecontroller.res.path import IPNetPath
 from tecontroller.res.flow import Flow
