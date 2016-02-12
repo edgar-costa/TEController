@@ -41,11 +41,26 @@ class LinksMonitor(DatabaseHandler):
             (x, y) = data['edge']
             if (x,y) in taken or (y,x) in taken:
                 continue
+            if not('r' in x and 'r' in y):
+                continue
             taken.append((x,y))
             s += link+' -> '+str(data['edge'])+'\n'
         s += '\n\n'
         return s
 
+    def printLinkToEdgesLine(self):
+        s = ""
+        taken = []
+        for link, data in self.links.iteritems():
+            (x, y) = data['edge']
+            if (x,y) in taken or (y,x) in taken:
+                continue
+            taken.append((x,y))
+            (x,y) = data['edge']
+            s += link+'->(%s %s),'%(x,y)
+        s += '\n'
+        return s
+    
     def __str__(self):
         s = ""
         taken = []
@@ -150,6 +165,11 @@ class LinksMonitor(DatabaseHandler):
         """
         """
         log.info("Going inside the run() loop...\n")
+        # Write edges info to log file (first line)
+        f = open(self.logfile, 'a')
+        f.write(self.printLinkToEdgesLine())
+        f.close()
+
         while True:
             # Update links with fresh data from the counters
             self.updateLinks()
