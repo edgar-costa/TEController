@@ -263,11 +263,10 @@ class LBController(DatabaseHandler):
         # We assume here that Flow is well formed, and that the
         # interface addresses of the hosts are given.
         src_name = self._db_getNameFromIP(flow['src'].compressed)
-        dst_name = self._db_getNameFromIP(flow['dst'].compressed)
         src_router_name, src_router_id = self._db_getConnectedRouter(src_name)
-        dst_router_name, dst_router_id = self._db_getConnectedRouter(dst_name)
+        dst_network = flow['dst'].network.compressed
         
-        route = tuple(nx.dijkstra_path(network_graph, src_router_id, dst_router_id))
+        route = tuple(nx.dijkstra_path(network_graph, src_router_id, dst_network))
         edges = self.getEdgesInfoFromRoute(route)
         path = IPNetPath(route=route, edges=edges)
         return path
@@ -448,14 +447,20 @@ class GreedyLBController(LBController):
         log.info("      * Iterations: %ds\n"%i)
 
         # Call to FIBBING Controller should be here
-        self.sbmanager.simple_path_requirement(flow['dst'].network.compressed, list(next_default_dijkstra_path.route))
+        log.info("     * Destination: %s Network: %s\n"%(flow['dst'].compressed, flow['dst'].network.compressed))
+        
+        log.info("     * Path: %s"%(str(list(next_default_dijkstra_path.route))))
+        self.sbmanager.simple_path_requirement(flow['dst'].network.compressed,
+                                               list(next_default_dijkstra_path.route))
         log.info("LBC: Forcing forwarding DAG in Southbound Manager\n")
-
+                 
 if __name__ == '__main__':
     log.info("LOAD BALANCER CONTROLLER\n")
     log.info("-"*60+"\n")
     time.sleep(dconf.LBC_InitialWaitingTime)
     
     lb = GreedyLBController()
+    import ipdb; ipdb.set_trace()
+
     lb.run()
 
