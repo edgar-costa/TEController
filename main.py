@@ -177,7 +177,7 @@ class SIGTopo(IPTopo):
 
 
 def launch_network():
-    net = IPNet(topo=SIGTopo(),
+    net = IPNet(topo=SimpleTopo(),
                 debug=_lib.DEBUG_FLAG,
                 intf=custom(TCIntf, bw=BW),
                 host=MyCustomHost)
