@@ -111,8 +111,8 @@ class SimpleTopo(IPTopo):
         self.addLink(c1, r1, cost = 1000)
 
         # Add Link Monitorer
-        #m1 = self.addHost(M1, isMonitorer=True)
-        #self.addLink(m1, r1)
+        m1 = self.addHost(M1, isMonitorer=True)
+        self.addLink(m1, r1)
 
         # Adding Traffic Generator Host
         c2 = self.addHost(TG, isTrafficGenerator=True) 
