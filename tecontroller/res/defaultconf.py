@@ -54,4 +54,4 @@ LinksMonitor_LogFile = PPATH + "logs/links.log"
 ## SNMP commands
 # Start agent
 START_SNMP_AGENT = '/usr/sbin/snmpd'
-
+SNMP_CommunityString = 'linkmonitor'
