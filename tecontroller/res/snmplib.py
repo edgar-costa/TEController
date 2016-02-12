@@ -147,9 +147,11 @@ class SnmpCounters(Base):
         out_counters_t = [a.split(" = ")[1] for a in out.split('\n') if len(a.split(" = ")) == 2]
         out_counters = np.asarray([int(a[a.index(':')+2:]) for a in out_counters_t if a][1:])
 
+        #ERRRRRRRRRRRRRRORR IS HEERE!!!!!
+
         # Treated as np.arrays from here on
         total_counters = np.multiply((in_counters + out_counters), 8) # in bits
-        
+
         # update interfaces data structure
         updateTime = time.time()
         self.timeDiff = updateTime - self.lastUpdated
