@@ -76,11 +76,11 @@ class snmpTestTopo(IPTopo):
         
 class SimpleTopo(IPTopo):
     def build(self, *args, **kwargs):
-        """       +---+
-               ___|R3 |__
-            3 /   +---+  \3
-             /            \
- +--+      +----+   10   +---+        +--+
+        """       +---+         +---+
+ +--+          ___|R3 |__       | D2|
+ |S2|__     3 /   +---+  \3    _+---+
+ +--+  \__   /            \   /
+ +--+     \+----+   10   +---+        +--+
  |S1|------| R1 |--------| R2|--------|D1|
  +--+     _+----+        +---+_       +--+
         _/    |            |   \_  
@@ -97,18 +97,22 @@ class SimpleTopo(IPTopo):
         
         
         s1 = self.addHost(S1)
+        s2 = self.addHost(S2)
         d1 = self.addHost(D1)
+        d2 = self.addHost(D2)
 
         self.addLink(s1, r1)
+        self.addLink(s2, r1)
         self.addLink(d1, r2)
+        self.addLink(d2, r2)
 
         # Adding Fibbing Controller
         c1 = self.addController(C1, cfg_path=C1_cfg)
         self.addLink(c1, r1, cost = 1000)
 
         # Add Link Monitorer
-        m1 = self.addHost(M1, isMonitorer=True)
-        self.addLink(m1, r1)
+        #m1 = self.addHost(M1, isMonitorer=True)
+        #self.addLink(m1, r1)
 
         # Adding Traffic Generator Host
         c2 = self.addHost(TG, isTrafficGenerator=True) 
