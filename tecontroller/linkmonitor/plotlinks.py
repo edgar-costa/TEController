@@ -41,6 +41,10 @@ def main():
 
     loads2 = loads2[:,1:]
 
+
+    #import ipdb; ipdb.set_trace()
+
+
     # PLOTS ###################################
     fig = plt.figure()
     for i, l in enumerate(links):
@@ -50,7 +54,8 @@ def main():
         ax.set_ylim(0,100)
         ax.legend([l, l+' filtered'], loc='right')
         ax.grid(True)
-        
+
+    fig.subplots_adjust(bottom=0.04, left=0.04, right=0.98, top=0.96, wspace=0.2, hspace=0.24)
     plt.suptitle('Load of links over time')
     plt.show()
     plt.savefig(dconf.Hosts_LogFolder+'links.png')

@@ -16,7 +16,7 @@ import time
 import numpy as np
 
 log = get_logger()
-time_info = True
+time_info = False
 
 class LinksMonitor(DatabaseHandler):
     """
@@ -64,7 +64,6 @@ class LinksMonitor(DatabaseHandler):
         counters_dict = {name:{'routerid':rid, 'counter': SnmpCounters(routerIp=rid)} for name, rid in routers}
         if time_info:
             log.info("linksmonitor.py: _startCounters() took %d seconds\n"%(time.time()-start))
-                        
         return counters_dict
 
     def _updateCounters(self):
@@ -92,7 +91,7 @@ class LinksMonitor(DatabaseHandler):
         # Update the counters first
         start = time.time()
         self._updateCounters()
-
+        #log.info("%s\n"%str(self.links))
         # Iterate the counters
         for name, data in self.counters.iteritems():
             # Get the counter object for each router
@@ -114,9 +113,9 @@ class LinksMonitor(DatabaseHandler):
                     
             bandwidths = np.asarray(bandwidths)
             currentPercentages = np.multiply(loads/(np.multiply(bandwidths, elapsed_time)), 100)
-            #print "Elapsed time: %s"%elapsed_time
-            #print "Loads: %s"%str(loads)
-            #print "Bws: %s"%str(bandwidths)
+            #log.info("Elapsed time: %s\n"%elapsed_time)
+            #log.info("Loads: %s\n"%str(loads))
+            #log.info("Bws: %s\n"%str(bandwidths))
             
             # Set link loads by interface name
             for i, iface_name in enumerate(iface_names):
@@ -154,14 +153,14 @@ class LinksMonitor(DatabaseHandler):
         while True:
             # Update links with fresh data from the counters
             self.updateLinks()
-            log.info("Links updated...\n")
+            #log.info("Links updated...\n")
 
             # Log new values to logfile
-            log.info("Logging...\n")
+            #log.info("Logging...\n")
             self.log()
             
             # Go to sleep for some interval time
-            log.info("Going to sleep...\n")
+            #log.info("Going to sleep...\n")
             time.sleep(self.interval/2)
                 
 if __name__ == '__main__':
@@ -169,8 +168,16 @@ if __name__ == '__main__':
     time.sleep(dconf.Hosts_InitialWaitingTime)
     
     refreshInterval = 1.05 #seconds
+    try:
+        f = open(dconf.LinksMonitor_LogFile, 'r')
+    except IOError:
+        f = open(dconf.LinksMonitor_LogFile, 'w')
+        f.close()
+    else:
+        f = open(dconf.LinksMonitor_LogFile, 'w')
+        f.close()
+        
     lm = LinksMonitor(interval=refreshInterval)
-    print lm.printLinksToEdges()
     lm.run()
 
     
