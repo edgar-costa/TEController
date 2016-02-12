@@ -449,9 +449,9 @@ class GreedyLBController(LBController):
         # Call to FIBBING Controller should be here
         log.info("     * Destination: %s Network: %s\n"%(flow['dst'].compressed, flow['dst'].network.compressed))
         
-        log.info("     * Path: %s"%(str(list(next_default_dijkstra_path.route))))
+        log.info("     * Path: %s\n"%(str(list(next_default_dijkstra_path.route)[:-1])))
         self.sbmanager.simple_path_requirement(flow['dst'].network.compressed,
-                                               list(next_default_dijkstra_path.route))
+                                               list(next_default_dijkstra_path.route)[:-1])
         log.info("LBC: Forcing forwarding DAG in Southbound Manager\n")
                  
 if __name__ == '__main__':
@@ -460,7 +460,5 @@ if __name__ == '__main__':
     time.sleep(dconf.LBC_InitialWaitingTime)
     
     lb = GreedyLBController()
-    import ipdb; ipdb.set_trace()
-
     lb.run()
 
