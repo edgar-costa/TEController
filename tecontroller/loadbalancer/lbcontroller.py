@@ -42,7 +42,6 @@ eventQueue = Queue.Queue()
 
 lineend = "-"*60+'\n'
 
-
 class MyGraphProvider(SouthboundManager):
     """This class overrwides the received_initial_graph abstract method of
     the SouthboundManager class. It is used to receive the initial
@@ -223,10 +222,10 @@ class LBController(DatabaseHandler):
         # If it can be allocated, no Fibbing is needed
         if self.canAllocateFlow(flow, defaultPath):
             # Allocate new flow and default path to destination prefix
-            self.addAllocationEntry(dst_prefix, flow, defaultPath)
+            self.addAllocationEntry(dst_prefix, flow, [defaultPath])
         else:
             # Otherwise, call the abstract method
-            self.flowAllocationAlgorithm(flow, defaultPath)            
+            self.flowAllocationAlgorithm(dst_prefix, flow, defaultPath)            
 
     def getDefaultDijkstraPath(self, network_graph, flow):
         """Returns an IPNetPath representing the default Dijkstra path given
@@ -390,7 +389,7 @@ class LBController(DatabaseHandler):
         
                 
     @abc.abstractmethod
-    def flowAllocationAlgorithm(self, flow, initial_path):
+    def flowAllocationAlgorithm(self, dst_prefix, flow, initial_path):
         """
         """
         
@@ -398,10 +397,15 @@ class GreedyLBController(LBController):
     def __init__(self, *args, **kwargs):
         super(GreedyLBController, self).__init__(*args, **kwargs)
 
-    def flowAllocationAlgorithm(self, flow, initial_path):
+    def flowAllocationAlgorithm(self, dst_prefix, flow, initial_path):
         """
         Implements abstract method.
+
+        TODO:
+         * Stop while if no more paths are available.
+         * Check ECMP possibilities if no paths are available!
         """
+        
         log.info("LBC: Greedy Algorithm started\n")
         start_time = time.time()
         i = 1
@@ -409,13 +413,11 @@ class GreedyLBController(LBController):
         # Remove edge with least capacity from path
         (ex, ey) = self.getMinCapacityEdge(initial_path)
         tmp_nw = self.getNetworkWithoutEdge(self.network_graph, ex, ey)
+
         # Calculate new default dijkstra path
         next_default_dijkstra_path = self.getDefaultDijkstraPath(tmp_nw, flow)
-
-        if tmp_nw.edges() == self.network_graph.edges():
-            log.info("LBC: ERROR: copy of network graph is wrongly done \n")
         
-        # Repeat it until path is found that can allocate flow
+        # Repeat it until path is found that can allocate flow or no more
         while not self.canAllocateFlow(flow, next_default_dijkstra_path):
             i = i + 1
             initial_path = next_default_dijkstra_path
@@ -424,20 +426,21 @@ class GreedyLBController(LBController):
             next_default_dijkstra_path = self.getDefaultDijkstraPath(tmp_nw, flow)
 
         # Allocate flow to Path
-        self.######tochange(next_default_dijkstra_path, flow)
+        self.addAllocationEntry(dst_prefix, flow, [next_default_dijkstra_path])
         elapsed_time = time.time() - start_time 
         log.info("LBC: Greedy Algorithm Finished "+lineend)
         log.info("      * Elapsed time: %ds\n"%elapsed_time)
         log.info("      * Iterations: %ds\n"%i)
 
         # Call to FIBBING Controller should be here
-        log.info("     * Destination: %s Network: %s\n"%(flow['dst'].compressed, flow['dst'].network.compressed))
-        
-        log.info("     * Path: %s\n"%(str(list(next_default_dijkstra_path.route)[:-1])))
-        self.sbmanager.simple_path_requirement(flow['dst'].network.compressed,
-                                               [r for r in next_default_dijkstra_path.route if r in
-                                                self.routers_to_ip.values()])
-        log.info("LBC: Forcing forwarding DAG in Southbound Manager\n")
+        log.info("     * dest_prefix: %s\n"%(str(dst_prefix.compressed)))
+        log.info("     * Path: %s\n"%(str(next_default_dijkstra_path.route)))
+
+        self.sbmanager.simple_path_requirement(dst_prefix.compressed, [r for r in
+                                                            next_default_dijkstra_path.route
+                                                            if r in
+                                                            self.routers_to_ip.values()])
+        log.info("LBC: Fored forwarding DAG in Southbound Manager\n")
                  
 if __name__ == '__main__':
     log.info("LOAD BALANCER CONTROLLER\n")
@@ -452,11 +455,11 @@ if __name__ == '__main__':
 """
 
     def getPathsFromFlow(self, flow):
-        """Given a flow, returns the current paths that it is allocated.
-        Since a flow can be assigned to different paths (ECMP), it
-        returns a list of IPNetPaths
+        #Given a flow, returns the current paths that it is allocated.
+        #Since a flow can be assigned to different paths (ECMP), it
+        #returns a list of IPNetPaths
 
-        """
+        
         paths = [data[flow] for network, data in
                 self.flow_allocation.iteritems() if flow in data.keys()]
         if len(paths) > 0:
@@ -466,8 +469,8 @@ if __name__ == '__main__':
 
 
     def getFlowListFromPrefix(self, prefix):
-        """Returns the list of flows going to that prefix.
-        """
+        #Returns the list of flows going to that prefix.
+        #
         return [data.keys() for network, data in
                 self.flow_allocation.iteritems() if network == prefix]
 
