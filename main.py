@@ -223,6 +223,7 @@ if __name__ == '__main__':
                         action='store_true',
                         default=False)
     args = parser.parse_args()
+
     if args.debug:
         _lib.DEBUG_FLAG = True
         from mininet.log import lg
