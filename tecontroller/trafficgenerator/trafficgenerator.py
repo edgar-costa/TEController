@@ -130,9 +130,13 @@ class TrafficGenerator(Base):
         f = open(flowfile, 'r')
         flows = f.readlines()
         for flowline in flows:
-            [s, d, sp, dp, size, s_t, dur] = flowline.strip('\n').split(',')
-            srcip = self.getHostIPByName(s)
-            dstip = self.getHostIPByName(d)
+            try:
+                [s, d, sp, dp, size, s_t, dur] = flowline.strip('\n').split(',')
+                srcip = self.getHostIPByName(s)
+                dstip = self.getHostIPByName(d)
+            except Exception:
+                srcip = None
+                dstip = None
             if srcip != None and dstip != None:
                 flow = Flow(src = srcip,
                             dst = dstip,
