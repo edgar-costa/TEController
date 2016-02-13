@@ -8,7 +8,7 @@ class Path(object):
     """Implements the abstract path object representing the between nodes
     in a (general) network.
     """
-    def __init__(self, route=(), edges={}):
+    def __init__(self, route=[], edges={}):
 
         self.route = route #Ordered list of nodes in the path. Nodes
                            #can be prefixes or routers.
@@ -37,7 +37,7 @@ class Path(object):
             return self.__getattribute__(key)
 
     def _setSrc(self, route):
-        if route != ():
+        if route != []:
             return route[0]
         else:
             return None
@@ -46,7 +46,7 @@ class Path(object):
         return len(self.route)
 
     def _setDst(self, route):
-        if route != ():
+        if route != []:
             return route[-1]
         else:
             return None
@@ -59,7 +59,7 @@ class Path(object):
         return not self.__eq__(other)
 
     def __repr__(self):
-        S = "Path[%s]"
+        S = "Path(%s)"
         return S%(str(self.route))
     
     def __str__(self):
@@ -107,7 +107,7 @@ class Path(object):
             yield (edge, data)
 
 class IPNetPath(Path):
-    def __init__(self, route=(), edges={}):
+    def __init__(self, route=[], edges={}):
         super(IPNetPath, self).__init__(route, edges)          
 
     def getMinBw(self):
@@ -119,5 +119,5 @@ class IPNetPath(Path):
         return min(bws)
 
     def __repr__(self):
-        S = "IPNetPath[%s]"
+        S = "IPNetPath(%s)"
         return S%(str(self.route))
