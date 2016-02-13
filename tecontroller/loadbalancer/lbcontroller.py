@@ -51,6 +51,9 @@ class MyGraphProvider(SouthboundManager):
     The HAS_INITIAL_GRAPH is set when the method is called.
 
     """
+    def __init__(self):
+        super(MyGraphProvider, self).__init__()
+    
     def received_initial_graph(self):
         HAS_INITIAL_GRAPH.set()        
 
@@ -108,10 +111,10 @@ class LBController(DatabaseHandler):
             log.info("    Hostname: %s --> %s:%s\n"%(name,data['router_name'], data['router_id']))
 
         #spawn Json listener thread
-        jl = JsonListener(eventQueue)
+        jl = JsonListener(self.eventQueue)
         jl.start()
         log.info("LBC: Json listener thread created\n")
-        
+
         #lbc_lf = open(lbcontroller_logfile, 'w')
         #try:
         #    subprocess.Popen([dconf.LBC_Path+'jsonlistener.py'], stdin=None,
@@ -451,7 +454,8 @@ class GreedyLBController(LBController):
         
         log.info("     * Path: %s\n"%(str(list(next_default_dijkstra_path.route)[:-1])))
         self.sbmanager.simple_path_requirement(flow['dst'].network.compressed,
-                                               list(next_default_dijkstra_path.route)[:-1])
+                                               [r for r in next_default_dijkstra_path.route if r in
+                                                self.routers_to_ip.values()])
         log.info("LBC: Forcing forwarding DAG in Southbound Manager\n")
                  
 if __name__ == '__main__':
