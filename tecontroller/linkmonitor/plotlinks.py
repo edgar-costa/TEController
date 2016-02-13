@@ -5,10 +5,17 @@ from tecontroller.res import defaultconf as dconf
 import numpy as np
 import matplotlib.pyplot as plt
 import time
+import argparse
 from scipy import signal
 
-def main():
+def main(args):
+    
     start = time.time()
+
+    # Parse arguments
+    tmp = args.only_links.split(',')
+    edges_to_print = [i.strip('[').strip(']') for i in tmp]
+    print "Edges to print: %s"%str(edges_to_print)
     
     # Open links logfile
     f = open(dconf.LinksMonitor_LogFile, 'r') # LINKS LOGFILE
@@ -47,16 +54,22 @@ def main():
     # PLOTS ###################################
     fig = plt.figure(1)
     fig.subplots_adjust(bottom=0.04, left=0.04, right=0.98, top=0.96, wspace=0.2, hspace=0.24)
-
+    count = 1
     for i, l in enumerate(links):
-        ax = fig.add_subplot(len(links),1,i+1)
-        label = l+" %s"%edges[i].replace(' ', ', ')
-        label_f = label+' filtered'
-        ax.plot(seconds, loads[:,i], 'r.', label=label)
-        ax.plot(seconds, loads2[:,i], 'b-', label=label_f)
-        ax.set_ylim(0,100)
-        ax.legend([label, label_f], loc='right')
-        ax.grid(True)
+
+        [tmpx, tmpy] = edges[i].strip('(').strip(')').split(' ')
+        edge_tmp = "(%s %s)"%(tmpy,tmpx)
+
+        if edges[i] in edges_to_print or edge_tmp in edges_to_print:
+            ax = fig.add_subplot(len(edges_to_print), 1, count)
+            label = l+" %s"%edges[i].replace(' ', ', ')
+            label_f = label+' filtered'
+            ax.plot(seconds, loads[:,i], 'r.', label=label)
+            ax.plot(seconds, loads2[:,i], 'b-', label=label_f)
+            ax.set_ylim(0,100)
+            ax.legend([label, label_f], loc='right')
+            ax.grid(True)
+            count += 1
 
     plt.suptitle('Load of links over time')
     plt.show()
@@ -64,4 +77,11 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    parser = argparse.ArgumentParser()
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument('-l', '--only-links',
+                       help='print only certain links',
+                       action='store_true',
+                       default='[(r1 r2),(r1 r3),(r3 r2),(s1 r1),(s2 r1)]')
+    args = parser.parse_args()
+    main(args)
