@@ -128,6 +128,8 @@ class SnmpCounters(Base):
                              stdout=subprocess.PIPE,
                              stderr=subprocess.PIPE)
         out, err = p.communicate()
+        if err:
+            log.info("snmplib.py: updateCounters32() ERROR: %s\n"%(str(err)))
         
         # process snmpwalk output
         numbers_t = [a.split(" = ")[0] for a in out.split('\n') if len(a.split(" = ")) == 2]
@@ -142,7 +144,8 @@ class SnmpCounters(Base):
                              stdout=subprocess.PIPE,
                              stderr=subprocess.PIPE)
         out, err = p.communicate()
-        
+        if err:
+            log.info("snmplib.py: updateCounters32() ERROR: %s\n"%(str(err)))
         # process snmpwalk output
         out_counters_t = [a.split(" = ")[1] for a in out.split('\n') if len(a.split(" = ")) == 2]
         out_counters = np.asarray([int(a[a.index(':')+2:]) for a in out_counters_t if a][1:])

@@ -39,7 +39,7 @@ FlowFile = TG_Path + 'flowfile.csv'
 
 # Waiting time (in seconds) for hosts to check their IP
 Hosts_InitialWaitingTime = 3
-LBC_InitialWaitingTime = 12
+LBC_InitialWaitingTime = 10
 TG_InitialWaitingTime = 20
 
 # Default port for which IPERF server is listening in the custom hosts
