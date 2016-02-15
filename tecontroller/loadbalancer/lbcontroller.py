@@ -77,6 +77,8 @@ class LBController(DatabaseHandler):
         self._stop = threading.Event() #Used to stop the thread
         self.hosts_to_ip = {}
         self.routers_to_ip = {}
+
+        self.demands = set()
         
         CFG.read(dconf.C1_Cfg) #Must be called before create instance
                                #of SouthboundManager
@@ -314,7 +316,9 @@ class LBController(DatabaseHandler):
             allocated_flows = self.getAllocatedFlows(prefix)
             if allocated_flows == []:
                 self.sbmanager.remove_lsa(lsa)
+                self.sbmanager.refresh_augmented_topo()
                 log.info("LBC: removed lies for prefix: %s\n"%(str(prefix)))
+                log.info("     LSAs: %s\n"%(str(lsa)))
             else:
                 # Do not remove lsas yet. Other flows ongoing
                 flows = [f for (f, p) in allocated_flows]
@@ -334,7 +338,7 @@ class LBController(DatabaseHandler):
             return [(f, p_l) for f, p_l in self.flow_allocation[prefix].iteritems()]
         else:
             log.info("LBC: getAllocatedFlows(): prefix %s not in flow_allocation table\n"%(str(prefix)))
-            
+
     def getLiesFromPrefix(self, prefix):
         """Retrieves the LSA of the associated prefix from the southbound
         manager.
@@ -471,8 +475,12 @@ class GreedyLBController(LBController):
         while not self.canAllocateFlow(flow, next_default_dijkstra_path):
             i = i + 1
             initial_path = next_default_dijkstra_path
+            # Remove edge with minimum capacity
             (ex, ey) = self.getMinCapacityEdge(initial_path)
             tmp_nw = self.getNetworkWithoutEdge(tmp_nw, ex, ey)
+            log.info("    * Edge removed: %s\n"%str((ex, ey)))
+
+            # Calculate new path without removed edge
             next_default_dijkstra_path = self.getDefaultDijkstraPath(tmp_nw, flow)
 
         # Allocate flow to Path
