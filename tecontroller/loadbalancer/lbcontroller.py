@@ -288,7 +288,9 @@ class LBController(DatabaseHandler):
         edges_in_path = [((path.route[i], path.route[i+1]),
                           self.network_graph.get_edge_data(path.route[i],
                                                            path.route[i+1])['capacity']) for i in
-                         range(len(path)-1)]
+                         range(len(path)-1) if 'capacity' in
+                         self.network_graph.get_edge_data(path.route[i],
+                                                          path.route[i+1]).keys()]
         if edges_in_path:
             minim_c = edges_in_path[0][1]
             minim_edge = edges_in_path[0][0]
@@ -298,8 +300,53 @@ class LBController(DatabaseHandler):
                     minim_edge = (x,y)
             return minim_edge
         else:
-            raise StandardError("%s has no edges!"%str(path))        
+            raise StandardError("%s has no edges!"%str(path))
 
+    def removePrefixLies(self, prefix):
+        """Remove lies for a given prefix only if there are no more flows
+        allocated for that prefix.
+        """
+        # Get the lies for prefix
+        lsa = self.getLiesFromPrefix(prefix)
+        if lsa:
+            # Fibbed prefix
+            # Let's check if there are other flows for prefix fist
+            allocated_flows = self.getAllocatedFlows(prefix)
+            if allocated_flows == []:
+                self.sbmanager.remove_lsa(lsa)
+                log.info("LBC: removed lies for prefix: %s\n"%(str(prefix)))
+            else:
+                # Do not remove lsas yet. Other flows ongoing
+                flows = [f for (f, p) in allocated_flows]
+                log.info("LBC: lies for prefix %s not removed. Flows yet ongoing:\n"%(str(prefix)))
+                for f in flows:
+                    log.info("    %s\n"%(str(f)))
+        else:
+            # Prefix not fibbed
+            log.info("LBC: removePrefixLies(): no lies for prefix: %s\n"%(str(prefix)))
+
+    def getAllocatedFlows(self, prefix):
+        """
+        Given a prefix, returns a list of tuples:
+        [(flow, path_list), (flow, path_list), ...]
+        """
+        if prefix in self.flow_allocation.keys():
+            return [(f, p_l) for f, p_l in self.flow_allocation[prefix].iteritems()]
+        else:
+            log.info("LBC: getAllocatedFlows(): prefix %s not in flow_allocation table\n"%(str(prefix)))
+            
+    def getLiesFromPrefix(self, prefix):
+        """Retrieves the LSA of the associated prefix from the southbound
+        manager.
+        """
+        lsa_set = self.sbmanager.advertized_lsa.copy()
+        while lsa_set != set():
+            lsa = lsa_set.pop()
+            dst = lsa.dest
+            if prefix.compressed == dst:
+                return lsa
+        return None
+        
     def addAllocationEntry(self, prefix, flow, path_list):
         """Add entry in the flow_allocation table.
         
@@ -312,9 +359,9 @@ class LBController(DatabaseHandler):
             self.flow_allocation[prefix] = {flow : path_list}
         else:
             if flow in self.flow_allocation[prefix].keys():
-                self.flow_allocatoin[prefix][flow] += path_list
+                self.flow_allocation[prefix][flow] += path_list
             else:
-                self.flow_allocatoin[prefix][flow] = path_list
+                self.flow_allocation[prefix][flow] = path_list
             
         t = time.strftime("%H:%M:%S", time.gmtime())
         log.info(("LBC: Flow ALLOCATED to Path - %s "+lineend)%t)
@@ -338,7 +385,7 @@ class LBController(DatabaseHandler):
                         # Substract corresponding size
                         data['capacity'] -= (flow.size/ecmp_paths)
 
-        # Define the removeAllocatoinEntry thread
+        # Define the removeAllocationEntry thread
         t = threading.Thread(target=self.removeAllocationEntry, args=(prefix, flow, path_list))
         # Add handler to list and start thread
         self.thread_handlers[flow] = t
@@ -377,6 +424,9 @@ class LBController(DatabaseHandler):
                     else:
                         data['capacity'] += (flow.size/ecmp_paths)
 
+        # Remove the lies for the given prefix
+        self.removePrefixLies(prefix)
+        
                         
     def getNetworkWithoutEdge(self, network_graph, x, y):
         """Returns a nx.DiGraph representing the network graph without the
