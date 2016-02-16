@@ -40,7 +40,7 @@ log = get_logger()
 
 eventQueue = Queue.Queue()
 
-lineend = "-"*60+'\n'
+lineend = "-"*150+'\n'
 
 class MyGraphProvider(SouthboundManager):
     """This class overrwides the received_initial_graph abstract method of
@@ -200,7 +200,8 @@ class LBController(DatabaseHandler):
         """
         while not self.isStopped():
             event = self.eventQueue.get()
-            log.info("LBC: NEW event in the queue "+lineend)
+            log.info(lineend)
+            log.info("LBC: NEW event in the queue ")
             log.info("      * Type: %s\n"%event['type'])
             #log.info("LBC:  * Data: %s)\n"%repr(event['data']))
             
@@ -354,6 +355,8 @@ class LBController(DatabaseHandler):
     def addAllocationEntry(self, prefix, flow, path_list):
         """Add entry in the flow_allocation table.
         
+        :param prefix: is a IPv4Network type
+
         :param path_list: List of paths (IPNetPath) for which this flow will be
                           multi-pathed towards destination prefix:
                           [[A, B, C], [A, D, C]]"""
@@ -368,7 +371,8 @@ class LBController(DatabaseHandler):
                 self.flow_allocation[prefix][flow] = path_list
             
         t = time.strftime("%H:%M:%S", time.gmtime())
-        log.info(("LBC: Flow ALLOCATED to Path - %s "+lineend)%t)
+        log.info(lineend)
+        log.info(("LBC: Flow ALLOCATED to Path - %s ")%t)
         log.info("      * dst_prefix: %s\n"%str(prefix.compressed))
         log.info("      * Paths (%d): %s\n"%(len(path_list), str([path.route for path in path_list])))
         log.info("      * Flow: %s\n"%str(flow))
@@ -411,7 +415,8 @@ class LBController(DatabaseHandler):
                 raise KeyError("%s is not alloacated in this prefix %s"%str(repr(flow)))
 
         t = time.strftime("%H:%M:%S", time.gmtime())
-        log.info(("LBC: Flow REMOVED from Path - %s "+lineend)%t)
+        log.info(lineend)
+        log.info("LBC: Flow REMOVED from Path - %s "%t)
         log.info("      * dst_prefix: %s\n"%str(prefix.compressed))
         log.info("      * Paths (%d): %s\n"%(len(path_list), str([path.route for path in path_list])))
         log.info("      * Flow: %s\n"%repr(flow))
@@ -485,19 +490,19 @@ class GreedyLBController(LBController):
 
         # Allocate flow to Path
         self.addAllocationEntry(dst_prefix, flow, [next_default_dijkstra_path])
-        elapsed_time = time.time() - start_time 
-        log.info("LBC: Greedy Algorithm Finished "+lineend)
+        elapsed_time = time.time() - start_time
+        log.info(lineend)
+        log.info("LBC: Greedy Algorithm Finished ")
         log.info("      * Elapsed time: %ds\n"%elapsed_time)
         log.info("      * Iterations: %ds\n"%i)
 
         # Call to FIBBING Controller should be here
-        log.info("     * dest_prefix: %s\n"%(str(dst_prefix.compressed)))
-        log.info("     * Path: %s\n"%(str(next_default_dijkstra_path.route)))
-
-        self.sbmanager.simple_path_requirement(dst_prefix.compressed, [r for r in
-                                                            next_default_dijkstra_path.route
-                                                            if r in
-                                                            self.routers_to_ip.values()])
+        log.info("      * Dest_prefix: %s\n"%(str(dst_prefix.compressed)))
+        log.info("      * Path: %s\n"%(str(next_default_dijkstra_path.route)))
+        self.sbmanager.simple_path_requirement(dst_prefix.compressed,
+                                               [r for r in
+                                                next_default_dijkstra_path.route
+                                                if r in self.routers_to_ip.values()])
         log.info("LBC: Fored forwarding DAG in Southbound Manager\n")
                  
 if __name__ == '__main__':
