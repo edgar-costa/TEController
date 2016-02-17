@@ -54,6 +54,7 @@ class MyGraphProvider(SouthboundManager):
         super(MyGraphProvider, self).__init__()
     
     def received_initial_graph(self):
+        super(MyGraphProvider, self).received_initial_graph()
         HAS_INITIAL_GRAPH.set()        
 
                 
@@ -125,7 +126,7 @@ class LBController(DatabaseHandler):
             yname = self._db_getNameFromIP(y)
 
             if xname and yname:
-                bw = self.db.bandwidth(xname, yname)
+                bw = self.db.interface_bandwidth(xname, yname)
                 data['bw'] = int(bw*1e6)
                 data['capacity'] = int(bw*1e6)
 
