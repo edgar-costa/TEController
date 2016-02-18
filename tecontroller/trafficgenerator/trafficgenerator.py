@@ -185,6 +185,7 @@ def trafficGeneratorCommandListener():
 
         
 if __name__ == '__main__':
+
     # Start the traffic generator object
     tg = TrafficGenerator()
 
@@ -197,8 +198,10 @@ if __name__ == '__main__':
     log.info("-"*60+"\n")
 
     # Schedule flows from file
-    tg.scheduleFileFlows(dconf.FlowFile)
-    log.info("LOG: Scheduled flow file!\n")
+    flowfile = dconf.FlowFile
+#    flowfile = dconf.TG_Path + 'flowfile2.csv'
+    tg.scheduleFileFlows(flowfile)
+    log.info("LOG: Scheduled flow file: %s\n"%flowfile)
     
     # Go start the JSON API server and listen for commands
     app = create_app(app, tg)
