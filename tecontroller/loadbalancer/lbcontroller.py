@@ -93,7 +93,7 @@ class LBController(DatabaseHandler):
         log.info("LBC: Initial graph received\n")
                  
         # Retreieve network from Fibbing Controller
-        #self.network_graph = copy.deepcopy(self.sbmanager.igp_graph)
+        #self.initial_graph = self.sbmanager.igp_graph.copy()
         self.network_graph = self.sbmanager.igp_graph
         
         # Include BW data inside network graph
@@ -219,26 +219,33 @@ class LBController(DatabaseHandler):
             else:
                 print "Unknown Event:"
                 print event
-                
+
+    def isFibbed(self, dst_prefix):
+        """Returns true if there exist fake LSA for that prefix in the
+        network.
+        """
+        return (self.getLiesFromPrefix(dst_prefix) != None)
+
+
+        
     def dealWithNewFlow(self, flow):
         """
         Treat new incoming flow.
         """
         # Get the destination network prefix
         dst_prefix = flow['dst'].network
-        
+
         # Get the default OSFP Dijkstra path
         defaultPath = self.getDefaultDijkstraPath(self.network_graph, flow)
         
-        # If it can be allocated, no Fibbing is needed
+        # If it can be allocated, no Fibbing needed
         if self.canAllocateFlow(flow, defaultPath):
-            
             # Allocate new flow and default path to destination prefix
             self.addAllocationEntry(dst_prefix, flow, defaultPath)
-            
+
         else:
             # Otherwise, call the abstract method
-            self.flowAllocationAlgorithm(dst_prefix, flow, initial_path=defaultPath)
+            self.flowAllocationAlgorithm(dst_prefix, flow, defaultPath)
             
     def getDefaultDijkstraPath(self, network_graph, flow):
         """Returns an list of network nodes representing the default Dijkstra
@@ -259,14 +266,25 @@ class LBController(DatabaseHandler):
         route = [r for r in route if self.isRouter(r)]
         return route
     
+    def toRouterNames(self, path):
+        """
+        """
+        result = [self._db_getNameFromIP(p) for p in path if self.isRouter(p)]
+        return result
 
+
+    def printFlow(self, flow):
+        """
+        """
+        pass
+    
     def canAllocateFlow(self, flow, path):
         """Returns true if there is at least flow.size bandwidth available in
         all links along the path from flow.src to src.dst,
 
         """
         log.info("LBC: canAllocateFlow():\n")
-        log.info("     * Path: %s\n"%str(path))
+        log.info("     * Path: %s\n"%str(self.toRouterNames(path)))
         log.info("     * Min capacity: %s\n"%str(self.getMinCapacity(path)))
         log.info("     * FlowSize: %s\n"%str(flow['size'])) 
         return self.getMinCapacity(path) >= flow.size
@@ -304,7 +322,6 @@ class LBController(DatabaseHandler):
 
         :param path: List of network nodes defining a path [A, B, C,
         D]
-
         """
         edges_in_path = [((path[i], path[i+1]),
                           self.network_graph.get_edge_data(path[i],
@@ -347,6 +364,7 @@ class LBController(DatabaseHandler):
             # Prefix not fibbed
             log.info("LBC: removePrefixLies(): no lies for prefix: %s\n"%(str(prefix)))
 
+            
     def getAllocatedFlows(self, prefix):
         """
         Given a prefix, returns a list of tuples:
@@ -355,8 +373,20 @@ class LBController(DatabaseHandler):
         if prefix in self.flow_allocation.keys():
             return [(f, p) for f, p in self.flow_allocation[prefix].iteritems()]
         else:
-            log.info("LBC: getAllocatedFlows(): prefix %s not in flow_allocation table\n"%(str(prefix)))
+            log.info("LBC: getAllocatedFlows(): prefix %s not yet in flow_allocation table\n"%(str(prefix)))
+            return []
 
+
+
+    def getFlowSizes(self, prefix):
+        """
+        Returns the sum of flows with destination prefix
+        """
+        allocated_flows = self.getAllocatedFlows(prefix)
+        sizes = [f['size'] for (f, p) in allocated_flows]
+        return sum(a), len(a)
+
+    
     def getLiesFromPrefix(self, prefix):
         """Retrieves the LSA of the associated prefix from the southbound
         manager.
@@ -386,8 +416,8 @@ class LBController(DatabaseHandler):
             
         t = time.strftime("%H:%M:%S", time.gmtime())
         log.info(("LBC: Flow ALLOCATED to Path - %s\n")%t)
-        log.info("      * dst_prefix: %s\n"%str(prefix.compressed))
-        log.info("      * Path: %s\n"%(str(path)))
+        log.info("      * Dest_prefix: %s\n"%str(prefix.compressed))
+        log.info("      * Path: %s\n"%str(self.toRouterNames(path)))
         log.info("      * Flow: %s\n"%str(flow))
         
         # Iterate through the graph
@@ -427,7 +457,7 @@ class LBController(DatabaseHandler):
         t = time.strftime("%H:%M:%S", time.gmtime())
         log.info("LBC: Flow REMOVED from Path - %s\n"%t)
         log.info("      * dst_prefix: %s\n"%str(prefix.compressed))
-        log.info("      * Paths: %s\n"%(str(path)))
+        log.info("      * Path: %s\n"%str(self.toRouterNames(path)))
         log.info("      * Flow: %s\n"%repr(flow))
 
         for (x, y, data) in self.network_graph.edges(data=True):
@@ -515,24 +545,24 @@ class GreedyLBController(LBController):
         
         log.info("LBC: Greedy Algorithm started\n")
         start_time = time.time()
-        i = 1
-
+        
         # Remove edges that can't allocate flow from graph
-        tmp_nw = self.getNetworkWithoutFullEdges(self.network_graph, flow['size'])
-
+        required_size = flow['size']
+        tmp_nw = self.getNetworkWithoutFullEdges(self.network_graph, required_size)
+        
         try:
             # Calculate new default dijkstra path
             shortest_congestion_free_path = self.getDefaultDijkstraPath(tmp_nw, flow)
 
         except nx.NetworkXNoPath:
-            # There is no congestion-free path between src and dst
-            log.info("LBC: The flow can't be allocated in the network\n")
+            # There is no congestion-free path to allocate all traffic to dst_prefix
+            log.info("LBC: Flow can't be allocated in the network\n")
             log.info("     Allocating it the default Dijkstra path...\n")
-
+            
             # Allocate flow to Path
             self.addAllocationEntry(dst_prefix, flow, initial_path)
             log.info("      * Dest_prefix: %s\n"%(str(dst_prefix.compressed)))
-            log.info("      * Path: %s\n"%(str(initial_path)))
+            log.info("      * Path: %s\n"%str(self.toRouterNames(initial_path)))
 
         else:
             log.info("LBC: Found path that can allocate flow\n")
@@ -540,19 +570,17 @@ class GreedyLBController(LBController):
             self.addAllocationEntry(dst_prefix, flow, shortest_congestion_free_path)
             # Call to FIBBING Controller should be here
             log.info("      * Dest_prefix: %s\n"%(str(dst_prefix.compressed)))
-            log.info("      * Path: %s\n"%(str(shortest_congestion_free_path)))
+            log.info("      * Path: %s\n"%str(self.toRouterNames(shortest_congestion_free_path)))
             self.sbmanager.simple_path_requirement(dst_prefix.compressed,
                                                    [r for r in shortest_congestion_free_path
                                                     if self.isRouter(r)])
-            log.info("LBC: Fored forwarding DAG in Southbound Manager\n")
+            log.info("LBC: Forced forwarding DAG in Southbound Manager\n")
 
         # Do this allways
         elapsed_time = time.time() - start_time
         log.info("LBC: Greedy Algorithm Finished\n")
-        log.info("      * Elapsed time: %ds\n"%elapsed_time)
-        log.info("      * Iterations: %ds\n"%i)
-
-
+        log.info("      * Elapsed time: %.2fs\n"%float(elapsed_time))
+        
         
 class ECMPLBController(LBController):
     def __init__(self, *args, **kwargs):
