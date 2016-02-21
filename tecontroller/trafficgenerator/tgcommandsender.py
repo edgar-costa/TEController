@@ -4,7 +4,7 @@ import netifaces as ni
 import requests
 import argparse
 import random
-
+from subprocess import Popen, PIPE
 
 if __name__ == '__main__':
     
