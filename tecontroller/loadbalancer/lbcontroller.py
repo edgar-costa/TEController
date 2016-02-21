@@ -17,7 +17,6 @@ from fibbingnode import CFG
 from tecontroller.res import defaultconf as dconf
 from tecontroller.res.dbhandler import DatabaseHandler
 
-#from tecontroller.res.path import IPNetPath
 from tecontroller.res.flow import Flow
 from tecontroller.loadbalancer.jsonlistener import JsonListener
 
@@ -68,8 +67,8 @@ class LBController(DatabaseHandler):
 
         """
         super(LBController, self).__init__()
-        self.flow_allocation = {} # {prefixA: {flow1:[path1, path2], flow2:[path2]},
-                                  #  prefixB: {flow1:[path3], flow2:[path2]}}
+        self.flow_allocation = {} # {prefixA: {flow1:path1, flow2:path2},
+                                  #  prefixB: {flow1:path3, flow2:path2}}
                                   
         self.eventQueue = eventQueue #From where to read events 
         self.thread_handlers = {} #Used to schedule flow
@@ -94,6 +93,7 @@ class LBController(DatabaseHandler):
         log.info("LBC: Initial graph received\n")
                  
         # Retreieve network from Fibbing Controller
+        #self.network_graph = copy.deepcopy(self.sbmanager.igp_graph)
         self.network_graph = self.sbmanager.igp_graph
         
         # Include BW data inside network graph
@@ -113,7 +113,6 @@ class LBController(DatabaseHandler):
         jl = JsonListener(self.eventQueue)
         jl.start()
         log.info("LBC: Json listener thread created\n")
-
         
     def _readBwDataFromDB(self):
         """Introduces BW data from /tmp/db.topo into the network DiGraph and
@@ -178,7 +177,14 @@ class LBController(DatabaseHandler):
         """
         return self.network_graph.get_edge_data(x,y)['bw']
     
-
+    def isRouter(self, x):
+        """
+        Returns true if x is an ip of a router in the network.
+        
+        :param x: string representing the IPv4 of a router.
+        """
+        return x in self.routers_to_ip.values()
+    
     def getEdgeCapacity(self, x, y):
         """Returns the capacity of the network edge between x and y
         """
@@ -201,11 +207,11 @@ class LBController(DatabaseHandler):
         """Main loop that deals with new incoming events
         """
         while not self.isStopped():
+            # Get event from the queue (blocking)
             event = self.eventQueue.get()
             log.info(lineend)
-            log.info("LBC: NEW event in the queue ")
+            log.info("LBC: NEW event in the queue\n")
             log.info("      * Type: %s\n"%event['type'])
-            #log.info("LBC:  * Data: %s)\n"%repr(event['data']))
             
             if event['type'] == 'newFlowStarted':
                 flow = event['data']
@@ -220,18 +226,20 @@ class LBController(DatabaseHandler):
         """
         # Get the destination network prefix
         dst_prefix = flow['dst'].network
-
+        
         # Get the default OSFP Dijkstra path
         defaultPath = self.getDefaultDijkstraPath(self.network_graph, flow)
         
         # If it can be allocated, no Fibbing is needed
         if self.canAllocateFlow(flow, defaultPath):
+            
             # Allocate new flow and default path to destination prefix
-            self.addAllocationEntry(dst_prefix, flow, [defaultPath])
+            self.addAllocationEntry(dst_prefix, flow, defaultPath)
+            
         else:
             # Otherwise, call the abstract method
-            self.flowAllocationAlgorithm(dst_prefix, flow, defaultPath)            
-
+            self.flowAllocationAlgorithm(dst_prefix, flow, initial_path=defaultPath)
+            
     def getDefaultDijkstraPath(self, network_graph, flow):
         """Returns an list of network nodes representing the default Dijkstra
         path given the flow and a network graph.
@@ -243,17 +251,24 @@ class LBController(DatabaseHandler):
         src_router_name, src_router_id = self._db_getConnectedRouter(src_name)
         dst_network = flow['dst'].network.compressed
 
+        # We compute the dijkstra path only with the original nodes
+        tmp_graph = network_graph.copy()
+        
         # We take only routers in the route
         route = nx.dijkstra_path(network_graph, src_router_id, dst_network)
-        route = [r for r in route if r in self.routers_to_ip.values()]
-        
+        route = [r for r in route if self.isRouter(r)]
         return route
+    
 
     def canAllocateFlow(self, flow, path):
         """Returns true if there is at least flow.size bandwidth available in
         all links along the path from flow.src to src.dst,
 
         """
+        log.info("LBC: canAllocateFlow():\n")
+        log.info("     * Path: %s\n"%str(path))
+        log.info("     * Min capacity: %s\n"%str(self.getMinCapacity(path)))
+        log.info("     * FlowSize: %s\n"%str(flow['size'])) 
         return self.getMinCapacity(path) >= flow.size
 
 
@@ -282,7 +297,7 @@ class LBController(DatabaseHandler):
             else:
                 caps_in_path.append(edge_data['capacity'])
         return min(caps_in_path)
-
+    
 
     def getMinCapacityEdge(self, path):
         """Returns the edge with the minimum capacity along the path.
@@ -320,7 +335,6 @@ class LBController(DatabaseHandler):
             allocated_flows = self.getAllocatedFlows(prefix)
             if allocated_flows == []:
                 self.sbmanager.remove_lsa(lsa)
-                self.sbmanager.refresh_augmented_topo()
                 log.info("LBC: removed lies for prefix: %s\n"%(str(prefix)))
                 log.info("     LSAs: %s\n"%(str(lsa)))
             else:
@@ -336,10 +350,10 @@ class LBController(DatabaseHandler):
     def getAllocatedFlows(self, prefix):
         """
         Given a prefix, returns a list of tuples:
-        [(flow, path_list), (flow, path_list), ...]
+        [(flow, path), (flow, path), ...]
         """
         if prefix in self.flow_allocation.keys():
-            return [(f, p_l) for f, p_l in self.flow_allocation[prefix].iteritems()]
+            return [(f, p) for f, p in self.flow_allocation[prefix].iteritems()]
         else:
             log.info("LBC: getAllocatedFlows(): prefix %s not in flow_allocation table\n"%(str(prefix)))
 
@@ -355,7 +369,7 @@ class LBController(DatabaseHandler):
                 return lsa
         return None
         
-    def addAllocationEntry(self, prefix, flow, path_list):
+    def addAllocationEntry(self, prefix, flow, path):
         """Add entry in the flow_allocation table.
         
         :param prefix: is a IPv4Network type
@@ -365,44 +379,36 @@ class LBController(DatabaseHandler):
                           [[A, B, C], [A, D, C]]"""
         
         if prefix not in self.flow_allocation.keys():
-            # prefix not in table
-            self.flow_allocation[prefix] = {flow : path_list}
+           # prefix not in table
+            self.flow_allocation[prefix] = {flow : path}
         else:
-            if flow in self.flow_allocation[prefix].keys():
-                self.flow_allocation[prefix][flow] += path_list
-            else:
-                self.flow_allocation[prefix][flow] = path_list
+            self.flow_allocation[prefix][flow] = path
             
         t = time.strftime("%H:%M:%S", time.gmtime())
-        log.info(lineend)
-        log.info(("LBC: Flow ALLOCATED to Path - %s ")%t)
+        log.info(("LBC: Flow ALLOCATED to Path - %s\n")%t)
         log.info("      * dst_prefix: %s\n"%str(prefix.compressed))
-        log.info("      * Paths (%d): %s\n"%(len(path_list), str([path for path in path_list])))
+        log.info("      * Path: %s\n"%(str(path)))
         log.info("      * Flow: %s\n"%str(flow))
         
-        # Substract flow size from edges capacity
-        # Check first how many ECMP paths are there
-        ecmp_paths = float(len(path_list))
-        for path in path_list:
-            # Iterate through the graph
-            for (x, y, data) in self.network_graph.edges(data=True):
-                # If edge from path found in graph 
-                if x in path and y in path and abs(path.index(x)-path.index(y))==1:
-                    if 'capacity' not in data.keys():
-                        #It enters here because it considers as edges the
-                        #links between interfaces (ip's) of the routers
-                        pass
-                    else:
-                        # Substract corresponding size
-                        data['capacity'] -= (flow.size/ecmp_paths)
+        # Iterate through the graph
+        for (x, y, data) in self.network_graph.edges(data=True):
+            # If edge from path found in graph 
+            if x in path and y in path and abs(path.index(x)-path.index(y))==1:
+                if 'capacity' not in data.keys():
+                    #It enters here because it considers as edges the
+                    #links between interfaces (ip's) of the routers
+                    pass
+                else:
+                    # Substract corresponding size
+                    data['capacity'] -= flow.size
 
         # Define the removeAllocationEntry thread
-        t = threading.Thread(target=self.removeAllocationEntry, args=(prefix, flow, path_list))
+        t = threading.Thread(target=self.removeAllocationEntry, args=(prefix, flow, path))
         # Add handler to list and start thread
         self.thread_handlers[flow] = t
         t.start()
         
-    def removeAllocationEntry(self, prefix, flow, path_list):        
+    def removeAllocationEntry(self, prefix, flow, path):        
         """
         Removes the flow from the allocation entry prefix and restores the corresponding.
         """
@@ -417,25 +423,22 @@ class LBController(DatabaseHandler):
             else:
                 raise KeyError("%s is not alloacated in this prefix %s"%str(repr(flow)))
 
-        t = time.strftime("%H:%M:%S", time.gmtime())
         log.info(lineend)
-        log.info("LBC: Flow REMOVED from Path - %s "%t)
+        t = time.strftime("%H:%M:%S", time.gmtime())
+        log.info("LBC: Flow REMOVED from Path - %s\n"%t)
         log.info("      * dst_prefix: %s\n"%str(prefix.compressed))
-        log.info("      * Paths (%d): %s\n"%(len(path_list), str([path for path in path_list])))
+        log.info("      * Paths: %s\n"%(str(path)))
         log.info("      * Flow: %s\n"%repr(flow))
 
-        # Add again flow size from edges capacity
-        ecmp_paths = float(len(path_list))
-        for path in path_list:
-            for (x, y, data) in self.network_graph.edges(data=True):
-                if x in path and y in path and abs(path.index(x)-path.index(y))==1:
-                    if 'capacity' not in data.keys():
-                        #pass: it enters here because it considers as edges
-                        #the links between interfaces (ip's) of the routers
-                        pass
-                    else:
-                        data['capacity'] += (flow.size/ecmp_paths)
-
+        for (x, y, data) in self.network_graph.edges(data=True):
+            if x in path and y in path and abs(path.index(x)-path.index(y))==1:
+                if 'capacity' not in data.keys():
+                    #pass: it enters here because it considers as edges
+                    #the links between interfaces (ip's) of the routers
+                    pass
+                else:
+                    data['capacity'] += flow['size']
+                    
         # Remove the lies for the given prefix
         self.removePrefixLies(prefix)
         
@@ -466,18 +469,18 @@ class LBController(DatabaseHandler):
         
         :param flow_size: Attribute of a flow defining its size (in bytes).
         """
-        ng_temp = copy.deepcopy(network_graph)
-        
-        full_edges = [ng_temp.remove_edge(x,y) for (x, y, data) in
-                      network_graph.edges(data=True) if
-                      data.get('capacity') and data.get('capacity') <=
-                      flow_size]
-        
-        log.info("LBC: Edges that can't allocate flow of size: %d\n%s\n"%(flow_size, str(network_graph.difference(ng_temp))))
-
-        return ng_temp
-
-                    
+        ng_temp = network_graph.copy()
+        #full_edges = [ng_temp.remove_edge(x,y) for (x, y, data) in
+        #              network_graph.edges(data=True) if
+        #              data.get('capacity') and data.get('capacity') <=
+        #              flow_size and self.isRouter(x) and self.isRouter(y)]
+        for (x, y, data) in network_graph.edges(data=True):
+            if data.get('capacity') and data.get('capacity') <= flow_size and self.isRouter(x) and self.isRouter(y):
+                edge = (x, y)
+                log.info("LBC: Edges %s with capacity %d can't allocate flow of size: %d\n"%(str(edge), data.get('capacity'), flow_size))
+                ng_temp.remove_edge(x, y)
+                
+        return ng_temp                    
                         
     @abc.abstractmethod
     def flowAllocationAlgorithm(self, dst_prefix, flow, initial_path):
@@ -514,8 +517,9 @@ class GreedyLBController(LBController):
         start_time = time.time()
         i = 1
 
-        # Remove edge that can't allocate flow from graph
+        # Remove edges that can't allocate flow from graph
         tmp_nw = self.getNetworkWithoutFullEdges(self.network_graph, flow['size'])
+
         try:
             # Calculate new default dijkstra path
             shortest_congestion_free_path = self.getDefaultDijkstraPath(tmp_nw, flow)
@@ -526,22 +530,20 @@ class GreedyLBController(LBController):
             log.info("     Allocating it the default Dijkstra path...\n")
 
             # Allocate flow to Path
-            self.addAllocationEntry(dst_prefix, flow, [initial_path])
+            self.addAllocationEntry(dst_prefix, flow, initial_path)
             log.info("      * Dest_prefix: %s\n"%(str(dst_prefix.compressed)))
             log.info("      * Path: %s\n"%(str(initial_path)))
 
         else:
             log.info("LBC: Found path that can allocate flow\n")
             # Allocate flow to Path
-            self.addAllocationEntry(dst_prefix, flow, [shortest_congestion_free_path])
+            self.addAllocationEntry(dst_prefix, flow, shortest_congestion_free_path)
             # Call to FIBBING Controller should be here
             log.info("      * Dest_prefix: %s\n"%(str(dst_prefix.compressed)))
             log.info("      * Path: %s\n"%(str(shortest_congestion_free_path)))
             self.sbmanager.simple_path_requirement(dst_prefix.compressed,
-                                                   [r for r in
-                                                    shortest_congestion_free_path
-                                                    if r in
-                                                    self.routers_to_ip.values()])
+                                                   [r for r in shortest_congestion_free_path
+                                                    if self.isRouter(r)])
             log.info("LBC: Fored forwarding DAG in Southbound Manager\n")
 
         # Do this allways
@@ -551,7 +553,7 @@ class GreedyLBController(LBController):
         log.info("      * Iterations: %ds\n"%i)
 
 
-
+        
 class ECMPLBController(LBController):
     def __init__(self, *args, **kwargs):
         super(ECMPLBController, self).__init__(*args, **kwargs)
@@ -560,47 +562,7 @@ class ECMPLBController(LBController):
         """
         Implements abstract method.
         """
-        
-        log.info("LBC: Greedy Algorithm started\n")
-        start_time = time.time()
-        i = 1
-
-        # Remove edge that can't allocate flow from graph
-        tmp_nw = self.getNetworkWithoutFullEdges(self.network_graph, flow['size'])
-        try:
-            # Calculate new default dijkstra path
-            shortest_congestion_free_path = self.getDefaultDijkstraPath(tmp_nw, flow)
-
-        except nx.NetworkXNoPath:
-            # There is no congestion-free path between src and dst
-            log.info("LBC: The flow can't be allocated in the network\n")
-            log.info("     Allocating it the default Dijkstra path...\n")
-
-            # Allocate flow to Path
-            self.addAllocationEntry(dst_prefix, flow, [initial_path])
-            log.info("      * Dest_prefix: %s\n"%(str(dst_prefix.compressed)))
-            log.info("      * Path: %s\n"%(str(initial_path)))
-
-        else:
-            log.info("LBC: Found path that can allocate flow\n")
-            # Allocate flow to Path
-            self.addAllocationEntry(dst_prefix, flow, [shortest_congestion_free_path])
-            # Call to FIBBING Controller should be here
-            log.info("      * Dest_prefix: %s\n"%(str(dst_prefix.compressed)))
-            log.info("      * Path: %s\n"%(str(shortest_congestion_free_path)))
-            self.sbmanager.simple_path_requirement(dst_prefix.compressed,
-                                                   [r for r in
-                                                    shortest_congestion_free_path
-                                                    if r in
-                                                    self.routers_to_ip.values()])
-            log.info("LBC: Fored forwarding DAG in Southbound Manager\n")
-com
-        # Do anyways
-        elapsed_time = time.time() - start_time
-        log.info("LBC: Greedy Algorithm Finished\n")
-        log.info("      * Elapsed time: %ds\n"%elapsed_time)
-        log.info("      * Iterations: %ds\n"%i)
-
+        pass
 
 if __name__ == '__main__':
     log.info("LOAD BALANCER CONTROLLER\n")
