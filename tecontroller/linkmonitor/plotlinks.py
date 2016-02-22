@@ -13,8 +13,12 @@ def main(args):
     start = time.time()
 
     # Parse arguments
-    tmp = args.only_links.split(',')
-    edges_to_print = [i.strip('[').strip(']') for i in tmp]
+    if args.all:
+        edges_to_print = "ALL"
+    else:
+        tmp = args.only_links.split(',')
+        edges_to_print = [i.strip('[').strip(']') for i in tmp]
+        
     print "Edges to print: %s"%str(edges_to_print)
     
     # Open links logfile
@@ -26,7 +30,10 @@ def main(args):
 
     links = [a.split('->')[0] for a in edges_t if a]
     edges = [a.split('->')[1] for a in edges_t if a]
-    
+
+    if args.all ==True:
+        edges_to_print = edges
+        
     seconds = np.asarray([float(line[0]) for line in lines])
     seconds = seconds - seconds[0] # make time relative to start
     
@@ -83,5 +90,6 @@ if __name__ == '__main__':
     group.add_argument('-l', '--only-links',
                        type=str,
                        default="[(s1 r1),(s2 r1),(r1 r2),(r1 r3),(r1 r4),(r4 r3),(r3 d1)]")
+    group.add_argument('--all', action='store_true', default=False)
     args = parser.parse_args()
     main(args)
