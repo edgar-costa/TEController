@@ -97,10 +97,13 @@ class LBController(DatabaseHandler):
         self.network_graph = self.sbmanager.igp_graph
         
         # Include BW data inside network graph
+        n_router_links = self._countRouter2RouterEdges()
         self._readBwDataFromDB()
-        if not self._bwInAllEdges():
+        i = 0
+        while not self._bwInAllRouterEdges(n_router_links):
+            i += 1
             self._readBwDataFromDB()
-        log.info("LBC: Bandwidths written in network_graph\n")
+        log.info("LBC: Bandwidths written in network_graph after %d iterations\n"%i)
 
         # Fill the host2Ip and router2ip attributes
         self._createHost2IPBindings()
@@ -123,19 +126,46 @@ class LBController(DatabaseHandler):
                 continue
             xname = self._db_getNameFromIP(x)
             yname = self._db_getNameFromIP(y)
-
+            
             if xname and yname:
                 bw = self.db.interface_bandwidth(xname, yname)
                 data['bw'] = int(bw*1e6)
                 data['capacity'] = int(bw*1e6)
-
             else:
                 log.info("LBC: ERROR -> _readBwDataFromDB(self): did not find xname and yname")
-                
-    def _bwInAllEdges(self):
-        ep = [True if 'capacity' in data.keys() and 'bw' in data.keys() else False for (x, y, data) in self.network_graph.edges(data=True)]
-        return False not in ep
-                
+
+
+    def _countRouter2RouterEdges(self):
+        """
+        Counts how many unidirectional links between routers exist in the network
+        """
+        routers = [n for (n, data) in self.db.network.iteritems() if data['type'] == 'router']
+        edges_count = 0
+        for r in routers:
+            data = self.db.network[r]
+            for n, d in data.iteritems():
+                if type(d) == dict:
+                    try:
+                        self.db.routerid(n)
+                    except TypeError:
+                        pass
+                    else:
+                        edges_count +=1
+        return edges_count
+
+    def _countWrittenBw(self):
+        ep = [1 if 'capacity' in data.keys() and 'bw' in
+              data.keys() else False for (x, y, data) in
+              self.network_graph.edges(data=True) if
+              self.network_graph.is_router(x) and
+              self.network_graph.is_router(y)]
+        return sum(ep)
+
+    def _bwInAllRouterEdges(self, n_router_links):
+        current_count = self._countWrittenBw()
+        return current_count == n_router_links and current_count != 0
+
+    
     def _createHost2IPBindings(self):
         """Fills the dictionary self.hosts_to_ip with the corresponding
         name-ip pairs
@@ -308,15 +338,39 @@ class LBController(DatabaseHandler):
         caps_in_path = []
         for i in range(len(path)-1):
             edge_data = self.network_graph.get_edge_data(path[i], path[i+1])
-            if 'capacity' not in edge_data.keys():
-                # It enters here because it considers as edges the
-                # links between interfaces (ip's) of the routers
-                pass
+            edge_data_i = self.network_graph.get_edge_data(path[i+1], path[i])
+            capacity = edge_data.get('capacity')
+            capacity_i = edge_data_i.get('capacity')
+            if capacity == capacity_i:
+                if capacity != None:
+                    caps_in_path.append(capacity)
+                else:
+                    # It enters here because it considers as edges the
+                    # links between interfaces (ip's) of the routers
+                    log.info("ERROR: getMinCapacity():\n")
+                    log.info("       * Path: %s\n"%path)
             else:
-                caps_in_path.append(edge_data['capacity'])
-        return min(caps_in_path)
-    
+                if capacity != None and capacity_i != None:
+                    log.info("ERROR: getMinCapacity(): Inconsistent edge data!\n")
+                    log.info("       * edge_data: %s or %s\n"%(str(edge_data), str(edge_data_i)))
+                    raise ValueError
+                else:
+                    if capacity:
+                        caps_in_path.append(capacity)
+                        self.network_graph[path[i+1]][path[i]]['capacity'] = capacity
+                    else:
+                        caps_in_path.append(capacity_i)
+                        self.network_graph[path[i]][path[i+1]]['capacity'] = capacity_i
+                        
+        try:
+            mini = min(caps_in_path)
+            return mini
+        except ValueError:
+            log.info("ERROR: getMinCapacity(): min could not be calculated\n")
+            log.info("       * Path: %s\n"%path)            
+            raise ValueError
 
+        
     def getMinCapacityEdge(self, path):
         """Returns the edge with the minimum capacity along the path.
 
@@ -409,7 +463,7 @@ class LBController(DatabaseHandler):
                           [[A, B, C], [A, D, C]]"""
         
         if prefix not in self.flow_allocation.keys():
-           # prefix not in table
+            # prefix not in table
             self.flow_allocation[prefix] = {flow : path}
         else:
             self.flow_allocation[prefix][flow] = path
@@ -427,6 +481,7 @@ class LBController(DatabaseHandler):
                 if 'capacity' not in data.keys():
                     #It enters here because it considers as edges the
                     #links between interfaces (ip's) of the routers
+                    
                     pass
                 else:
                     # Substract corresponding size
