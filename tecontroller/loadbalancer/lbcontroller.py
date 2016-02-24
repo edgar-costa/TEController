@@ -271,26 +271,7 @@ class LBController(DatabaseHandler):
     @abc.abstractmethod
     def dealWithNewFlow(self, flow):
         """
-        Treat new incoming flow.
         """
-        # Get the destination network prefix
-        dst_prefix = flow['dst'].network
-
-        # Get the default OSFP Dijkstra path
-        defaultPath = self.getDefaultDijkstraPath(self.network_graph, flow)
-        
-        # If it can be allocated, no Fibbing needed
-        if self.canAllocateFlow(flow, defaultPath):
-            # Log it
-            t = time.strftime("%H:%M:%S", time.gmtime())
-            log.info("%s - dealWithNewFlow(): default Dijkstra path can allocate flow\n"%t)            
-
-            # Allocate new flow and default path to destination prefix
-            self.addAllocationEntry(dst_prefix, flow, defaultPath)
-
-        else:
-            # Otherwise, call the abstract method
-            self.flowAllocationAlgorithm(dst_prefix, flow, defaultPath)
             
     def getDefaultDijkstraPath(self, network_graph, flow):
         """Returns an list of network nodes representing the default Dijkstra
@@ -439,13 +420,16 @@ class LBController(DatabaseHandler):
                 # Just log it
                 flows = [f for (f, p) in allocated_flows]
                 t = time.strftime("%H:%M:%S", time.gmtime())
-                log.info("%s - removePrefixLies(): lies for prefix %s not removed. Flows yet ongoing:\n"%(t, self._db_getNameFromIP(prefix.compressed)))
+                to_print = "%s - removePrefixLies(): "
+                to_print += "lies for prefix %s not removed. Flows yet ongoing:\n"
+                log.info(to_print%(t, self._db_getNameFromIP(prefix.compressed)))
                 for f in flows:
                     log.info("\t%s\n"%(self.toFlowHostnames(f)))
         else:
             # Prefix not fibbed
             t = time.strftime("%H:%M:%S", time.gmtime())
-            log.info("%s - removePrefixLies(): no lies for prefix: %s\n"%(t, self._db_getNameFromIP(prefix.compressed)))
+            to_print = "%s - removePrefixLies(): no lies for prefix: %s\n"
+            log.info(to_print%(t, self._db_getNameFromIP(prefix.compressed)))
 
             
     def getAllocatedFlows(self, prefix):
@@ -457,9 +441,10 @@ class LBController(DatabaseHandler):
             return [(f, p) for f, p in self.flow_allocation[prefix].iteritems()]
         else:
             t = time.strftime("%H:%M:%S", time.gmtime())
-            log.info("%s - getAllocatedFlows(): prefix %s not yet in flow_allocation table\n"%(t, self._db_getNameFromIP(prefix.compressed)))
+            to_print = "%s - getAllocatedFlows(): "
+            to_print += "prefix %s not yet in flow_allocation table\n"
+            log.info(to_print%(t, self._db_getNameFromIP(prefix.compressed)))
             return []
-
 
 
     def getFlowSizes(self, prefix):
@@ -493,6 +478,7 @@ class LBController(DatabaseHandler):
         ng_temp.remove_edge(x, y)
         return ng_temp
 
+
     def getAllPaths(self, network_graph, x, y):
         """Returns an ordered list representing all paths between node x and
         y in network_graph. Paths are ordered in increasing length.
@@ -502,6 +488,7 @@ class LBController(DatabaseHandler):
         :param x,y: ipaddress.IPv4Network
         """
         pass
+
 
     def getNetworkWithoutFullEdges(self, network_graph, flow_size):
         """Returns a nx.DiGraph representing the network graph without the
@@ -524,10 +511,9 @@ class LBController(DatabaseHandler):
                 ng_temp.remove_edge(x, y)
 
         t = time.strftime("%H:%M:%S", time.gmtime())
-        log.info("%s - getNetworkWithoutFullEdges(): The following edges can't allocate flow of size: %d\n"%(t, flow_size))
+        to_print = "%s - getNetworkWithoutFullEdges(): "
+        to_print += "The following edges can't allocate flow of size: %d\n"
+        log.info(to_print%(t, flow_size))
         for (edge,cap) in removed:
             log.info("\tEdge: %s, capacity: %d\n"%(edge, cap))
-        return ng_temp                    
-
-
-
+        return ng_temp
