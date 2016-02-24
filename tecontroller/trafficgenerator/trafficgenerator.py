@@ -129,29 +129,32 @@ class TrafficGenerator(Base):
         """
         f = open(flowfile, 'r')
         flows = f.readlines()
-        for flowline in flows:
-            try:
-                [s, d, sp, dp, size, s_t, dur] = flowline.strip('\n').split(',')
-                srcip = self.getHostIPByName(s)
-                dstip = self.getHostIPByName(d)
-            except Exception:
-                srcip = None
-                dstip = None
-            if srcip != None and dstip != None:
-                flow = Flow(src = srcip,
-                            dst = dstip,
-                            sport = sp,
-                            dport = dp,
-                            size = size,
-                            start_time = s_t,
-                            duration = dur)
-                #Schedule flow creation
-                self.scheduler.enter(flow['start_time'], 1, self._createFlow, ([flow]))
-            else:
-                log.info("ERROR! Hosts %s and/or %s do not exist in the network!\n"%(s, d))
+        if flows:
+            for flowline in flows:
+                try:
+                    [s, d, sp, dp, size, s_t, dur] = flowline.strip('\n').split(',')
+                    srcip = self.getHostIPByName(s)
+                    dstip = self.getHostIPByName(d)
+                except Exception:
+                    srcip = None
+                    dstip = None
+                if srcip != None and dstip != None:
+                    flow = Flow(src = srcip,
+                                dst = dstip,
+                                sport = sp,
+                                dport = dp,
+                                size = size,
+                                start_time = s_t,
+                                duration = dur)
+                    #Schedule flow creation
+                    self.scheduler.enter(flow['start_time'], 1, self._createFlow, ([flow]))
+                else:
+                    log.info("ERROR! Hosts %s and/or %s do not exist in the network!\n"%(s, d))                
+            self.scheduler.run()
+        else:
+            log.info("No flows to schedule in file\n")                
+            
                 
-        self.scheduler.run()
-
 def create_app(appl, traffic_generator):
     app.config['TG'] = traffic_generator
     return appl
@@ -199,8 +202,8 @@ if __name__ == '__main__':
     log.info("-"*60+"\n")
 
     # Schedule flows from file
-    flowfile = dconf.FlowFile
-    #flowfile = dconf.TG_Path + 'flowfile2.csv'
+    #flowfile = dconf.FlowFile
+    flowfile = dconf.TG_Path + 'flowfile2.csv'
     tg.scheduleFileFlows(flowfile)
     log.info("LOG: Scheduled flow file: %s\n"%flowfile)
     
