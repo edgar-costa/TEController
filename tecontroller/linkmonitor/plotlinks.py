@@ -75,7 +75,7 @@ def main(args):
             ax.plot(seconds, loads2[:,i], 'b-', label=label_f)
             ax.set_ylim(0,100)
             ax.legend([label, label_f], loc='right')
-            ax.legend([label_f], loc='right')
+            #ax.legend([label_f], loc='right')
             ax.grid(True)
             count += 1
 
