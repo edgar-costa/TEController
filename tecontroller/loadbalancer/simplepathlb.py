@@ -6,6 +6,12 @@ from tecontroller.res import defaultconf as dconf
 from fibbingnode.misc.mininetlib import get_logger
 
 import networkx as nx
+import threading
+import time
+
+
+log = get_logger()
+lineend = "-"*100+'\n'
 
 class SimplePathLB(LBController):
     """Implements the flowAllocationAlgorithm of the
