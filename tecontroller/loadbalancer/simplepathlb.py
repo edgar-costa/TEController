@@ -1,4 +1,5 @@
 #!/usr/bin/python
+
 from tecontroller.loadbalancer.lbcontroller import LBController
 from tecontroller.res import defaultconf as dconf
 
@@ -22,11 +23,14 @@ class SimplePathLB(LBController):
     If the flow can't be allocated in any path from source to
     destination, the algorithm falls back to the original dijsktra
     path and does not fib the network.
+
     """
+    
     def __init__(self, *args, **kwargs):
         super(SimplePathLB, self).__init__(*args, **kwargs)
+    
 
-   def dealWithNewFlow(self, flow):
+    def dealWithNewFlow(self, flow):
         """
         Implements the abstract method
         """

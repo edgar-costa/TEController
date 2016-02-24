@@ -269,8 +269,9 @@ class LBController(DatabaseHandler):
     @abc.abstractmethod
     def dealWithNewFlow(self, flow):
         """
+        Called when a new flow arrives
         """
-            
+    
     def getDefaultDijkstraPath(self, network_graph, flow):
         """Returns an list of network nodes representing the default Dijkstra
         path given the flow and a network graph.
