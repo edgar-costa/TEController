@@ -1,3 +1,4 @@
+#!/usr/bin/python
 from tecontroller.loadbalancer.lbcontroller import LBController
 from tecontroller.res import defaultconf as dconf
 
