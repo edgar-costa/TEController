@@ -127,7 +127,8 @@ class SimpleTopo(IPTopo):
         self.addLink(c2, r2)
         
         # Adding Traffic Engineering Controller
-        c3 = self.addHost(LBC, isLBController=True)
+        c3 = self.addHost(LBC, isLBController=True, algorithm='SimplePath')
+        #c3 = self.addHost(LBC, isLBController=True, algorithm='ECMP')
         self.addLink(c3, r2) 
 
 

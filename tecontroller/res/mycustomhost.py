@@ -27,6 +27,9 @@ lm_logfile =  dconf.Hosts_LogFolder + "LM.log"
 
 log = get_logger()
 
+algo_to_file = {'SimplePath': 'simplepathlb.py', 
+                'ECMP': 'ecmplb.py'}
+
 class MyCustomHost(_node.Host):
     """This class essentially extends the Host class in mininet so that
     our custom hosts create the two desired processes in each host:
@@ -48,8 +51,10 @@ class MyCustomHost(_node.Host):
             
         elif 'isLBController' in kwargs.keys() and kwargs.get('isLBController') == True:
             log.info("\nStarting LoadBalancing Controller\n")
+            # Fetch which algorithm is running
+            algorithm = kwargs.get('algorithm', 'SimplePath')
             lbcl = open(lbc_logfile, 'w')
-            tec = self.popen(dconf.LBC_Path+'lbcontroller.py',
+            tec = self.popen(dconf.LBC_Path+algo_to_file[algorithm],
                              stdin=None, stdout=lbcl, stderr=lbcl)
             lbcl.close()
             

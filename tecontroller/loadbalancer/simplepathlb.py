@@ -23,8 +23,7 @@ class SimplePathLB(LBController):
     path and does not fib the network.
     """
     def __init__(self, *args, **kwargs):
-        super(GreedyLBController, self).__init__(*args, **kwargs)
-
+        super(SimplePathLB, self).__init__(*args, **kwargs)
 
    def dealWithNewFlow(self, flow):
         """
@@ -48,7 +47,6 @@ class SimplePathLB(LBController):
         else:
             # Otherwise, call the abstract method
             self.flowAllocationAlgorithm(dst_prefix, flow, defaultPath)
-
 
     def addAllocationEntry(self, prefix, flow, path):
         """Add entry in the flow_allocation table.
@@ -126,8 +124,6 @@ class SimplePathLB(LBController):
         self.removePrefixLies(prefix)
         
 
-
-
     def flowAllocationAlgorithm(self, dst_prefix, flow, initial_path):
         """
         """
@@ -163,8 +159,11 @@ class SimplePathLB(LBController):
             self.sbmanager.simple_path_requirement(dst_prefix.compressed,
                                                    [r for r in shortest_congestion_free_path
                                                     if self.isRouter(r)])
+
             t = time.strftime("%H:%M:%S", time.gmtime())
-            log.info("%s - flowAllocationAlgorithm(): Forced forwarding DAG in Southbound Manager\n"%t)
+            to_print = "%s - flowAllocationAlgorithm(): "
+            to_print += "Forced forwarding DAG in Southbound Manager\n"
+            log.info(to_print%t)
 
         # Do this allways
         elapsed_time = time.time() - start_time
