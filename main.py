@@ -31,10 +31,18 @@ R1 = 'r1'
 R2 = 'r2'
 R3 = 'r3'
 R4 = 'r4'
+
 D1 = 'd1'
+D2 = 'd2'
+D3 = 'd3'
+D4 = 'd4'
+
 S1 = 's1'
 S2 = 's2'
-D2 = 'd2'
+S3 = 's3'
+S4 = 's4'
+
+
 M1 = 'm1'
 
 BW = 1  # Absurdly low bandwidth for easy congestion (in Mb)
@@ -79,7 +87,7 @@ class SimpleTopo(IPTopo):
  +--+          ___|R3 |__       | D2|
  |S2|__     3 /   +---+  \3    _+---+
  +--+  \__   /            \   /
- +--+     \+----+   10   +---+        +--+
+ +--+     \+----+   7   +---+        +--+
  |S1|------| R1 |--------| R2|--------|D1|
  +--+     _+----+        +---+_       +--+
         _/    |            |   \_  
@@ -90,7 +98,7 @@ class SimpleTopo(IPTopo):
         r1 = self.addRouter(R1, cls=MyCustomRouter)
         r2 = self.addRouter(R2, cls=MyCustomRouter)
         r3 = self.addRouter(R3, cls=MyCustomRouter)
-        self.addLink(r1, r2, cost = 10)
+        self.addLink(r1, r2, cost = 7)
         self.addLink(r1, r3, cost = 3)
         self.addLink(r3, r2, cost = 3)
         
@@ -114,28 +122,31 @@ class SimpleTopo(IPTopo):
         self.addLink(m1, r1)
 
         # Adding Traffic Generator Host
-        c2 = self.addHost(TG, isTrafficGenerator=True) 
+        c2 = self.addHost(TG, isTrafficGenerator=True)
+        
         self.addLink(c2, r2)
         
         # Adding Traffic Engineering Controller
         c3 = self.addHost(LBC, isLBController=True)
-        self.addLink(c3, r2)
- 
+        self.addLink(c3, r2) 
 
+
+
+        
 class SIGTopo(IPTopo):
     def build(self, *args, **kwargs):
         """
                          +----+
                          | D1 |
-                         +----+
-                          |
-            +---+        +---+      +---+
+   +--+                  +----+
+   |S3|___                |
+   +--+   \_+---+        +---+      +---+
             | R2|--------|R3 |------|D2 |
             +---+       /+---+      +---+
               |     ___/   |
-           10 |    /       |
-              |   /        |
- +--+      +----+'       +---+        +--+
+           10 |    /       |   _ +--+
+              |   /        |  /  |S4|
+ +--+      +----+'       +---+   +--+ +--+
  |S1|------| R1 |--------| R4|--------|C1|
  +--+     _+----+        +---+_       +--+
         _/    |            |   \__
@@ -154,13 +165,24 @@ class SIGTopo(IPTopo):
         self.addLink(r1, r3)
 
         s1 = self.addHost(S1)
-        d1 = self.addHost(D1)
         s2 = self.addHost(S2)
+        s3 = self.addHost(S3)
+        s4 = self.addHost(S4)
+
+        d1 = self.addHost(D1)
         d2 = self.addHost(D2)
+        d3 = self.addHost(D3)
+        d4 = self.addHost(D4)
+        
         self.addLink(s1, r1)
         self.addLink(s2, r1)
+        self.addLink(s3, r2)
+        self.addLink(s4, r2)
+
         self.addLink(d1, r3)
         self.addLink(d2, r3)
+        self.addLink(d3, r3)
+        self.addLink(d4, r3)
 
         # Adding Fibbing Controller
         c1 = self.addController(C1, cfg_path=C1_cfg)
@@ -179,7 +201,6 @@ class SIGTopo(IPTopo):
         self.addLink(c3, r4)
 
 
-
 def launch_network():
     net = IPNet(topo=SimpleTopo(),
                 debug=_lib.DEBUG_FLAG,
@@ -192,28 +213,10 @@ def launch_network():
     net.stop()
 
 
-    # Not used
-def launch_controller():
-    CFG.read(C1_cfg)
-    db = TopologyDB(db=DB_path)
-    manager = SouthboundManager(optimizer=OSPFSimple())
-    import ipdb; ipdb.set_trace() #TRACEEEEEEEEEEEEEEE    
-    manager.simple_path_requirement(db.subnet(R3, D1), [db.routerid(r)
-                                                        for r in (R1, R2, R3)])
-    manager.simple_path_requirement(db.subnet(R3, D2), [db.routerid(r)
-                                                        for r in (R1, R4, R3)])
-    try:
-        manager.run()
-    except KeyboardInterrupt:
-        manager.stop()
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     group = parser.add_mutually_exclusive_group()
-    group.add_argument('-c', '--controller',
-                       help='Start the controller',
-                       action='store_true',
-                       default=False)
     group.add_argument('-n', '--net',
                        help='Start the Mininet topology',
                        action='store_true',
@@ -231,7 +234,5 @@ if __name__ == '__main__':
         import logging
         log.setLevel(logging.DEBUG)
         lg.setLogLevel('debug')
-    if args.controller:
-        launch_controller()
     elif args.net:
         launch_network()
