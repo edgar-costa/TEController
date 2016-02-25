@@ -202,8 +202,8 @@ if __name__ == '__main__':
     log.info("-"*60+"\n")
 
     # Schedule flows from file
-    #flowfile = dconf.FlowFile
-    flowfile = dconf.TG_Path + 'flowfile2.csv'
+    flowfile = dconf.FlowFile
+    #flowfile = dconf.TG_Path + 'flowfile2.csv'
     tg.scheduleFileFlows(flowfile)
     log.info("LOG: Scheduled flow file: %s\n"%flowfile)
     
