@@ -445,7 +445,7 @@ class LBController(DatabaseHandler):
             log.info(to_print%(t, self._db_getNameFromIP(prefix.compressed)))
             return []
 
-
+        
     def getFlowSizes(self, prefix):
         """
         Returns the sum of flows with destination prefix
@@ -504,3 +504,59 @@ class LBController(DatabaseHandler):
         for (edge,cap) in removed:
             log.info("\tEdge: %s, capacity: %d\n"%(edge, cap))
         return ng_temp
+
+
+
+        def getAllPathsRanked(self, igp_graph, start, end):
+        """Recursive function that returns an ordered list representing all
+        paths between node x and y in network_graph. Paths are ordered
+        in increasing length.
+        
+        :param igp_graph: IGPGraph representing the network
+        
+        :param start: router if of source's connected router
+
+        :param end: compressed subnet address of the destination
+                    prefix."""
+        paths = self._getAllPaths(igp_graph, start, end)
+        ordered_paths = self._orderByLength(paths)
+        return ordered_paths
+        
+    
+    def _getAllPaths(self, igp_graph, start, end, path=[]):
+        """Recursive function that finds all paths from start node to end
+        node.
+
+        """
+        path = path + [start]
+        if start == end:
+            return [path]
+
+        if not start in igp_graph:
+            return []
+
+        paths = []
+        for node in igp_graph[start]:
+            if node not in path: # Ommiting loops here
+                newpaths = self.getAllPaths(igp_graph, node, end, path)
+                for newpath in newpaths:
+                    paths.append(newpath)
+        return paths
+
+    def _orderByLength(self, paths):
+        """Given a list of arbitrary paths. It ranks them by lenght (or total
+        edges weight).
+
+        """
+        # Search for path lengths
+        ordered_paths = []
+        for path in paths:
+            pathlen = 0
+            for (u,v) in zip(path[:-1], path[1:]):
+                if self.network_graph.is_router(v):
+                    pathlen += self.network_graph.get_edge_data(u,v)['weight']
+            ordered_paths.append((path, pathlen))
+        # Now rank them
+        ordered_paths = sorted(ordered_paths, key=lambda x: x[1])
+        return ordered_paths
+

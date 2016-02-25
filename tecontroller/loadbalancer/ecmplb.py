@@ -8,7 +8,7 @@ from fibbingnode.misc.mininetlib import get_logger
 import networkx as nx
 import threading
 import time
-
+import math
 
 log = get_logger()
 lineend = "-"*100+'\n'
@@ -108,7 +108,6 @@ class ECMPLB(LBController):
         log.info("%s - flowAllocationAlgorithm(): Greedy Algorithm Finished\n"%t)
         log.info("\t* Elapsed time: %.3fs\n"%float(elapsed_time))
 
-
     def ecmpAlgorithm(self, dst_prefix, flow):
         """
         Pseudocode:
@@ -124,92 +123,117 @@ class ECMPLB(LBController):
             else:
                 self.allocateFlowToECMPPaths(flow, all_capable_paths[:n_paths_needed])
         """
-        pass
-
-    
-    def getAllPaths(self, igp_graph, start, end, path=[]):
-        """Recursive functoin that returns an ordered list representing all
-        paths between node x and y in network_graph. Paths are ordered
-        in increasing length.
+        start_time = time.time()
         
-        :param igp_graph: IGPGraph representing the network
+        t = time.strftime("%H:%M:%S", time.gmtime())
+        to_print = "%s - ecmpAlgorithm() started...\n"
+        log.info(to_print%t)
+
+        # Get source hostname
+        src_hostname = self._db_getNameFromIP(flow['src'].compressed) 
+
+        # Get source attached router
+        (src_router_name, src_router_id) = self._db_getConnectedRouter(src_hostname)
         
-        :param start: router if of source's connected router
-
-        :param end: compressed subnet address of the destination
-                    prefix."""
-        path = path + [start]
-        if start == end:
-            return [path]
-
-        if not start in igp_graph:
-            return []
-
-        paths = []
-        for node in igp_graph[start]:
-            if node not in path: # Ommiting loops here
-                newpaths = self.getAllPaths(igp_graph, node, end, path)
-                for newpath in newpaths:
-                    paths.append(newpath)
-        return paths
-
-    def orderByLength(self, paths):
-        # Search for path lengths
-        ordered_paths = []
-        for path in paths:
-            pathlen = 0
-            for (u,v) in zip(path[:-1], path[1:]):
-                if igp_graph.is_router(v):
-                    pathlen += igp_graph.get_edge_data(u,v)['weight']
-            ordered_paths.append((path, pathlen))
-        # Now rank them
-        ordered_paths = sorted(ordered_paths, key=lambda x: x[1])
-        return ordered_paths
+        # Get all paths from src to dst ranked by length
+        rankedPaths = self.getAllPathsRanked(self.network_graph, src_router_id, dst_prefix)
         
-    
-    def addAllocationEntry(self, prefix, flow, path):
+        found_allocation = False
+        for (path, length) in rankedPaths:
+            minCapacity = self.getMinCapacity(path)
+
+            # We get do the following to avoid congestion
+            (minu, minv) = self.getMinCapacityEdge(path)
+            minEdgeBw = self.network_graph.get_network_data(minu, minv)
+            minEdgeBw = minEdgeBw.get('bw', None)
+            if minEdgeBw:
+                # To avoid congestion, we assume here that around 5%
+                # of the link's bandwidth is consumed capacity that we
+                # do not control
+                minCapacity_aux = (minCapacity - (minEdgeBw*0.05))
+            else:
+                minCapacity_aux = minCapacity
+                
+            n_paths_needed = math.ceil(flow['size']/float(minCapacity_aux))
+            tmp_network_graph = self.getNetworkWithoutFullEdges(self.network_graph, minCapacity_aux)
+            capable_paths = self.getAllPathsRanked(tmp_network_graph, src_router_id, dst_prefix)
+            if len(capable_paths) < n_paths_needed:
+                continue
+            else:
+                found_allocation = True
+                self.addAllocationEntry(dst_prefix, flow, capable_paths[:n_paths_needed])
+
+        if not found_allocation:
+            log.info("\tNo congestion-free ECMP allocation could be found\n")
+            log.info("\t* Dest_prefix: %s\n"%self._db_getNameFromIP(prefix.compressed))
+            log.info("\t* Paths (%s): %s\n"%(len(path_list), str([self.toRouterNames(path) for path in path_list])))
+            log.info("\t* Flow: %s\n"%self.toFlowHostnames(flow))
+
+        t = time.strftime("%H:%M:%S", time.gmtime())
+        to_print = "%s - ecmpAlgorithm() finished after %.3f seconds\n"%(t, time.time()-start_time)
+        log.info(to_print)
+
+
+                
+    def addAllocationEntry(self, prefix, flow, path_list):
         """Add entry in the flow_allocation table.
         
-        :param prefix: is a IPv4Network type
-
-        :param path_list: List of paths (IPNetPath) for which this flow will be
+        :param prefix: destination prefix. Expressed as an
+                       IPv4Interface object
+        
+        :param path_list: List of paths for which this flow will be
                           multi-pathed towards destination prefix:
                           [[A, B, C], [A, D, C]]"""
-        
         if prefix not in self.flow_allocation.keys():
             # prefix not in table
-            self.flow_allocation[prefix] = {flow : path}
+            self.flow_allocation[prefix] = {flow : path_list}
         else:
-            self.flow_allocation[prefix][flow] = path
-            
-        t = time.strftime("%H:%M:%S", time.gmtime())
-        log.info("%s - addAllocationEntry(): Flow ALLOCATED to Path\n"%t)
-        log.info("\t* Dest_prefix: %s\n"%self._db_getNameFromIP(prefix.compressed))
-        log.info("\t* Path: %s\n"%str(self.toRouterNames(path)))
-        log.info("\t* Flow: %s\n"%self.toFlowHostnames(flow))
-        
-        # Iterate through the graph
-        for (x, y, data) in self.network_graph.edges(data=True):
-            # If edge from path found in graph 
-            if x in path and y in path and abs(path.index(x)-path.index(y))==1:
-                if 'capacity' not in data.keys():
-                    #It enters here because it considers as edges the
-                    #links between interfaces (ip's) of the routers
-                    
-                    pass
-                else:
-                    # Substract corresponding size
-                    data['capacity'] -= flow.size
+            if flow in self.flow_allocation[prefix].keys():
+                self.flow_allocatoin[prefix][flow] += path_list
+            else:
+                self.flow_allocatoin[prefix][flow] = path_list
 
-        # Define the removeAllocationEntry thread
-        t = threading.Thread(target=self.removeAllocationEntry, args=(prefix, flow, path))
+        # Loggin a bit...
+        t = time.strftime("%H:%M:%S", time.gmtime())
+        to_print = "%s - addAllocationEntry(): "
+        to_print += "flow ALLOCATED to Paths\n"
+        log.info("\t* Dest_prefix: %s\n"%self._db_getNameFromIP(prefix.compressed))
+        log.info("\t* Paths (%s): %s\n"%(len(path_list), str([self.toRouterNames(path) for path in path_list])))
+        log.info("\t* Flow: %s\n"%self.toFlowHostnames(flow))
+                        
+        # Check first how many ECMP paths are there
+        ecmp_paths = float(len(path_list))
+        for path in path_list:
+            edges = [(u,v) for (u,v) in zip(path[:-1], path[1:])]
+            for (u, v) in edges:
+                data = self.network_graph.get_network_data(u, v)
+                capacity = data.get('capacity', None)
+                if capacity:
+                    # Substract corresponding size
+                    data['capacity'] -= (flow.size/float(ecmp_paths))
+                    
+                else:
+                    data_i = self.network_graph.get_network_data(v,u)
+                    capacity_i = data_i.get('capacity', None)
+                    if capacity_i:
+                        # Substract corresponding size
+                        data_i['capacity'] -= (flow.size/ecmp_paths)
+                        data['capactity'] = data_i.get('capacity')
+                    else:
+                        to_print += "ERROR: capacity key not found in edge (%s, %s)"
+                        log.info(to_print%(t, u, v))
+                        #It enters here because it considers as edges the
+                        #links between interfaces (ip's) of the routers
+                        pass
+                    
+        # Define the removeAllocatoinEntry thread
+        t = threading.Thread(target=self.removeAllocationEntry, args=(prefix, flow, path_list))
         # Add handler to list and start thread
         self.thread_handlers[flow] = t
         t.start()
 
-
-        
-    def removeAllocationEntry(self, prefix, flow, path):        
+    
+    def removeAllocationEntry(self, prefix, flow, path_list):        
         """
         Removes the flow from the allocation entry prefix and restores the corresponding.
         """
@@ -224,29 +248,40 @@ class ECMPLB(LBController):
             else:
                 raise KeyError("%s is not alloacated in this prefix %s"%str(repr(flow)))
 
-        log.info(lineend)
         t = time.strftime("%H:%M:%S", time.gmtime())
-        log.info("%s - removeAllocationEntry(): Flow REMOVED from Path\n"%t)
+        log.info("%s - removeAllocationEntry(): Flow REMOVED from Paths\n"%t)
         log.info("\t* Dest_prefix: %s\n"%self._db_getNameFromIP(prefix.compressed))
         log.info("\t* Path: %s\n"%str(self.toRouterNames(path)))
         log.info("\t* Flow: %s\n"%self.toFlowHostnames(flow))
-        
 
-        for (x, y, data) in self.network_graph.edges(data=True):
-            if x in path and y in path and abs(path.index(x)-path.index(y))==1:
-                if 'capacity' not in data.keys():
-                    #pass: it enters here because it considers as edges
-                    #the links between interfaces (ip's) of the routers
-                    pass
+        ecmp_paths = float(len(path_list))
+        for path in path_list:
+            edges = [(u,v) for (u,v) in zip(path[:-1], path[1:])]
+            for (u, v) in edges:
+                data = self.network_graph.get_network_data(u, v)
+                capacity = data.get('capacity', None)
+                if capacity:
+                    # Add corresponding size
+                    data['capacity'] += (flow.size/float(ecmp_paths))
+                    
                 else:
-                    data['capacity'] += flow['size']
+                    data_i = self.network_graph.get_network_data(v,u)
+                    capacity_i = data_i.get('capacity', None)
+                    if capacity_i:
+                        # Add corresponding size
+                        data_i['capacity'] += (flow.size/ecmp_paths)
+                        data['capactity'] = data_i.get('capacity')
+                    else:
+                        to_print += "ERROR: capacity key not found in edge (%s, %s)"
+                        log.info(to_print%(t, u, v))
+                        #It enters here because it considers as edges the
+                        #links between interfaces (ip's) of the routers
+                        pass
                     
         # Remove the lies for the given prefix
         self.removePrefixLies(prefix)
-        
-        
 
-
+        
 if __name__ == '__main__':
     log.info("ECMP-AWARE LOAD BALANCER CONTROLLER\n")
     log.info("-"*60+"\n")
