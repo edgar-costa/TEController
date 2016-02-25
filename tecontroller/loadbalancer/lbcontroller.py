@@ -477,18 +477,6 @@ class LBController(DatabaseHandler):
         ng_temp.remove_edge(x, y)
         return ng_temp
 
-
-    def getAllPaths(self, network_graph, x, y):
-        """Returns an ordered list representing all paths between node x and
-        y in network_graph. Paths are ordered in increasing length.
-        
-        :param network_graph: networkx.DiGraph representing the network
-        
-        :param x,y: ipaddress.IPv4Network
-        """
-        pass
-
-
     def getNetworkWithoutFullEdges(self, network_graph, flow_size):
         """Returns a nx.DiGraph representing the network graph without the
         edge that can't allocate a flow of flow_size.
