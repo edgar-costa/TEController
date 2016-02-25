@@ -47,6 +47,25 @@ M1 = 'm1'
 
 BW = 1  # Absurdly low bandwidth for easy congestion (in Mb)
 
+SIG_TOPO = """
+            +---+        +----+    +---+
+            |S4 |        | D1 |    | D3|
+   +--+     +---+        +----+  __+---+
+   |S3|___    |           |   __/
+   +--+   \_+---+        +---+      +---+
+            | R2|--------|R3 |------|D2 |
+            +---+       /+---+__    +---+
+              |     ___/   |    \___+---+
+           10 |    /       |        |D4 |
+              |   /        |        +---+
+ +--+      +----+'       +---+        +--+
+ |S1|------| R1 |--------| R4|--------|C1|
+ +--+     _+----+        +---+_       +--+
+        _/    |            |   \__
+   +---+    +---+        +---+    \+---+
+   | M1|    |S2 |        |TG |     |LBC|
+   +---+    +---+        +---+     +---+
+        """
 
 class snmpTestTopo(IPTopo):
     def build(self, *args, **kwargs):
@@ -137,17 +156,17 @@ class SimpleTopo(IPTopo):
 class SIGTopo(IPTopo):
     def build(self, *args, **kwargs):
         """
-                         +----+
-                         | D1 |
-   +--+                  +----+
-   |S3|___                |
+            +---+        +----+    +---+
+            |S4 |        | D1 |    | D3|
+   +--+     +---+        +----+  __+---+
+   |S3|___    |           |   __/
    +--+   \_+---+        +---+      +---+
             | R2|--------|R3 |------|D2 |
-            +---+       /+---+      +---+
-              |     ___/   |
-           10 |    /       |   _ +--+
-              |   /        |  /  |S4|
- +--+      +----+'       +---+   +--+ +--+
+            +---+       /+---+__    +---+
+              |     ___/   |    \___+---+
+           10 |    /       |        |D4 |
+              |   /        |        +---+
+ +--+      +----+'       +---+        +--+
  |S1|------| R1 |--------| R4|--------|C1|
  +--+     _+----+        +---+_       +--+
         _/    |            |   \__
@@ -159,6 +178,7 @@ class SIGTopo(IPTopo):
         r2 = self.addRouter(R2, cls=MyCustomRouter)
         r3 = self.addRouter(R3, cls=MyCustomRouter)
         r4 = self.addRouter(R4, cls=MyCustomRouter)
+
         self.addLink(r1, r2, cost=10)
         self.addLink(r1, r4)
         self.addLink(r2, r3)
@@ -198,12 +218,14 @@ class SIGTopo(IPTopo):
         self.addLink(c2, r4)
 
         # Adding Traffic Engineering Controller
-        c3 = self.addHost(LBC, isLBController=True)
+        c3 = self.addHost(LBC, isLBController=True, algorithm='SimplePath')
+        #c3 = self.addHost(LBC, isLBController=True, algorithm='ECMP')
         self.addLink(c3, r4)
 
 
 def launch_network():
-    net = IPNet(topo=SimpleTopo(),
+    print SIG_TOPO
+    net = IPNet(topo=SIGTopo(),
                 debug=_lib.DEBUG_FLAG,
                 intf=custom(TCIntf, bw=BW),
                 host=MyCustomHost)
