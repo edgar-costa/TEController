@@ -265,13 +265,152 @@ class LBController(DatabaseHandler):
         """
         return (self.getLiesFromPrefix(dst_prefix) != None)
 
-        
-    @abc.abstractmethod
+
     def dealWithNewFlow(self, flow):
+        """Called when a new flow arrives. This method should be overwritten
+        by each of the subclasses performing the various algorithms.
+
+        When this function is called, no algorithm to allocate flows
+        is called. The LBController only keeps track of the default
+        allocations of the flows.
         """
-        Called when a new flow arrives
-        """
+        # Get the destination network prefix
+        dst_prefix = flow['dst'].network
+        # Get source hostname
+        src_hostname = lbc._db_getNameFromIP(flow['src'].compressed) 
+        # Get source attached router
+        (src_router_name, src_router_id) = lbc._db_getConnectedRouter(src_hostname)
+
+        # Get default dijkstra path
+        defaultPath = self.getDefaultDijkstraPath(self.network_graph, flow)
+        
+        # Get length of the default dijkstra shortest path
+        defaultLength = self.getPathLength(defaultPath)
+        
+        # Get all paths with length equal to the defaul path length
+        default_paths = self._getAllPathsLim(self.network_graph, src_router_id, dst_prefix.compressed, defaultLength)
+        
+        if len(default_paths) > 1:
+            # ECMP is happening
+            t = time.strftime("%H:%M:%S", time.gmtime())
+            log.info("%s - dealWithNewFlow(): ECMP is ACTIVE\n"%t)
+        elif len(default_paths) == 1:
+            t = time.strftime("%H:%M:%S", time.gmtime())
+            log.info("%s - dealWithNewFlow(): ECMP is NOT active\n"%t)
+        else:
+            t = time.strftime("%H:%M:%S", time.gmtime())
+            log.info("%s - dealWithNewFlow(): ERROR\n"%t)
+            
+        # Allocate new flow and default path to destination prefix
+        self.addAllocationEntry(dst_prefix, flow, default_paths)
+
+
+    def addAllocationEntry(self, prefix, flow, path_list):
+        """Add entry in the flow_allocation table.
+        
+        :param prefix: destination prefix. Expressed as an
+                       IPv4Interface object
+        
+        :param path_list: List of paths for which this flow will be
+                          multi-pathed towards destination prefix:
+                          [[A, B, C], [A, D, C]]"""
+        if prefix not in self.flow_allocation.keys():
+            # prefix not in table
+            self.flow_allocation[prefix] = {flow : path_list}
+        else:
+            if flow in self.flow_allocation[prefix].keys():
+                self.flow_allocation[prefix][flow] += path_list
+            else:
+                self.flow_allocation[prefix][flow] = path_list
+
+        # Loggin a bit...
+        t = time.strftime("%H:%M:%S", time.gmtime())
+        to_print = "%s - addAllocationEntry(): "
+        to_print += "flow ALLOCATED to Paths\n"
+        log.info("\t* Dest_prefix: %s\n"%self._db_getNameFromIP(prefix.compressed))
+        log.info("\t* Paths (%s): %s\n"%(len(path_list), str([self.toRouterNames(path) for path in path_list])))
+        log.info("\t* Flow: %s\n"%self.toFlowHostnames(flow))
+                        
+        # Check first how many ECMP paths are there
+        ecmp_paths = float(len(path_list))
+        for path in path_list:
+            edges = [(u,v) for (u,v) in zip(path[:-1], path[1:])]
+            for (u, v) in edges:
+                data = self.network_graph.get_edge_data(u, v)
+                capacity = data.get('capacity', None)
+                if capacity:
+                    # Substract corresponding size
+                    data['capacity'] -= (flow.size/float(ecmp_paths))
+                    
+                else:
+                    data_i = self.network_graph.get_edge_data(v,u)
+                    capacity_i = data_i.get('capacity', None)
+                    if capacity_i:
+                        # Substract corresponding size
+                        data_i['capacity'] -= (flow.size/ecmp_paths)
+                        data['capactity'] = data_i.get('capacity')
+                    else:
+                        to_print += "ERROR: capacity key not found in edge (%s, %s)"
+                        log.info(to_print%(t, u, v))
+                        #It enters here because it considers as edges the
+                        #links between interfaces (ip's) of the routers
+                        pass
+                    
+        # Define the removeAllocatoinEntry thread
+        t = threading.Thread(target=self.removeAllocationEntry, args=(prefix, flow, path_list))
+        # Add handler to list and start thread
+        self.thread_handlers[flow] = t
+        t.start()
     
+    def removeAllocationEntry(self, prefix, flow, path_list):        
+        """
+        Removes the flow from the allocation entry prefix and restores the corresponding.
+        """
+        time.sleep(flow['duration']) #wait for after seconds
+        
+        if prefix not in self.flow_allocation.keys():
+            # prefix not in table
+            raise KeyError("The is no such prefix allocated: %s"%str(prefix.compressed))
+        else:
+            if flow in self.flow_allocation[prefix].keys():
+                self.flow_allocation[prefix].pop(flow, None)
+            else:
+                raise KeyError("%s is not alloacated in this prefix %s"%str(repr(flow)))
+
+        t = time.strftime("%H:%M:%S", time.gmtime())
+        log.info("%s - removeAllocationEntry(): Flow REMOVED from Paths\n"%t)
+        log.info("\t* Dest_prefix: %s\n"%self._db_getNameFromIP(prefix.compressed))
+        log.info("\t* Paths (%s): %s\n"%(len(path_list), str([self.toRouterNames(path) for path in path_list])))
+        log.info("\t* Flow: %s\n"%self.toFlowHostnames(flow))
+
+        ecmp_paths = float(len(path_list))
+        for path in path_list:
+            edges = [(u,v) for (u,v) in zip(path[:-1], path[1:])]
+            for (u, v) in edges:
+                data = self.network_graph.get_edge_data(u, v)
+                capacity = data.get('capacity', None)
+                if capacity:
+                    # Add corresponding size
+                    data['capacity'] += (flow.size/float(ecmp_paths))
+                    
+                else:
+                    data_i = self.network_graph.get_edge_data(v,u)
+                    capacity_i = data_i.get('capacity', None)
+                    if capacity_i:
+                        # Add corresponding size
+                        data_i['capacity'] += (flow.size/ecmp_paths)
+                        data['capactity'] = data_i.get('capacity')
+                    else:
+                        to_print += "ERROR: capacity key not found in edge (%s, %s)"
+                        log.info(to_print%(t, u, v))
+                        #It enters here because it considers as edges the
+                        #links between interfaces (ip's) of the routers
+                        pass
+                    
+        # Remove the lies for the given prefix
+        self.removePrefixLies(prefix)
+
+        
     def getDefaultDijkstraPath(self, network_graph, flow):
         """Returns an list of network nodes representing the default Dijkstra
         path given the flow and a network graph.
@@ -283,13 +422,43 @@ class LBController(DatabaseHandler):
         src_router_name, src_router_id = self._db_getConnectedRouter(src_name)
         dst_network = flow['dst'].network.compressed
 
-        # We compute the dijkstra path only with the original nodes
-        tmp_graph = network_graph.copy()
-        
         # We take only routers in the route
         route = nx.dijkstra_path(network_graph, src_router_id, dst_network)
         route = [r for r in route if self.isRouter(r)]
         return route
+
+
+    def getPathLength(self, path):
+        """
+        """
+        routers = [n for n in path if self.network_graph.is_router(n)]
+        edges = [self.network_graph.get_edge_data(u,v)['weight'] for
+                 (u,v) in zip(path[:-1], path[1:])]
+        return sum(edges)
+        
+    def getDefaultDijkstraPathLength(self, network_graph, flow):
+        """Returns the length of the default Dijkstra path between the
+        flow.src and flow.dst nodes in network_graph.
+        """        
+        # We assume here that Flow is well formed, and that the
+        # interface addresses of the hosts are given.
+        src_name = self._db_getNameFromIP(flow['src'].compressed)
+        src_router_name, src_router_id = self._db_getConnectedRouter(src_name)
+        dst_network = flow['dst'].network.compressed
+
+        # We take only routers in the route
+        try:
+            default_length = nx.dijkstra_path_length(network_graph, src_router_id, dst_network)
+        except nx.NetworkXNoPath:
+            t = time.strftime("%H:%M:%S", time.gmtime())
+            to_print = "%s - getDefaultDijkstraPathLength(): ERROR: "
+            to_print += "No path exists between flow.src and flow.dst\n"
+            log.info(to_print%t)
+            log.info("\t* Flow: %s\n"%self.toFlowHostnames(flow))
+            raise nx.NetworkXNoPath
+        else:
+            return default_length
+
     
     def toRouterNames(self, path):
         """
@@ -306,16 +475,15 @@ class LBController(DatabaseHandler):
                   flow.setTimeToStr(flow.start_time),
                   flow.setTimeToStr(flow.duration))
     
-    def canAllocateFlow(self, flow, path):
+    def canAllocateFlow(self, flow, path_list):
         """Returns true if there is at least flow.size bandwidth available in
-        all links along the path from flow.src to src.dst,
-
+        all links along the path (or multiple paths in case of ECMP)
+        from flow.src to src.dst,
         """
-        #log.info("LBC: canAllocateFlow():\n")
-        #log.info("     * Path: %s\n"%str(self.toRouterNames(path)))
-        #log.info("     * Min capacity: %s\n"%str(self.getMinCapacity(path)))
-        #log.info("     * FlowSize: %s\n"%str(flow['size'])) 
-        return self.getMinCapacity(path) >= flow.size
+        for path in path_list:
+            if self.getMinCapacity(path) < flow.size:
+                return False
+        return True
 
 
     def getEdgesInfoFromRoute(self, route):
@@ -334,34 +502,10 @@ class LBController(DatabaseHandler):
         
         :param path: List of network nodes defining a path [A, B, C, D]"""
         caps_in_path = []
-        for i in range(len(path)-1):
-            edge_data = self.network_graph.get_edge_data(path[i], path[i+1])
-            edge_data_i = self.network_graph.get_edge_data(path[i+1], path[i])
-            capacity = edge_data.get('capacity')
-            capacity_i = edge_data_i.get('capacity')
-            if capacity == capacity_i:
-                if capacity != None:
-                    caps_in_path.append(capacity)
-                else:
-                    # It enters here because it considers as edges the
-                    # links between interfaces (ip's) of the routers
-                    t = time.strftime("%H:%M:%S", time.gmtime())
-                    log.info("%s - getMinCapacity(): ERROR\n"%t)
-                    log.info("\t* Path: %s\n"%path)
-            else:
-                if capacity != None and capacity_i != None:
-                    t = time.strftime("%H:%M:%S", time.gmtime())
-                    log.info("%s - getMinCapacity(): ERROR: Inconsistent edge data!\n"%t)
-                    log.info("\t* edge_data: %s or %s\n"%(str(edge_data), str(edge_data_i)))
-                    raise ValueError
-                else:
-                    if capacity:
-                        caps_in_path.append(capacity)
-                        self.network_graph[path[i+1]][path[i]]['capacity'] = capacity
-                    else:
-                        caps_in_path.append(capacity_i)
-                        self.network_graph[path[i]][path[i+1]]['capacity'] = capacity_i
-                        
+        for (u,v) in zip(path[:-1], path[1:]):
+            edge_data = self.network_graph.get_edge_data(u, v)
+            cap = edge_data.get('capacity', None)
+            caps_in_path.append(cap)
         try:
             mini = min(caps_in_path)
             return mini
@@ -370,7 +514,6 @@ class LBController(DatabaseHandler):
             log.info("%s - getMinCapacity(): ERROR: min could not be calculated\n"%t)
             log.info("\t* Path: %s\n"%path)            
             raise ValueError
-
         
     def getMinCapacityEdge(self, path):
         """Returns the edge with the minimum capacity along the path.
@@ -467,7 +610,7 @@ class LBController(DatabaseHandler):
                 return lsa
         return None
         
-                        
+        
     def getNetworkWithoutEdge(self, network_graph, x, y):
         """Returns a nx.DiGraph representing the network graph without the
         (x,y) edge. x and y must be nodes of network_graph.
@@ -505,9 +648,7 @@ class LBController(DatabaseHandler):
             log.info("\tEdge: %s, capacity: %d\n"%(edge, cap))
         return ng_temp
 
-
-
-        def getAllPathsRanked(self, igp_graph, start, end):
+    def getAllPathsRanked(self, igp_graph, start, end):
         """Recursive function that returns an ordered list representing all
         paths between node x and y in network_graph. Paths are ordered
         in increasing length.
@@ -518,18 +659,27 @@ class LBController(DatabaseHandler):
 
         :param end: compressed subnet address of the destination
                     prefix."""
-        paths = self._getAllPaths(igp_graph, start, end)
+        paths = self._getAllPathsLim(igp_graph, start, end, 0)
         ordered_paths = self._orderByLength(paths)
         return ordered_paths
         
     
-    def _getAllPaths(self, igp_graph, start, end, path=[]):
+    def _getAllPathsLim(self, igp_graph, start, end, k, path=[], len_path=0):
         """Recursive function that finds all paths from start node to end
-        node.
-
+        node with maximum length of k.
         """
+        # Accumulate path length first
+        if path == []:
+            len_path = 0
+        else:
+            last_node = path[-1]
+            len_path += igp_graph.get_edge_data(last_node, start)['weight']
+
+        # Accumulate nodes in path
         path = path + [start]
+        
         if start == end:
+            # Arrived to the end. Go back returning everything
             return [path]
 
         if not start in igp_graph:
@@ -538,9 +688,16 @@ class LBController(DatabaseHandler):
         paths = []
         for node in igp_graph[start]:
             if node not in path: # Ommiting loops here
-                newpaths = self.getAllPaths(igp_graph, node, end, path)
-                for newpath in newpaths:
-                    paths.append(newpath)
+                if k == 0:
+                    # If we do not want any length limit
+                    newpaths = self._getAllPathsLim(igp_graph, node, end, k, path, len_path)
+                    for newpath in newpaths:
+                        paths.append(newpath)
+
+                elif len_path < k+1:
+                    newpaths = self._getAllPathsLim(igp_graph, node, end, k, path, len_path)
+                    for newpath in newpaths:
+                        paths.append(newpath)
         return paths
 
     def _orderByLength(self, paths):
@@ -560,3 +717,11 @@ class LBController(DatabaseHandler):
         ordered_paths = sorted(ordered_paths, key=lambda x: x[1])
         return ordered_paths
 
+
+if __name__ == '__main__':
+    log.info("NO-ALGORITHM LOAD BALANCER CONTROLLER\n")
+    log.info("-"*60+"\n")
+    time.sleep(dconf.LBC_InitialWaitingTime)
+    
+    lb = LBController()
+    lb.run()

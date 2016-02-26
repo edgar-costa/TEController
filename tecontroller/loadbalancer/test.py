@@ -1,11 +1,12 @@
 import networkx as nx
-from tecontroller.res.path import IPNetPath as Pth
 from tecontroller.res.flow import Flow
-from tecontroller.loadbalancer.lbcontroller import GreedyLBController
+from tecontroller.loadbalancer.simplepathlb import SimplePathLB
+from tecontroller.loadbalancer.ecmplb import ECMPLB
 import time
 
 # Start LBC controller
-lbc = GreedyLBController()
+lbc = SimplePathLB()
+#lbc = ECMPLB()
 ng = lbc.network_graph
 
 """

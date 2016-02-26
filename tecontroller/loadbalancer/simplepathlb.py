@@ -9,7 +9,6 @@ import networkx as nx
 import threading
 import time
 
-
 log = get_logger()
 lineend = "-"*100+'\n'
 
@@ -34,7 +33,7 @@ class SimplePathLB(LBController):
     
     def __init__(self, *args, **kwargs):
         super(SimplePathLB, self).__init__(*args, **kwargs)
-    
+
 
     def dealWithNewFlow(self, flow):
         """
@@ -42,100 +41,46 @@ class SimplePathLB(LBController):
         """
         # Get the destination network prefix
         dst_prefix = flow['dst'].network
+        # Get source hostname
+        src_hostname = self._db_getNameFromIP(flow['src'].compressed) 
+        # Get source attached router
+        (src_router_name, src_router_id) = self._db_getConnectedRouter(src_hostname)
 
-        # Get the default OSFP Dijkstra path
+        # Get default dijkstra path
         defaultPath = self.getDefaultDijkstraPath(self.network_graph, flow)
         
-        # If it can be allocated, no Fibbing needed
-        if self.canAllocateFlow(flow, defaultPath):
-            # Log it
+        # Get length of the default dijkstra shortest path
+        defaultLength = self.getPathLength(defaultPath)
+        
+        # Get all paths with length equal to the defaul path length
+        default_paths = self._getAllPathsLim(self.network_graph, src_router_id, dst_prefix.compressed, defaultLength)
+        log.info("default_paths: %s\n"%(str([self.toRouterNames(r) for r in default_paths])))
+        
+        if len(default_paths) > 1:
+            # ECMP is happening
             t = time.strftime("%H:%M:%S", time.gmtime())
-            log.info("%s - dealWithNewFlow(): default Dijkstra path can allocate flow\n"%t)
-
-            # Allocate new flow and default path to destination prefix
-            self.addAllocationEntry(dst_prefix, flow, defaultPath)
-
+            log.info("%s - dealWithNewFlow(): ECMP is ACTIVE\n"%t)
+        elif len(default_paths) == 1:
+            t = time.strftime("%H:%M:%S", time.gmtime())
+            log.info("%s - dealWithNewFlow(): ECMP is NOT active\n"%t)
         else:
-            # Otherwise, call the abstract method
-            self.flowAllocationAlgorithm(dst_prefix, flow, defaultPath)
+            t = time.strftime("%H:%M:%S", time.gmtime())
+            log.info("%s - dealWithNewFlow(): ERROR\n"%t)
 
-    def addAllocationEntry(self, prefix, flow, path):
-        """Add entry in the flow_allocation table.
-        
-        :param prefix: is a IPv4Network type
+        # Check if flow can be allocated. Otherwise, call allocation
+        # algorithm.
+        if self.canAllocateFlow(flow, default_paths):
+            t = time.strftime("%H:%M:%S", time.gmtime())
+            log.info("%s - dealWithNewFlow(): default Dijkstra path/s can allocate flow\n"%t)
 
-        :param path_list: List of paths (IPNetPath) for which this flow will be
-                          multi-pathed towards destination prefix:
-                          [[A, B, C], [A, D, C]]"""
-        
-        if prefix not in self.flow_allocation.keys():
-            # prefix not in table
-            self.flow_allocation[prefix] = {flow : path}
-        else:
-            self.flow_allocation[prefix][flow] = path
+            # Allocate new flow and default paths to destination prefix
+            self.addAllocationEntry(dst_prefix, flow, default_paths)
             
-        t = time.strftime("%H:%M:%S", time.gmtime())
-        log.info("%s - addAllocationEntry(): Flow ALLOCATED to Path\n"%t)
-        log.info("\t* Dest_prefix: %s\n"%self._db_getNameFromIP(prefix.compressed))
-        log.info("\t* Path: %s\n"%str(self.toRouterNames(path)))
-        log.info("\t* Flow: %s\n"%self.toFlowHostnames(flow))
-        
-        # Iterate through the graph
-        for (x, y, data) in self.network_graph.edges(data=True):
-            # If edge from path found in graph 
-            if x in path and y in path and abs(path.index(x)-path.index(y))==1:
-                if 'capacity' not in data.keys():
-                    #It enters here because it considers as edges the
-                    #links between interfaces (ip's) of the routers
-                    
-                    pass
-                else:
-                    # Substract corresponding size
-                    data['capacity'] -= flow.size
-
-        # Define the removeAllocationEntry thread
-        t = threading.Thread(target=self.removeAllocationEntry, args=(prefix, flow, path))
-        # Add handler to list and start thread
-        self.thread_handlers[flow] = t
-        t.start()
-        
-    def removeAllocationEntry(self, prefix, flow, path):        
-        """
-        Removes the flow from the allocation entry prefix and restores the corresponding.
-        """
-        time.sleep(flow['duration']) #wait for after seconds
-        
-        if prefix not in self.flow_allocation.keys():
-            # prefix not in table
-            raise KeyError("The is no such prefix allocated: %s"%str(prefix.compressed))
         else:
-            if flow in self.flow_allocation[prefix].keys():
-                self.flow_allocation[prefix].pop(flow, None)
-            else:
-                raise KeyError("%s is not alloacated in this prefix %s"%str(repr(flow)))
+            # Otherwise, call the subclassed method
+            self.flowAllocationAlgorithm(dst_prefix, flow, default_paths)
 
-        log.info(lineend)
-        t = time.strftime("%H:%M:%S", time.gmtime())
-        log.info("%s - removeAllocationEntry(): Flow REMOVED from Path\n"%t)
-        log.info("\t* Dest_prefix: %s\n"%self._db_getNameFromIP(prefix.compressed))
-        log.info("\t* Path: %s\n"%str(self.toRouterNames(path)))
-        log.info("\t* Flow: %s\n"%self.toFlowHostnames(flow))
-        
-
-        for (x, y, data) in self.network_graph.edges(data=True):
-            if x in path and y in path and abs(path.index(x)-path.index(y))==1:
-                if 'capacity' not in data.keys():
-                    #pass: it enters here because it considers as edges
-                    #the links between interfaces (ip's) of the routers
-                    pass
-                else:
-                    data['capacity'] += flow['size']
-                    
-        # Remove the lies for the given prefix
-        self.removePrefixLies(prefix)
-        
-
-    def flowAllocationAlgorithm(self, dst_prefix, flow, initial_path):
+    def flowAllocationAlgorithm(self, dst_prefix, flow, initial_paths):
         """
         """
         t = time.strftime("%H:%M:%S", time.gmtime())
@@ -157,15 +102,15 @@ class SimplePathLB(LBController):
             log.info("\tAllocating it the default Dijkstra path...\n")
             
             # Allocate flow to Path
-            self.addAllocationEntry(dst_prefix, flow, initial_path)
+            self.addAllocationEntry(dst_prefix, flow, initial_paths)
             log.info("\t* Dest_prefix: %s\n"%self._db_getNameFromIP(dst_prefix.compressed))
-            log.info("\t* Path: %s\n"%str(self.toRouterNames(initial_path)))
+            log.info("\t* Paths (%s): %s\n"%(len(path_list), str([self.toRouterNames(path) for path in initial_paths])))
 
         else:
             t = time.strftime("%H:%M:%S", time.gmtime())
             log.info("%s - flowAllocationAlgorithm(): Found path that can allocate flow\n"%t)
             # Allocate flow to Path
-            self.addAllocationEntry(dst_prefix, flow, shortest_congestion_free_path)
+            self.addAllocationEntry(dst_prefix, flow, [shortest_congestion_free_path])
             # Call to FIBBING Controller should be here
             self.sbmanager.simple_path_requirement(dst_prefix.compressed,
                                                    [r for r in shortest_congestion_free_path
