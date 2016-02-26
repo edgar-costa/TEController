@@ -54,19 +54,43 @@ class SimplePathLB(LBController):
         
         # Get all paths with length equal to the defaul path length
         default_paths = self._getAllPathsLim(self.network_graph, src_router_id, dst_prefix.compressed, defaultLength)
+
+        log.info("defaultPath: %s\n"%self.toRouterNames(defaultPath))
+        log.info("defaultLength: %d\n"%defaultLength)
         log.info("default_paths: %s\n"%(str([self.toRouterNames(r) for r in default_paths])))
-        
+
+        ecmp = False
         if len(default_paths) > 1:
             # ECMP is happening
+            ecmp = True
             t = time.strftime("%H:%M:%S", time.gmtime())
             log.info("%s - dealWithNewFlow(): ECMP is ACTIVE\n"%t)
         elif len(default_paths) == 1:
+            ecmp = False
             t = time.strftime("%H:%M:%S", time.gmtime())
             log.info("%s - dealWithNewFlow(): ECMP is NOT active\n"%t)
         else:
             t = time.strftime("%H:%M:%S", time.gmtime())
             log.info("%s - dealWithNewFlow(): ERROR\n"%t)
 
+        is_fibbed = False
+        if ecmp == True:
+            # So far it means that it is not fibbed! since we induced a simple path DAG
+            is_fibbed = False
+        else:
+            # It means there is only one path. NO ECMP
+            # Check if calculated path was previously fibbed
+            is_fibbed = self.isFibbedPath(defaultPath) 
+
+            if is_fibbed == True:
+                log.info("dealWithNewFlow(): Found fibbed path\n")
+                log.info("Checking in allocation table...: %s\n"%str(self.flow_allocation[dst_prefix].items()))
+                ###
+                # Something must be done here: maybe retreive the saved path!?
+            else:
+                pass
+            
+        #########################################
         # Check if flow can be allocated. Otherwise, call allocation
         # algorithm.
         if self.canAllocateFlow(flow, default_paths):
@@ -75,11 +99,11 @@ class SimplePathLB(LBController):
 
             # Allocate new flow and default paths to destination prefix
             self.addAllocationEntry(dst_prefix, flow, default_paths)
-            
         else:
             # Otherwise, call the subclassed method
             self.flowAllocationAlgorithm(dst_prefix, flow, default_paths)
-
+        ##########################################
+            
     def flowAllocationAlgorithm(self, dst_prefix, flow, initial_paths):
         """
         """

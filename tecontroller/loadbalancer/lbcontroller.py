@@ -274,6 +274,9 @@ class LBController(DatabaseHandler):
         is called. The LBController only keeps track of the default
         allocations of the flows.
         """
+        # In genera, this won't be True that often...
+        ecmp = False
+        
         # Get the destination network prefix
         dst_prefix = flow['dst'].network
         # Get source hostname
@@ -292,19 +295,42 @@ class LBController(DatabaseHandler):
         
         if len(default_paths) > 1:
             # ECMP is happening
+            ecmp = True
             t = time.strftime("%H:%M:%S", time.gmtime())
             log.info("%s - dealWithNewFlow(): ECMP is ACTIVE\n"%t)
         elif len(default_paths) == 1:
+            ecmp = False
             t = time.strftime("%H:%M:%S", time.gmtime())
             log.info("%s - dealWithNewFlow(): ECMP is NOT active\n"%t)
         else:
             t = time.strftime("%H:%M:%S", time.gmtime())
             log.info("%s - dealWithNewFlow(): ERROR\n"%t)
+
+        if ecmp:
+            # So far it means that it is not fibbed! since we induced a simple path DAG
+            self.addAllocationEntry(dst_prefix, flow, default_paths)
+        else:
+            # Check if calculated path was previously fibbed
+            if self.isFibbedPath(defaultPath):
+                #default_paths =
+                log.info("dealWithNewFlow(): Found fibbed path\n")
+                log.info("Checking in allocation table...: %s\n"%str(self.flow_allocation[dst_prefix].items()))
+            else:
+                # Allocate new flow and default path to destination prefix
+                self.addAllocationEntry(dst_prefix, flow, default_paths)
+                
+    def isFibbedPath(self, path):
+        """
+        Returns True if it finds a fake edge along the path
+        """
+        for (u,v) in zip(path[:-1], path[1:]):
+            if self.network_graph.get_edge_data(u,v)['weight'] == 1:
+                data_i = self.network_graph.get_edge_data(v,u)
+                if data_i == None:
+                    # Fake edge found
+                    return True
+        return False
             
-        # Allocate new flow and default path to destination prefix
-        self.addAllocationEntry(dst_prefix, flow, default_paths)
-
-
     def addAllocationEntry(self, prefix, flow, path_list):
         """Add entry in the flow_allocation table.
         
@@ -333,29 +359,31 @@ class LBController(DatabaseHandler):
                         
         # Check first how many ECMP paths are there
         ecmp_paths = float(len(path_list))
+
         for path in path_list:
-            edges = [(u,v) for (u,v) in zip(path[:-1], path[1:])]
+            path_only_routers = [p for p in path if self.network_graph.is_router(p)]
+            edges = [(u,v) for (u,v) in zip(path_only_routers[:-1], path_only_routers[1:])]
             for (u, v) in edges:
                 data = self.network_graph.get_edge_data(u, v)
                 capacity = data.get('capacity', None)
                 if capacity:
                     # Substract corresponding size
                     data['capacity'] -= (flow.size/float(ecmp_paths))
-                    
                 else:
                     data_i = self.network_graph.get_edge_data(v,u)
-                    capacity_i = data_i.get('capacity', None)
-                    if capacity_i:
-                        # Substract corresponding size
-                        data_i['capacity'] -= (flow.size/ecmp_paths)
-                        data['capactity'] = data_i.get('capacity')
+                    if data_i:
+                        capacity_i = data_i.get('capacity', None)
+                        if capacity_i:
+                            # Substract corresponding size
+                            data_i['capacity'] -= (flow.size/ecmp_paths)
+                            data['capactity'] = data_i.get('capacity')
+                        else:
+                            to_print = "ERROR: capacity key not found in edge (%s, %s)\n"
+                            log.info(to_print%(u, v))
                     else:
-                        to_print += "ERROR: capacity key not found in edge (%s, %s)"
-                        log.info(to_print%(t, u, v))
-                        #It enters here because it considers as edges the
-                        #links between interfaces (ip's) of the routers
-                        pass
-                    
+                        to_print = "ERROR: capacity key not found in edge (%s, %s)\n"
+                        log.info(to_print%(u, v))
+                            
         # Define the removeAllocatoinEntry thread
         t = threading.Thread(target=self.removeAllocationEntry, args=(prefix, flow, path_list))
         # Add handler to list and start thread
@@ -367,6 +395,12 @@ class LBController(DatabaseHandler):
         Removes the flow from the allocation entry prefix and restores the corresponding.
         """
         time.sleep(flow['duration']) #wait for after seconds
+
+
+        if not isinstance(path_list, list):
+            raise TypeError("path_list should be a list")
+        
+        log.info(lineend)
         
         if prefix not in self.flow_allocation.keys():
             # prefix not in table
@@ -424,7 +458,6 @@ class LBController(DatabaseHandler):
 
         # We take only routers in the route
         route = nx.dijkstra_path(network_graph, src_router_id, dst_network)
-        route = [r for r in route if self.isRouter(r)]
         return route
 
 
@@ -664,42 +697,51 @@ class LBController(DatabaseHandler):
         return ordered_paths
         
     
-    def _getAllPathsLim(self, igp_graph, start, end, k, path=[], len_path=0):
+    def _getAllPathsLim(self, igp_graph, start, end, k, path=[], len_path=0, die=False):
         """Recursive function that finds all paths from start node to end
         node with maximum length of k.
         """
-        # Accumulate path length first
-        if path == []:
-            len_path = 0
-        else:
-            last_node = path[-1]
-            len_path += igp_graph.get_edge_data(last_node, start)['weight']
-
-        # Accumulate nodes in path
-        path = path + [start]
+        if die == False:
+            # Accumulate path length first
+            if path == []:
+                len_path = 0
+            else:
+                last_node = path[-1]
+                len_path += igp_graph.get_edge_data(last_node, start)['weight']
+                
+            # Accumulate nodes in path
+            path = path + [start]
         
-        if start == end:
-            # Arrived to the end. Go back returning everything
-            return [path]
-
-        if not start in igp_graph:
-            return []
-
-        paths = []
-        for node in igp_graph[start]:
-            if node not in path: # Ommiting loops here
+            if start == end:
+                # Arrived to the end. Go back returning everything
                 if k == 0:
-                    # If we do not want any length limit
-                    newpaths = self._getAllPathsLim(igp_graph, node, end, k, path, len_path)
-                    for newpath in newpaths:
-                        paths.append(newpath)
-
+                    return [path]
                 elif len_path < k+1:
-                    newpaths = self._getAllPathsLim(igp_graph, node, end, k, path, len_path)
-                    for newpath in newpaths:
-                        paths.append(newpath)
-        return paths
+                    return [path]
+                else:
+                    self._getAllPathsLim(igp_graph, start, end, k, path=path, len_path=len_path, die=True)
+            
+            if not start in igp_graph:
+                return []
 
+            paths = []
+            for node in igp_graph[start]:
+                if node not in path: # Ommiting loops here
+                    if k == 0:
+                        # If we do not want any length limit
+                        newpaths = self._getAllPathsLim(igp_graph, node, end, k, path=path, len_path=len_path)
+                        for newpath in newpaths:
+                            paths.append(newpath)
+                    elif len_path < k+1:
+                        newpaths = self._getAllPathsLim(igp_graph, node, end, k, path=path, len_path=len_path)
+                        for newpath in newpaths:
+                            paths.append(newpath)
+            return paths
+        else:
+            # Recursive call dies here
+            pass
+
+        
     def _orderByLength(self, paths):
         """Given a list of arbitrary paths. It ranks them by lenght (or total
         edges weight).
