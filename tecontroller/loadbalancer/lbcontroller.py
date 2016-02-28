@@ -361,7 +361,7 @@ class LBController(DatabaseHandler):
         (dst_rname, dst_rid) = self._db_getConnectedRouter(dst_hostname)
 
         # Calculate path and return it
-        active_paths = self._getAllPathsLimDAG(active_dag, src_rid, dst_rid)
+        active_paths = self._getAllPathsLimDAG(active_dag, src_rid, dst_rid, 0)
         return active_paths
 
     
