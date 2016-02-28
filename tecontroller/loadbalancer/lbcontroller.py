@@ -536,7 +536,7 @@ class LBController(DatabaseHandler):
                     log.info(to_print%(u, v))
 
         # Remove the lies for the given prefix
-        self.removePrefixLies(prefix)
+        self.removePrefixLies(prefix, path_list)
         
         
     def getDefaultDijkstraPath(self, network_graph, flow):
@@ -671,9 +671,15 @@ class LBController(DatabaseHandler):
         else:
             raise StandardError("%s has no edges!"%str(path))
 
-    def removePrefixLies(self, prefix):
+    def removePrefixLies(self, prefix, path_list):
         """Remove lies for a given prefix only if there are no more flows
-        allocated for that prefix.
+        allocated for that prefix flowing through some edge of
+        path_list.
+
+        :param prefix: subnet prefix
+
+        :param path_list: List of paths from source to
+                          destination. E.g: [[A,B,C],[A,D,C]]
         """
         # Get the lies for prefix
         lsa = self.getLiesFromPrefix(prefix)
@@ -681,31 +687,56 @@ class LBController(DatabaseHandler):
             # Fibbed prefix
             # Let's check if there are other flows for prefix fist
             allocated_flows = self.getAllocatedFlows(prefix)
-            if allocated_flows == []:
-                self.sbmanager.remove_lsa(lsa)
 
+            # Check if there are flows to prefix going through some
+            # path in path_list. If not, we can delete the
+            # lies. Otherwise, we must wait.
+            if allocated_flows == []:
+                # Obviously, if no flows are found, we can already
+                # remove the lies.
+                self.sbmanager.remove_lsa(lsa)
                 # Log it
                 t = time.strftime("%H:%M:%S", time.gmtime())
                 log.info("%s - removePrefixLies(): removed lies for prefix: %s\n"%(t, self._db_getNameFromIP(prefix)))
                 log.info("\tLSAs: %s\n"%(str(lsa)))
                 
             else:
-                # Do not remove lsas yet. Other flows ongoing
-
-                # Just log it
-                flows = [f for (f, p) in allocated_flows]
-                t = time.strftime("%H:%M:%S", time.gmtime())
-                to_print = "%s - removePrefixLies(): "
-                to_print += "lies for prefix %s not removed. Flows yet ongoing:\n"
-                log.info(to_print%(t, self._db_getNameFromIP(prefix)))
-                for f in flows:
-                    log.info("\t%s\n"%(self.toFlowHostnames(f)))
+                canRemoveLSA = True
+                for flow in allocated_flows:
+                    # Get all paths used by flow
+                    flow_path_list = self.flow_allocation[prefix][flow]
+                    # Get all edges used by flow
+                    flow_edge_list = [(u,v) for (u,v) in zip(fp[:-1], fp[1:]) for fp in flow_path_list]
+                    paths_edge_list = [(u,v) for zip(path[:-1], path[1:]) for path in path_list]
+                    check = [True if (u,v) in path_edges_list else False for (u,v) in edge_list]
+                    if sum(check) > 0:
+                        # Do not remove lsas yet. Other flows ongoing
+                        # in one of the paths in path_list
+                        canRemoveLSA = False
+                        break
+                        
+                if canRemoveLSA == False:
+                    # Just log it
+                    flows = [f for (f, p) in allocated_flows]
+                    t = time.strftime("%H:%M:%S", time.gmtime())
+                    to_print = "%s - removePrefixLies(): "
+                    to_print += "lies for prefix %s not removed. Flows yet ongoing:\n"
+                    log.info(to_print%(t, self._db_getNameFromIP(prefix)))
+                    for f in flows:
+                        log.info("\t%s\n"%(self.toFlowHostnames(f)))
+                else:
+                    # Remove lies
+                    self.sbmanager.remove_lsa(lsa)
+                    # Log it
+                    t = time.strftime("%H:%M:%S", time.gmtime())
+                    to_print = "%s - removePrefixLies(): removed lies for prefix: %s\n"
+                    log.info(to_print%(t, self._db_getNameFromIP(prefix)))
+                    log.info("\tLSAs: %s\n"%(str(lsa)))
         else:
             # Prefix not fibbed
             t = time.strftime("%H:%M:%S", time.gmtime())
             to_print = "%s - removePrefixLies(): no lies for prefix: %s\n"
             log.info(to_print%(t, self._db_getNameFromIP(prefix)))
-
             
     def getAllocatedFlows(self, prefix):
         """
