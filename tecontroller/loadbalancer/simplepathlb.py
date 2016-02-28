@@ -97,6 +97,9 @@ class SimplePathLB(LBController):
             # Calculate new default dijkstra path
             shortest_congestion_free_path = self.getDefaultDijkstraPath(tmp_nw, flow)
 
+            # Remove the destination subnet node from the path
+            shortest_congestion_free_path = shortest_congestion_free_path[:-1]
+            
         except nx.NetworkXNoPath:
             # There is no congestion-free path to allocate all traffic to dst_prefix
             t = time.strftime("%H:%M:%S", time.gmtime())
@@ -105,7 +108,7 @@ class SimplePathLB(LBController):
             
             # Allocate flow to Path
             self.addAllocationEntry(dst_prefix, flow, initial_paths)
-            log.info("\t* Dest_prefix: %s\n"%self._db_getNameFromIP(dst_prefix.compressed))
+            log.info("\t* Dest_prefix: %s\n"%self._db_getNameFromIP(dst_prefix))
             log.info("\t* Paths (%s): %s\n"%(len(path_list), str([self.toRouterNames(path) for path in initial_paths])))
 
         else:
@@ -116,17 +119,32 @@ class SimplePathLB(LBController):
 
             # Modify destination DAG
             dag = self.getCurrentDag(dst_prefix)
-            dag = self.turnEdgesInactive(dag, initial_paths)
-            dag = self.turnEdgesActive(dag, [shortest_congestion_free_path])
-            self.setCurrentDag(dst_prefix, dag)
             
+            dtp = self.toDagNames(dag)
+            log.info("INITIAL_DAG: %s\n"%str(dtp.edges(data=True)))
+
+            # Remove edges from initial paths
+            dag = self.turnEdgesInactive(dag, initial_paths)
+
+            # Add new edges from new computed path
+            dag = self.turnEdgesActive(dag, [shortest_congestion_free_path])
+
+            # This complete DAG goes to the database
+            self.setCurrentDag(dst_prefix, dag)
+
+            # Retrieve only the active edges to force fibbing
+            final_dag = self.getActiveDag(dst_prefix)
+            
+            dtp = self.toDagNames(final_dag)
+            log.info("FINAL DAG: %s\n"%str(dtp.edges(data=True)))
+
             # Call to a FIBBING Controller function should be here
             # instead
             lsa = self.getLiesFromPrefix(dst_prefix)
             if lsa:
                 self.sbmanager.remove_lsas(lsa)
 
-            self.sbmanager.fwd_dags[dst_prefix] = dag.copy()
+            self.sbmanager.fwd_dags[dst_prefix] = final_dag
             self.sbmanager.refresh_lsas()
                 
             t = time.strftime("%H:%M:%S", time.gmtime())

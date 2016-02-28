@@ -1,4 +1,4 @@
-ODimport networkx as nx
+import networkx as nx
 from tecontroller.res.flow import Flow
 from tecontroller.loadbalancer.simplepathlb import SimplePathLB
 from tecontroller.loadbalancer.ecmplb import ECMPLB
@@ -7,8 +7,8 @@ from tecontroller.loadbalancer.lbcontroller import LBController
 import time
 
 # Start LBC controller
-lbc = LBController()
-#lbc = SimplePathLB()
+#lbc = LBController()
+lbc = SimplePathLB()
 #lbc = ECMPLB()
 
 # Get router addresses

@@ -336,6 +336,7 @@ class LBController(DatabaseHandler):
         """
         return self.dags[dst].copy()
 
+    
     def setCurrentDag(self, dst, dag):
         """
         Sets the current DAG towards destination
@@ -357,12 +358,14 @@ class LBController(DatabaseHandler):
     def turnEdgesInactive(self, dag, path_list):
         """
         """
+        path_edges_list = []
         for path in path_list:
-            path_edges_list = [(u,v) for (u,v) in zip(path[:-1], path[1:])]
-            for (u,v) in path_edges_list:
-                if (u,v) in dag.edges():
-                    edge_data = dag.get_edge_data(u,v)
-                    edge_data['active'] = False
+            path_edges_list += zip(path[:-1], path[1:])
+            
+        for (u,v) in path_edges_list:
+            if (u,v) in dag.edges():
+                edge_data = dag.get_edge_data(u,v)
+                edge_data['active'] = False
         return dag
 
                 
@@ -635,6 +638,18 @@ class LBController(DatabaseHandler):
         else:
             return default_length
 
+
+    def toDagNames(self, dag):
+        """
+        """
+        dag_to_print = nx.DiGraph()
+        
+        for (u,v, data) in dag.edges(data=True):
+            u_temp = self._db_getNameFromIP(u)
+            v_temp = self._db_getNameFromIP(v)
+            dag_to_print.add_edge(u_temp, v_temp, **data)
+        return dag_to_print
+    
     
     def toRouterNames(self, path_list):
         """
@@ -752,11 +767,20 @@ class LBController(DatabaseHandler):
                 
             else:
                 canRemoveLSA = True
+
+                # Collect first the edges of the paths to remove
+                path_edges_list = []
+                for path in path_list:
+                    path_edges_list += zip(path[:-1], path[1:])
+                    
                 for (flow, flow_path_list) in allocated_flows:
-                    # Get all edges used by flow
-                    flow_edge_list = [(u,v) for (u,v) in zip(fp[:-1], fp[1:]) for fp in flow_path_list]
-                    paths_edge_list = [(u,v) for (u,v) in zip(path[:-1], path[1:]) for path in path_list]
-                    check = [True if (u,v) in path_edges_list else False for (u,v) in edge_list]
+                    # Get all edges used by flows sending to same
+                    # destination prefix
+                    flow_edges_list = []
+                    for flow_path in flow_path_list:
+                        flow_edges_list += zip(flow_path[:-1], flow_path[1:])
+                                   
+                    check = [True if (u,v) in path_edges_list else False for (u,v) in flow_edges_list]
                     if sum(check) > 0:
                         # Do not remove lsas yet. Other flows ongoing
                         # in one of the paths in path_list
