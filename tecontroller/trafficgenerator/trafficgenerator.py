@@ -137,7 +137,9 @@ class TrafficGenerator(Base):
         flows = f.readlines()
         if flows:
             for flowline in flows:
-                if flowline[0] != '#':
+                flowline = flowline.replace(' ','').replace('\n','')
+                if flowline != '' and flowline[0] != '#':
+                    log.info("FLOWLINE: \""+flowline+"\"")
                     try:
                         [s, d, sp, dp, size, s_t, dur] = flowline.strip('\n').split(',')
                         # Get hosts IPs
@@ -146,7 +148,6 @@ class TrafficGenerator(Base):
                     except Exception:
                         srcip = None
                         dstip = None
-                        
                     if srcip != None and dstip != None:
                         flow = Flow(src = srcip,
                                     dst = dstip,
@@ -159,7 +160,7 @@ class TrafficGenerator(Base):
                         self.scheduler.enter(0, 1, self.createFlow, ([flow]))
                     else:
                         log.info("ERROR! Hosts %s and/or %s do not exist in the network!\n"%(s, d))                       
-
+                        
             # Make the scheduler run after file has been parsed
             self.scheduler.run()
         else:
