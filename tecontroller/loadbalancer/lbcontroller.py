@@ -142,12 +142,10 @@ class LBController(DatabaseHandler):
             
             other_routers = [rip for rn, rip in self.routers_to_ip.iteritems() if rn != cr]
             for r in other_routers:
-                
                 # Get the shortest path
                 dpath = apdp[r][cr]
                 
                 # Are there possibly more paths with the same cost? Let's check:
-
                 # Get length of the default dijkstra shortest path
                 dlength = self.getPathLength(dpath+[subnet_prefix])
         
@@ -160,7 +158,6 @@ class LBController(DatabaseHandler):
                     t = time.strftime("%H:%M:%S", time.gmtime())
                     to_print = "%s - _createInitialDags(): ECMP is ACTIVE between %s and %s (%s)\n"
                     log.info(to_print%(t, self._db_getNameFromIP(r), self._db_getNameFromIP(subnet_prefix), subnet_prefix))  
-
                 elif len(default_paths) == 1:
                     ecmp = False
                     default_paths = [dpath]
@@ -338,9 +335,9 @@ class LBController(DatabaseHandler):
         destination.
         """
         dag = self.dags[dst]
-        active_dag = nx.DiGraph()
-        action = [active_dag.add_edge(u,v) for (u,v,data) in
-                  dag.edges(data=True) if data['active'] == True]
+        active_dag = dag.copy()
+        action = [active_dag.remove_edge(u,v) for (u,v, data) in
+                  active_dag.edges(data=True) if data['active'] == False]
         return active_dag
 
     
@@ -590,11 +587,17 @@ class LBController(DatabaseHandler):
             return default_length
 
     
-    def toRouterNames(self, path):
+    def toRouterNames(self, path_list):
         """
         """
-        result = [self._db_getNameFromIP(p) for p in path if self.isRouter(p)]
-        return result
+        total = []
+        if isinstance(path_list[0], list):
+            for path in path_list:
+                r = [self._db_getNameFromIP(p) for p in path if self.isRouter(p)] 
+                total.append(r)
+            return total
+        else:
+            return [self._db_getNameFromIP(p) for p in path_list if self.isRouter(p)] 
 
 
     def toFlowHostnames(self, flow):
