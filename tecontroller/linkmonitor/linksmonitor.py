@@ -185,7 +185,7 @@ class LinksMonitor(DatabaseHandler):
                 
 if __name__ == '__main__':
     #Waiting for the IP's to be assigned...
-    time.sleep(dconf.Hosts_InitialWaitingTime)
+    time.sleep(dconf.Hosts_InitialWaitingTime+5)
     
     refreshInterval = 1.05 #seconds
     try:
