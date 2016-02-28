@@ -456,7 +456,7 @@ class LBController(DatabaseHandler):
         t = time.strftime("%H:%M:%S", time.gmtime())
         to_print = "%s - addAllocationEntry(): "
         to_print += "flow ALLOCATED to Paths\n"
-        log.info("\t* Dest_prefix: %s\n"%self._db_getNameFromIP(prefix.compressed))
+        log.info("\t* Dest_prefix: %s\n"%self._db_getNameFromIP(prefix))
         log.info("\t* Paths (%s): %s\n"%(len(path_list), str([self.toRouterNames(path) for path in path_list])))
         log.info("\t* Flow: %s\n"%self.toFlowHostnames(flow))
                         
@@ -502,7 +502,7 @@ class LBController(DatabaseHandler):
         
         if prefix not in self.flow_allocation.keys():
             # prefix not in table
-            raise KeyError("The is no such prefix allocated: %s"%str(prefix.compressed))
+            raise KeyError("The is no such prefix allocated: %s"%str(prefix))
         else:
             if flow in self.flow_allocation[prefix].keys():
                 self.flow_allocation[prefix].pop(flow, None)
@@ -511,7 +511,7 @@ class LBController(DatabaseHandler):
 
         t = time.strftime("%H:%M:%S", time.gmtime())
         log.info("%s - removeAllocationEntry(): Flow REMOVED from Paths\n"%t)
-        log.info("\t* Dest_prefix: %s\n"%self._db_getNameFromIP(prefix.compressed))
+        log.info("\t* Dest_prefix: %s\n"%self._db_getNameFromIP(prefix))
         log.info("\t* Paths (%s): %s\n"%(len(path_list), str([self.toRouterNames(path) for path in path_list])))
         log.info("\t* Flow: %s\n"%self.toFlowHostnames(flow))
 
@@ -680,7 +680,7 @@ class LBController(DatabaseHandler):
 
                 # Log it
                 t = time.strftime("%H:%M:%S", time.gmtime())
-                log.info("%s - removePrefixLies(): removed lies for prefix: %s\n"%(t, self._db_getNameFromIP(prefix.compressed)))
+                log.info("%s - removePrefixLies(): removed lies for prefix: %s\n"%(t, self._db_getNameFromIP(prefix)))
                 log.info("\tLSAs: %s\n"%(str(lsa)))
                 
             else:
@@ -691,14 +691,14 @@ class LBController(DatabaseHandler):
                 t = time.strftime("%H:%M:%S", time.gmtime())
                 to_print = "%s - removePrefixLies(): "
                 to_print += "lies for prefix %s not removed. Flows yet ongoing:\n"
-                log.info(to_print%(t, self._db_getNameFromIP(prefix.compressed)))
+                log.info(to_print%(t, self._db_getNameFromIP(prefix)))
                 for f in flows:
                     log.info("\t%s\n"%(self.toFlowHostnames(f)))
         else:
             # Prefix not fibbed
             t = time.strftime("%H:%M:%S", time.gmtime())
             to_print = "%s - removePrefixLies(): no lies for prefix: %s\n"
-            log.info(to_print%(t, self._db_getNameFromIP(prefix.compressed)))
+            log.info(to_print%(t, self._db_getNameFromIP(prefix)))
 
             
     def getAllocatedFlows(self, prefix):
@@ -712,7 +712,7 @@ class LBController(DatabaseHandler):
             t = time.strftime("%H:%M:%S", time.gmtime())
             to_print = "%s - getAllocatedFlows(): "
             to_print += "prefix %s not yet in flow_allocation table\n"
-            log.info(to_print%(t, self._db_getNameFromIP(prefix.compressed)))
+            log.info(to_print%(t, self._db_getNameFromIP(prefix)))
             return []
 
         
@@ -733,7 +733,7 @@ class LBController(DatabaseHandler):
         while lsa_set != set():
             lsa = lsa_set.pop()
             dst = lsa.dest
-            if prefix.compressed == dst:
+            if prefix == dst:
                 return lsa
         return None
         
