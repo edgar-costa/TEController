@@ -41,6 +41,7 @@ S1 = 's1'
 S2 = 's2'
 S3 = 's3'
 S4 = 's4'
+S5 = 's5'
 
 
 M1 = 'm1'
@@ -157,23 +158,23 @@ class SimpleTopo(IPTopo):
 class SIGTopo(IPTopo):
     def build(self, *args, **kwargs):
         """
-            +---+        +----+    +---+
-            |S4 |        | D1 |    | D3|
-   +--+     +---+        +----+  __+---+
+            +--+         +--+  +--+
+            |S4|         |D1|  |D3|
+   +--+     +--+         +--+  +--+
    |S3|___    |           |   __/
-   +--+   \_+---+        +---+      +---+
-            | R2|--------|R3 |------|D2 |
-            +---+       /+---+__    +---+
-              |     ___/   |    \___+---+
-           10 |    /       |        |D4 |
-              |   /        |        +---+
+   +--+   \_+---+        +---+     +--+
+            | R2|--------|R3 |-----|D2|
+            +---+       /+---+__   +--+
+              |     ___/   |    \__+--+
+           10 |    /       |       |D4|
+              |   /        |       +--+
  +--+      +----+'       +---+        +--+
  |S1|------| R1 |--------| R4|--------|C1|
- +--+     _+----+        +---+_       +--+
-        _/    |            |   \__
-   +---+    +---+        +---+    \+---+
-   | M1|    |S2 |        |TG |     |LBC|
-   +---+    +---+        +---+     +---+
+ +--+     _+----+       _+---+_       +--+
+        _/    |       _/   |   \_
+    +--+    +---+   +--+  +--+   \+---+
+    |M1|    |S2 |   |S5|  |TG|    |LBC|
+    +--+    +---+   +--+  +--+    +---+
         """
         r1 = self.addRouter(R1, cls=MyCustomRouter)
         r2 = self.addRouter(R2, cls=MyCustomRouter)
@@ -190,6 +191,7 @@ class SIGTopo(IPTopo):
         s2 = self.addHost(S2)
         s3 = self.addHost(S3)
         s4 = self.addHost(S4)
+        s5 = self.addHost(S5)
 
         d1 = self.addHost(D1)
         d2 = self.addHost(D2)
@@ -200,6 +202,7 @@ class SIGTopo(IPTopo):
         self.addLink(s2, r1)
         self.addLink(s3, r2)
         self.addLink(s4, r2)
+        self.addLink(s5, r4)
 
         self.addLink(d1, r3)
         self.addLink(d2, r3)
@@ -224,6 +227,7 @@ class SIGTopo(IPTopo):
         #c3 = self.addHost(LBC, isLBController=True, algorithm='ECMP')
         self.addLink(c3, r4)
 
+        
 
 def launch_network():
     print SIG_TOPO
