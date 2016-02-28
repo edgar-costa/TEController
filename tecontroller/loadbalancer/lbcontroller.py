@@ -485,15 +485,18 @@ class LBController(DatabaseHandler):
                             
         # Define the removeAllocatoinEntry thread
         t = threading.Thread(target=self.removeAllocationEntry, args=(prefix, flow, path_list))
+        # Start the thread
+        t.start()
         # Add handler to list and start thread
         self.thread_handlers[flow] = t
-        t.start()
-    
+
+        
     def removeAllocationEntry(self, prefix, flow, path_list):        
         """
         Removes the flow from the allocation entry prefix and restores the corresponding.
         """
-        time.sleep(flow['duration']) #wait for after seconds
+        # Wait until flow finishes
+        time.sleep(flow['duration']) 
 
         if not isinstance(path_list, list):
             raise TypeError("path_list should be a list")
@@ -630,7 +633,7 @@ class LBController(DatabaseHandler):
         :param path: List of network nodes defining a path [A, B, C, D]"""
         caps_in_path = []
         for (u,v) in zip(path[:-1], path[1:]):
-            edge_data = self.network_graph.get_edge_data(u, v)
+            edge_data = self.initial_graph.get_edge_data(u, v)
             cap = edge_data.get('capacity', None)
             caps_in_path.append(cap)
         try:
@@ -649,10 +652,10 @@ class LBController(DatabaseHandler):
         D]
         """
         edges_in_path = [((path[i], path[i+1]),
-                          self.network_graph.get_edge_data(path[i],
+                          self.initial_graph.get_edge_data(path[i],
                                                            path[i+1])['capacity']) for i in
                          range(len(path)-1) if 'capacity' in
-                         self.network_graph.get_edge_data(path[i],
+                         self.initial_graph.get_edge_data(path[i],
                                                           path[i+1]).keys()]
         if edges_in_path:
             minim_c = edges_in_path[0][1]
