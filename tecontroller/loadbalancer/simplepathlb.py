@@ -49,7 +49,9 @@ class SimplePathLB(LBController):
         # Get the current path from source to destination
         currentPaths = self.getActivePaths(src_prefix, dst_prefix)
 
-        log.info("Currentaths for flow: %s\n"%(str(self.toRouterNames(currentPaths))))
+        t = time.strftime("%H:%M:%S", time.gmtime())
+        to_print = "%s - dealWithNewFlow(): Current paths for flow: %s\n"
+        log.info(to_print%(t, str(self.toRouterNames(currentPaths))))
 
         if len(currentPaths) > 1:
             # ECMP is happening
@@ -69,6 +71,7 @@ class SimplePathLB(LBController):
         if self.canAllocateFlow(flow, currentPaths):
             t = time.strftime("%H:%M:%S", time.gmtime())
             log.info("%s - dealWithNewFlow(): Flow can be ALLOCATED in current paths\n"%t)
+            self.addAllocationEntry(dst_prefix, flow, currentPaths)
 
         else:
             t = time.strftime("%H:%M:%S", time.gmtime())
@@ -123,8 +126,8 @@ class SimplePathLB(LBController):
             if lsa:
                 self.sbmanager.remove_lsas(lsa)
 
-            self.sbmanager.fwd_dags[dst_prefix] = dag
-            self.sbmanager.refresh_lsa()
+            self.sbmanager.fwd_dags[dst_prefix] = dag.copy()
+            self.sbmanager.refresh_lsas()
                 
             t = time.strftime("%H:%M:%S", time.gmtime())
             to_print = "%s - flowAllocationAlgorithm(): "

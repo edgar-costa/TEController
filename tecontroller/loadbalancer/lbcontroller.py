@@ -357,11 +357,12 @@ class LBController(DatabaseHandler):
     def turnEdgesInactive(self, dag, path_list):
         """
         """
-        path_edge_list = [(u,v) for (u,v) zip(path[:-1], path[1:]) for path in path_edges]
-        for (u,v) in path_edges_list:
-            if (u,v) in dag.edges():
-                edge_data = dag.get_edge_data(u,v)
-                edge_data['active'] = False
+        for path in path_list:
+            path_edges_list = [(u,v) for (u,v) in zip(path[:-1], path[1:])]
+            for (u,v) in path_edges_list:
+                if (u,v) in dag.edges():
+                    edge_data = dag.get_edge_data(u,v)
+                    edge_data['active'] = False
         return dag
 
                 
@@ -373,19 +374,20 @@ class LBController(DatabaseHandler):
         :param path_list: list of paths from source to
                           destination. E.g: [[A,B,C], [A,T,C]]
         """
-        path_edge_list = [(u,v) for (u,v) zip(path[:-1], path[1:]) for path in path_edges]
-        for (u,v) in path_edges_list:
-            if (u,v) in dag.edges():
-                edge_data = dag.get_edge_data(u,v)
-                if edge_data['active'] == False:
-                    edge_data['active'] = True
-            else:
-                # The initial edges will never get the fibbed
-                # attribute set to True, since they exist in the dag
-                # from the beginning.
-                dag.add_edge(u,v)
-                dag.get_edge_data(u,v)['active'] = True
-                dag.get_edge_data(u,v)['fibbed'] = True
+        for path in path_list:
+            path_edges_list = [(u,v) for (u,v) in zip(path[:-1], path[1:])]
+            for (u,v) in path_edges_list:
+                if (u,v) in dag.edges():
+                    edge_data = dag.get_edge_data(u,v)
+                    if edge_data['active'] == False:
+                        edge_data['active'] = True
+                else:
+                    # The initial edges will never get the fibbed
+                    # attribute set to True, since they exist in the dag
+                    # from the beginning.
+                    dag.add_edge(u,v)
+                    dag.get_edge_data(u,v)['active'] = True
+                    dag.get_edge_data(u,v)['fibbed'] = True
         return dag
     
     def getActivePaths(self, src, dst):
@@ -492,15 +494,13 @@ class LBController(DatabaseHandler):
             # prefix not in table
             self.flow_allocation[prefix] = {flow : path_list}
         else:
-            if flow in self.flow_allocation[prefix].keys():
-                self.flow_allocation[prefix][flow] += path_list
-            else:
-                self.flow_allocation[prefix][flow] = path_list
-
+            self.flow_allocation[prefix][flow] = path_list
+            
         # Loggin a bit...
         t = time.strftime("%H:%M:%S", time.gmtime())
         to_print = "%s - addAllocationEntry(): "
         to_print += "flow ALLOCATED to Paths\n"
+        log.info(to_print%t)
         log.info("\t* Dest_prefix: %s\n"%self._db_getNameFromIP(prefix))
         log.info("\t* Paths (%s): %s\n"%(len(path_list), str([self.toRouterNames(path) for path in path_list])))
         log.info("\t* Flow: %s\n"%self.toFlowHostnames(flow))
@@ -565,7 +565,8 @@ class LBController(DatabaseHandler):
 
         ecmp_paths = float(len(path_list))
         for path in path_list:
-            edges = [(u,v) for (u,v) in zip(path[:-1], path[1:])]
+            path_only_routers = [p for p in path if self.isRouter(p)]
+            edges = [(u,v) for (u,v) in zip(path_only_routers[:-1], path_only_routers[1:])]
             for (u, v) in edges:
                 data = self.initial_graph.get_edge_data(u, v)
                 capacity = data.get('capacity', None)
@@ -690,6 +691,7 @@ class LBController(DatabaseHandler):
         try:
             mini = min(caps_in_path)
             return mini
+        
         except ValueError:
             t = time.strftime("%H:%M:%S", time.gmtime())
             log.info("%s - getMinCapacity(): ERROR: min could not be calculated\n"%t)
@@ -746,13 +748,11 @@ class LBController(DatabaseHandler):
                 # Log it
                 t = time.strftime("%H:%M:%S", time.gmtime())
                 log.info("%s - removePrefixLies(): removed lies for prefix: %s\n"%(t, self._db_getNameFromIP(prefix)))
-                log.info("\tLSAs: %s\n"%(str(lsa)))
+                log.info("\t* LSAs: %s\n"%(str(lsa)))
                 
             else:
                 canRemoveLSA = True
-                for flow in allocated_flows:
-                    # Get all paths used by flow
-                    flow_path_list = self.flow_allocation[prefix][flow]
+                for (flow, flow_path_list) in allocated_flows:
                     # Get all edges used by flow
                     flow_edge_list = [(u,v) for (u,v) in zip(fp[:-1], fp[1:]) for fp in flow_path_list]
                     paths_edge_list = [(u,v) for (u,v) in zip(path[:-1], path[1:]) for path in path_list]
