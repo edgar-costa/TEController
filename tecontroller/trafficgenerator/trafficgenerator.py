@@ -139,7 +139,6 @@ class TrafficGenerator(Base):
             for flowline in flows:
                 flowline = flowline.replace(' ','').replace('\n','')
                 if flowline != '' and flowline[0] != '#':
-                    log.info("FLOWLINE: \""+flowline+"\"")
                     try:
                         [s, d, sp, dp, size, s_t, dur] = flowline.strip('\n').split(',')
                         # Get hosts IPs
