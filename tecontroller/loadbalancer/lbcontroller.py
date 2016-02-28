@@ -400,7 +400,7 @@ class LBController(DatabaseHandler):
             ecmp = True
             t = time.strftime("%H:%M:%S", time.gmtime())
             log.info("%s - dealWithNewFlow(): ECMP is ACTIVE\n"%t)
-        elif len(default_paths) == 1:
+        elif len(currentPaths) == 1:
             ecmp = False
             t = time.strftime("%H:%M:%S", time.gmtime())
             log.info("%s - dealWithNewFlow(): ECMP is NOT active\n"%t)
