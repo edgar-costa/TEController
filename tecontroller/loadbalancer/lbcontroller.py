@@ -330,6 +330,19 @@ class LBController(DatabaseHandler):
                 log.info("%s - run(): UNKNOWN Event\n"%t)
                 log.info("\t* Event: "%str(event))
 
+    def getCurrentDag(self, dst):
+        """
+        Returns a copy of the current DAG towards destination
+        """
+        return self.dags[dst].copy()
+
+    def setCurrentDag(self, dst, dag):
+        """
+        Sets the current DAG towards destination
+        """
+        self.dags[dst] = dag
+
+                
     def getActiveDag(self, dst):
         """Returns the DAG being currently deployed in practice for the given
         destination.
@@ -340,6 +353,40 @@ class LBController(DatabaseHandler):
                   active_dag.edges(data=True) if data['active'] == False]
         return active_dag
 
+
+    def turnEdgesInactive(self, dag, path_list):
+        """
+        """
+        path_edge_list = [(u,v) for (u,v) zip(path[:-1], path[1:]) for path in path_edges]
+        for (u,v) in path_edges_list:
+            if (u,v) in dag.edges():
+                edge_data = dag.get_edge_data(u,v)
+                edge_data['active'] = False
+        return dag
+
+                
+    def turnEdgesActive(self, dag, path_list):
+        """Modifies the dag by setting to active all edges of paths in path_list.
+
+        :param dag: nx.DiGraph representing the current DAG for a particular destination
+
+        :param path_list: list of paths from source to
+                          destination. E.g: [[A,B,C], [A,T,C]]
+        """
+        path_edge_list = [(u,v) for (u,v) zip(path[:-1], path[1:]) for path in path_edges]
+        for (u,v) in path_edges_list:
+            if (u,v) in dag.edges():
+                edge_data = dag.get_edge_data(u,v)
+                if edge_data['active'] == False:
+                    edge_data['active'] = True
+            else:
+                # The initial edges will never get the fibbed
+                # attribute set to True, since they exist in the dag
+                # from the beginning.
+                dag.add_edge(u,v)
+                dag.get_edge_data(u,v)['active'] = True
+                dag.get_edge_data(u,v)['fibbed'] = True
+        return dag
     
     def getActivePaths(self, src, dst):
         """Both src and dst must be strings representing subnet prefixes
@@ -382,6 +429,7 @@ class LBController(DatabaseHandler):
         is called. The LBController only keeps track of the default
         allocations of the flows.
         """
+
         # In general, this won't be True that often...
         ecmp = False
         
@@ -707,7 +755,7 @@ class LBController(DatabaseHandler):
                     flow_path_list = self.flow_allocation[prefix][flow]
                     # Get all edges used by flow
                     flow_edge_list = [(u,v) for (u,v) in zip(fp[:-1], fp[1:]) for fp in flow_path_list]
-                    paths_edge_list = [(u,v) for zip(path[:-1], path[1:]) for path in path_list]
+                    paths_edge_list = [(u,v) for (u,v) in zip(path[:-1], path[1:]) for path in path_list]
                     check = [True if (u,v) in path_edges_list else False for (u,v) in edge_list]
                     if sum(check) > 0:
                         # Do not remove lsas yet. Other flows ongoing
