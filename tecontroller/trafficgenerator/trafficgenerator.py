@@ -65,9 +65,10 @@ class TrafficGenerator(Base):
         LBController a new flow created in the network.
         """
         url = "http://%s:%s/newflowstarted" %(self._lbc_ip, dconf.LBC_JsonPort)
-        log.info(' * Informing LBController...\n')
-        log.info('   - Flow: %s\n'%str(flow))
-        log.info('   - URL: %s\n'%url)
+        t = time.strftime("%H:%M:%S", time.gmtime())
+        log.info('%s - Informing LBController...\n'%t)
+        log.info('\t\t* Flow: %s\n'%str(flow))
+        log.info('\t\t* URL: %s\n'%url)
         try:
             requests.post(url, json = flow.toJSON())
         except Exception:
@@ -87,6 +88,9 @@ class TrafficGenerator(Base):
         given flow in the network.  This function has to call
         self.informLBController!
         """
+        # Sleep after it is your time to start
+        time.sleep(flow['start_time'])
+        
         # Remove the interface mask part from the addresses, because
         # hosts only recognise their IP, not their interface ip.
         flow_cpy = copy.deepcopy(flow)
@@ -94,10 +98,12 @@ class TrafficGenerator(Base):
         flow_cpy['dst'] = flow['dst'].compressed.split('/')[0]
         
         url = "http://%s:%s/startflow" %(flow_cpy['src'], dconf.Hosts_JsonPort)
-        log.info('LOG: TrafficGenerator - starting Flow:\n')
-        log.info(' * Sending request to host\n')
-        log.info('   - FLOW (sent to Host): %s\n'%str(flow_cpy))
-        log.info('   - URL: %s\n'%url)
+
+        t = time.strftime("%H:%M:%S", time.gmtime())
+        log.info('%s - _createFlow(): starting Flow:\n'%t)
+        log.info('\tSending request to host\n')
+        log.info('\t\t* FLOW (sent to Host): %s\n'%str(flow_cpy))
+        log.info('\t\t* URL: %s\n'%url)
 
         # Send request to host to start new iperf client session
         try:
@@ -134,11 +140,13 @@ class TrafficGenerator(Base):
                 if flowline[0] != '#':
                     try:
                         [s, d, sp, dp, size, s_t, dur] = flowline.strip('\n').split(',')
+                        # Get hosts IPs
                         srcip = self.getHostIPByName(s)
                         dstip = self.getHostIPByName(d)
                     except Exception:
                         srcip = None
                         dstip = None
+                        
                     if srcip != None and dstip != None:
                         flow = Flow(src = srcip,
                                     dst = dstip,
@@ -148,9 +156,11 @@ class TrafficGenerator(Base):
                                     start_time = s_t,
                                     duration = dur)
                         #Schedule flow creation
-                        self.scheduler.enter(flow['start_time'], 1, self._createFlow, ([flow]))
+                        self.scheduler.enter(0, 1, self.createFlow, ([flow]))
                     else:
-                        log.info("ERROR! Hosts %s and/or %s do not exist in the network!\n"%(s, d))   
+                        log.info("ERROR! Hosts %s and/or %s do not exist in the network!\n"%(s, d))                       
+
+            # Make the scheduler run after file has been parsed
             self.scheduler.run()
         else:
             log.info("No flows to schedule in file\n")                
@@ -199,15 +209,23 @@ if __name__ == '__main__':
     
     # Get Traffic Generator hosts's IP.
     MyOwnIp = tg.getHostIPByName(dconf.TG_Hostname).split('/')[0]
-    log.info("TRAFFIC GENERATOR - HOST %s\n"%(MyOwnIp))
+    t = time.strftime("%H:%M:%S", time.gmtime())
+    log.info("%s - TRAFFIC GENERATOR - HOST %s\n"%(t, MyOwnIp))
     log.info("-"*60+"\n")
 
     # Schedule flows from file
     flowfile = dconf.FlowFile
     #flowfile = dconf.TG_Path + 'flowfile2.csv'
+
+    t = time.strftime("%H:%M:%S", time.gmtime())
+    st = time.time()
+    log.info("%s - main(): Scheduling flow file: %s ...\n"%(t, flowfile))
+
     tg.scheduleFileFlows(flowfile)
-    log.info("LOG: Scheduled flow file: %s\n"%flowfile)
     
+    t2 = time.strftime("%H:%M:%S", time.gmtime())
+    log.info("%s - main(): Scheduled flow file after %.2f seconds\n"%(t2, time.time()-st))
+
     # Go start the JSON API server and listen for commands
     app = create_app(app, tg)
     app.run(host=MyOwnIp)
