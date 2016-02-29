@@ -815,6 +815,11 @@ class LBController(DatabaseHandler):
         # Get the current DAG for that prefix
         current_dag = self.getCurrentDag(prefix)
         
+        dtp = self.toDagNames(current_dag)
+        t = time.strftime("%H:%M:%S", time.gmtime())
+        log.info("%s - removePrefixLies(): Initial DAG\n"%t)
+        log.info("%s\n"%str(dtp.edges(data=True)))
+        
         # Get the lies for prefix
         lsa = self.getLiesFromPrefix(prefix)
         if lsa:
@@ -917,6 +922,12 @@ class LBController(DatabaseHandler):
 
         # Set the current DAG to prefix again
         self.setCurrentDag(prefix, current_dag)
+
+        # Log it
+        dtp = self.toDagNames(current_dag)
+        t = time.strftime("%H:%M:%S", time.gmtime())
+        log.info("%s - removePrefixLies(): Final DAG\n"%t)
+        log.info("%s\n"%str(dtp.edges(data=True)))
 
             
     def getAllocatedFlows(self, prefix):

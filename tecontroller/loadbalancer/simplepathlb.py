@@ -121,7 +121,9 @@ class SimplePathLB(LBController):
             dag = self.getCurrentDag(dst_prefix)
             
             dtp = self.toDagNames(dag)
-            log.info("INITIAL_DAG: %s\n"%str(dtp.edges(data=True)))
+            t = time.strftime("%H:%M:%S", time.gmtime())
+            log.info("%s - flowAllocationAlgorithm(): Initial DAG\n"%t)
+            log.info("%s\n"%str(dtp.edges(data=True)))
 
             # Get edges of new found path
             scfp = shortest_congestion_free_path
@@ -161,7 +163,9 @@ class SimplePathLB(LBController):
             final_dag = self.getActiveDag(dst_prefix)
             
             dtp = self.toDagNames(final_dag)
-            log.info("FINAL DAG: %s\n"%str(dtp.edges(data=True)))
+            t = time.strftime("%H:%M:%S", time.gmtime())
+            log.info("%s - flowAllocationAlgorithm(): Final DAG\n"%t)
+            log.info("%s\n"%str(dtp.edges(data=True)))
 
             # Call to a FIBBING Controller function should be here
             # instead
