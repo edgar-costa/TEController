@@ -174,6 +174,7 @@ class LBController(DatabaseHandler):
                             edge_data = dag.get_edge_data(u,v)
                             edge_data['active'] = True
                             edge_data['fibbed'] = False
+                            edge_data['ongoing_flows'] = False
 
             # Add DAG to prefix
             self.dags[subnet_prefix] = dag
@@ -191,9 +192,11 @@ class LBController(DatabaseHandler):
             yname = self._db_getNameFromIP(y)
             
             if xname and yname:
-                bw = self.db.interface_bandwidth(xname, yname)
-                data['bw'] = int(bw*1e6)
-                data['capacity'] = int(bw*1e6)
+                if self.sbmanager.igp_graph.is_router(x) and self.sbmanager.igp_graph.is_router(y):
+                    # Fill edges between routers!
+                    bw = self.db.interface_bandwidth(xname, yname)
+                    data['bw'] = int(bw*1e6)
+                    data['capacity'] = int(bw*1e6)
             else:
                 t = time.strftime("%H:%M:%S", time.gmtime())
                 log.info("%s - _readBwDataFromDB(): ERROR: did not find xname and yname"%t)
@@ -343,6 +346,37 @@ class LBController(DatabaseHandler):
         """
         self.dags[dst] = dag
 
+
+    def getActiveEdges(self, dag, node):
+        activeEdges = []
+        for n, data in dag[node].iteritems():
+            if data['active'] == True:
+                activeEdges.append((node, n))
+        return activeEdges
+
+    def getFibbedEdges(self, dag, node):
+        fibbedEdges = []
+        for n, data in dag[node].iteritems():
+            if data['fibbed'] == True:
+                fibbedEdges.append((node, n))
+        return fibbedEdges
+
+    def getDefaultEdges(self, dag, node):
+        defaultEdges = []
+        for n, data in dag[node].iteritems():
+            if data['fibbed'] == False:
+                defaultEdges.append((node, n))
+        return defaultEdges
+    
+    
+    def getEdgesFromPathList(self, path_list):
+        """Given a list of paths, returns a list of all the edges contained
+        in these paths.
+        """
+        edge_list = []
+        for path in path_list:
+            edge_list += zip(path[:-1], path[1:])
+        return edge_list
                 
     def getActiveDag(self, dst):
         """Returns the DAG being currently deployed in practice for the given
@@ -354,44 +388,45 @@ class LBController(DatabaseHandler):
                   active_dag.edges(data=True) if data['active'] == False]
         return active_dag
 
+    def switchDagEdgesData(self, dag, path_list, **kwargs):
+        """Sets the data of the edges in path_list to the attributes expressed
+        in kwargs.
 
-    def turnEdgesInactive(self, dag, path_list):
+        :param dag: nx.DiGraph representing the dag of the destination
+                    subnet that we want to change the edges state.
+
+        :param path_list: list of paths. E.g: [[A,B,C],[A,G,C]...]
+
+        :param **kwargs: Edge attributes to be set.
+
         """
-        """
-        path_edges_list = []
-        for path in path_list:
-            path_edges_list += zip(path[:-1], path[1:])
+        # Check first if we have a path_list or a edges_list
+        if path_list != [] and isinstance(path_list[0], tuple):
+            # We have an edges list
+            edge_list = path_list
+                        
+        elif path_list != [] and isinstance(path_list[0], list):
+            # We have a path_list
+            edge_list = self.getEdgesFromPathList(path_list)
             
-        for (u,v) in path_edges_list:
-            if (u,v) in dag.edges():
-                edge_data = dag.get_edge_data(u,v)
-                edge_data['active'] = False
-        return dag
-
-                
-    def turnEdgesActive(self, dag, path_list):
-        """Modifies the dag by setting to active all edges of paths in path_list.
-
-        :param dag: nx.DiGraph representing the current DAG for a particular destination
-
-        :param path_list: list of paths from source to
-                          destination. E.g: [[A,B,C], [A,T,C]]
-        """
-        for path in path_list:
-            path_edges_list = [(u,v) for (u,v) in zip(path[:-1], path[1:])]
-            for (u,v) in path_edges_list:
-                if (u,v) in dag.edges():
-                    edge_data = dag.get_edge_data(u,v)
-                    if edge_data['active'] == False:
-                        edge_data['active'] = True
-                else:
+        if path_list != []:
+            for (u,v) in edge_list:
+                if (u,v) not in dag.edges():
                     # The initial edges will never get the fibbed
                     # attribute set to True, since they exist in the dag
                     # from the beginning.
                     dag.add_edge(u,v)
-                    dag.get_edge_data(u,v)['active'] = True
+                    edge_data = dag.get_edge_data(u,v)
                     dag.get_edge_data(u,v)['fibbed'] = True
-        return dag
+
+                # Do for all edges
+                edge_data = dag.get_edge_data(u,v)
+                for key, value in kwargs.iteritems():
+                    edge_data[key] = value
+
+        # Return modified dag when finished
+        return dag            
+
     
     def getActivePaths(self, src, dst):
         """Both src and dst must be strings representing subnet prefixes
@@ -511,26 +546,39 @@ class LBController(DatabaseHandler):
         # Check first how many ECMP paths are there
         ecmp_paths = float(len(path_list))
 
+        # Current dag for destination
+        current_dag = self.getCurrentDag(prefix)
+
+        # Iterate the paths
         for path in path_list:
+            # Calculate paths with only routers
             path_only_routers = [p for p in path if self.isRouter(p)]
-            edges = [(u,v) for (u,v) in zip(path_only_routers[:-1], path_only_routers[1:])]
+
+            # Extract the edges of the path
+            edges = zip(path_only_routers[:-1], path_only_routers[1:])
+            
+            # Modify first the current destination dag: ongoing_flows = True
+            current_dag = self.switchDagEdgesData(current_dag, edges, ongoing_flows=True)
+                        
             for (u, v) in edges:
+                # Get capacity of the edge (u,v)
                 data = self.initial_graph.get_edge_data(u, v)
                 capacity = data.get('capacity', None)
                 if capacity:
+                    # Substract portion of flow size
                     data['capacity'] -= (flow.size/float(ecmp_paths))
-                    # Get also data from the reverse edge
+
+                    # Modify also the capacity data of the reverse edge
                     data_i = self.initial_graph.get_edge_data(v, u)
-                    if data_i:
-                        # Substract corresponding size
-                        data_i['capacity'] = data['capacity']
-                    else:
-                        to_print = "ERROR: capacity key not found in edge (%s, %s)\n"
-                        log.info(to_print%(u, v))
+                    data_i['capacity'] = data['capacity']
+
                 else:
                     to_print = "ERROR: capacity key not found in edge (%s, %s)\n"
                     log.info(to_print%(u, v))
-                            
+
+        # Set the current dag
+        self.setCurrentDag(prefix, current_dag)
+        
         # Define the removeAllocatoinEntry thread
         t = threading.Thread(target=self.removeAllocationEntry, args=(prefix, flow, path_list))
         # Start the thread
@@ -566,27 +614,50 @@ class LBController(DatabaseHandler):
         log.info("\t* Paths (%s): %s\n"%(len(path_list), str([self.toRouterNames(path) for path in path_list])))
         log.info("\t* Flow: %s\n"%self.toFlowHostnames(flow))
 
+        # Check first how many ECMP paths are there
         ecmp_paths = float(len(path_list))
+
+        # Current dag for destination
+        current_dag = self.getCurrentDag(prefix)
+
+        # Get current remaining allocated flows for destination
+        remaining_flows = self.getAllocatedFlows(prefix)
+
+        # Acumulate edges for which there are flows ongoing
+        ongoing_edge_list = []
+        for (f, f_path_list) in remaining_flows:
+            ongoing_edge_list += self.getEdgeFromPathList(f_path_list)
+        
+        # Iterate the path_list
         for path in path_list:
+            # Get paths with only routers
             path_only_routers = [p for p in path if self.isRouter(p)]
-            edges = [(u,v) for (u,v) in zip(path_only_routers[:-1], path_only_routers[1:])]
+
+            # Calculate edges of the path
+            edges = zip(path_only_routers[:-1], path_only_routers[1:])
+
+            # Calculate which of these edges can be set to ongoing_flows = False
+            edges_without_flows = [(u,v) for (u,v) in edges if (u,v) not in ongoing_edge_list]
+
+            # Set them
+            current_dag = self.switchDagEdgesData(current_dag, edges_without_flows, ongoing_flows=False)
+
+            # Now add capacities to edges
             for (u, v) in edges:
                 data = self.initial_graph.get_edge_data(u, v)
                 capacity = data.get('capacity', None)
                 if capacity:
                     data['capacity'] += (flow.size/float(ecmp_paths))
-                    # Get also data from the reverse edge
+                    # Set also the reverse edge
                     data_i = self.initial_graph.get_edge_data(v, u)
-                    if data_i:
-                        # Substract corresponding size
-                        data_i['capacity'] = data['capacity']
-                    else:
-                        to_print = "ERROR: capacity key not found in edge (%s, %s)\n"
-                        log.info(to_print%(u, v))
+                    data_i['capacity'] = data['capacity']
                 else:
                     to_print = "ERROR: capacity key not found in edge (%s, %s)\n"
                     log.info(to_print%(u, v))
 
+        # Set the new calculated dag to its destination prefix dag
+        self.setCurrentDag(prefix, current_dag)
+        
         # Remove the lies for the given prefix
         self.removePrefixLies(prefix, path_list)
         
@@ -660,6 +731,11 @@ class LBController(DatabaseHandler):
                 r = [self._db_getNameFromIP(p) for p in path if self.isRouter(p)] 
                 total.append(r)
             return total
+        elif isinstance(path_list[0], tuple):
+                r = [(self._db_getNameFromIP(u),
+                      self._db_getNameFromIP(v)) for (u,v) in path_list
+                     if self.isRouter(u) and self.isRouter(v)] 
+                return r
         else:
             return [self._db_getNameFromIP(p) for p in path_list if self.isRouter(p)] 
 
@@ -683,17 +759,6 @@ class LBController(DatabaseHandler):
         return True
 
 
-    def getEdgesInfoFromRoute(self, route):
-        """Given a list of network nodes, returns a dictionary with the edges
-        information.
-        """
-        edges = {(x, y): data for (x, y, data) in
-                          self.network_graph.edges(data=True) if x in
-                          route and y in route and
-                          abs(route.index(x)-route.index(y)) == 1}
-        return edges
-
-    
     def getMinCapacity(self, path):
         """Returns the minimum capacity of the edges along the path.
         
@@ -712,7 +777,8 @@ class LBController(DatabaseHandler):
             log.info("%s - getMinCapacity(): ERROR: min could not be calculated\n"%t)
             log.info("\t* Path: %s\n"%path)            
             raise ValueError
-        
+
+
     def getMinCapacityEdge(self, path):
         """Returns the edge with the minimum capacity along the path.
 
@@ -746,6 +812,9 @@ class LBController(DatabaseHandler):
         :param path_list: List of paths from source to
                           destination. E.g: [[A,B,C],[A,D,C]]
         """
+        # Get the current DAG for that prefix
+        current_dag = self.getCurrentDag(prefix)
+        
         # Get the lies for prefix
         lsa = self.getLiesFromPrefix(prefix)
         if lsa:
@@ -760,6 +829,24 @@ class LBController(DatabaseHandler):
                 # Obviously, if no flows are found, we can already
                 # remove the lies.
                 self.sbmanager.remove_lsa(lsa)
+
+                # Set the DAG for the prefix destination to its
+                # original version
+                path_list_edges = []
+                for path in path_list:
+                    path_list_edges += zip(path[:-1], path[1:])
+            
+                # Remove edges from initial paths
+                for path in path_list:
+                    for node in path:
+                        # Set edges to initial situation (fibbed=True,
+                        # active=False) and (fibbed=False, active=True)
+                        default_edges = self.getDefaultEdges(current_dag, node)
+                        current_dag = self.switchDagEdgesData(current_dag, default_edges, active=True)
+                        
+                        fibbed_edges = self.getFibbedEdges(current_dag, node)
+                        current_dag = self.switchDagEdgesData(current_dag, fibbed_edges, active=False)
+                
                 # Log it
                 t = time.strftime("%H:%M:%S", time.gmtime())
                 log.info("%s - removePrefixLies(): removed lies for prefix: %s\n"%(t, self._db_getNameFromIP(prefix)))
@@ -799,6 +886,24 @@ class LBController(DatabaseHandler):
                 else:
                     # Remove lies
                     self.sbmanager.remove_lsa(lsa)
+
+                    # Set the DAG for the prefix destination to its
+                    # original version
+                    path_list_edges = []
+                    for path in path_list:
+                        path_list_edges += zip(path[:-1], path[1:])
+            
+                    # Remove edges from initial paths
+                    for path in path_list:
+                        for node in path:
+                            # Set edges to initial situation (fibbed=True,
+                            # active=False) and (fibbed=False, active=True)
+                            default_edges = self.getDefaultEdges(current_dag, node)
+                            current_dag = self.switchDagEdgesData(current_dag, default_edges, active=True)
+                        
+                            fibbed_edges = self.getFibbedEdges(current_dag, node)
+                            current_dag = self.switchDagEdgesData(current_dag, fibbed_edges, active=False)
+
                     # Log it
                     t = time.strftime("%H:%M:%S", time.gmtime())
                     to_print = "%s - removePrefixLies(): removed lies for prefix: %s\n"
@@ -809,6 +914,10 @@ class LBController(DatabaseHandler):
             t = time.strftime("%H:%M:%S", time.gmtime())
             to_print = "%s - removePrefixLies(): no lies for prefix: %s\n"
             log.info(to_print%(t, self._db_getNameFromIP(prefix)))
+
+        # Set the current DAG to prefix again
+        self.setCurrentDag(prefix, current_dag)
+
             
     def getAllocatedFlows(self, prefix):
         """
@@ -845,7 +954,24 @@ class LBController(DatabaseHandler):
             if prefix == dst:
                 return lsa
         return None
-        
+
+
+    def getFullEdges(self, network_graph, min_size):
+        """
+        Returns a list of edges that can't allocate min_size bytes of bandwidth.
+
+        :param network_graph: IGPGraph
+
+        :param min_size: minimum bandwidth size in bytes
+
+        Returns: list of edges. E.g: [(A,B),(B,T),...]
+        """
+        full_edges = [(u,v) for (u,v,data) in
+                 network_graph.edges(data=True) if 'capacity' in
+                 data.keys() and data['capacity'] < min_size]
+
+        return full_edges
+    
         
     def getNetworkWithoutEdge(self, network_graph, x, y):
         """Returns a nx.DiGraph representing the network graph without the
