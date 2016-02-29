@@ -114,8 +114,8 @@ class SimplePathLB(LBController):
         else:
             t = time.strftime("%H:%M:%S", time.gmtime())
             log.info("%s - flowAllocationAlgorithm(): Found path that can allocate flow\n"%t)
-            # Allocate flow to Path
-            self.addAllocationEntry(dst_prefix, flow, [shortest_congestion_free_path])
+            log.info("\t\t* Path (readable): %s\n"%str(self.toRouterNames(shortest_congestion_free_path)))
+            log.info("\t\t* Path (ips): %s\n"%str(shortest_congestion_free_path))
 
             # Modify destination DAG
             dag = self.getCurrentDag(dst_prefix)
@@ -123,13 +123,38 @@ class SimplePathLB(LBController):
             dtp = self.toDagNames(dag)
             log.info("INITIAL_DAG: %s\n"%str(dtp.edges(data=True)))
 
+            # Get edges of new found path
+            scfp = shortest_congestion_free_path
+            new_path_edges = zip(scfp[:-1], scfp[1:])
+            
             # Remove edges from initial paths
-            dag = self.turnEdgesInactive(dag, initial_paths)
+            for node in shortest_congestion_free_path:
+                # Get active edges of node
+                active_edges = self.getActiveEdges(dag, node)
+                for a_e in active_edges:
+                    if a_e not in new_path_edges:
+                        dag = self.switchDagEdgesData(dag, [(a_e)], active=False)
+                            
+            # Remove also full edges from DAG (only if no flows to
+            # same destination are going through it. Otherwise, we
+            # might need longer prefix fibbing...
+            full_edges = self.getFullEdges(self.initial_graph, flow['size'])
+            check_ongoing_flows = [(u,v) for (u,v) in full_edges if
+                                   dag.get_edge_data(u,v) != None and
+                                   dag.get_edge_data(u,v).get('ongoing_flows')
+                                   == True]
+
+            if len(check_ongoing_flows) != 0:
+                # We need longer prefix match here!!!
+                t = time.strftime("%H:%M:%S", time.gmtime())
+                to_print = "%s - flowAllocationAlgorithm(): Some full edges should be removed"
+                to_print += ", but ongoing flows exist.\n\tLONGER PREFIX FIBBING NEEDED\n" 
+                log.info(to_print%t)
 
             # Add new edges from new computed path
-            dag = self.turnEdgesActive(dag, [shortest_congestion_free_path])
-
-            # This complete DAG goes to the database
+            dag = self.switchDagEdgesData(dag, [shortest_congestion_free_path], active=True)
+            
+            # This complete DAG goes to the prefix-dag data attribute
             self.setCurrentDag(dst_prefix, dag)
 
             # Retrieve only the active edges to force fibbing
@@ -146,7 +171,10 @@ class SimplePathLB(LBController):
 
             self.sbmanager.fwd_dags[dst_prefix] = final_dag
             self.sbmanager.refresh_lsas()
-                
+
+            # Allocate flow to Path. It HAS TO BE DONE after changing the DAG...
+            self.addAllocationEntry(dst_prefix, flow, [shortest_congestion_free_path])
+            
             t = time.strftime("%H:%M:%S", time.gmtime())
             to_print = "%s - flowAllocationAlgorithm(): "
             to_print += "Forced forwarding DAG in Southbound Manager\n"
