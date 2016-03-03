@@ -27,7 +27,8 @@ lm_logfile =  dconf.Hosts_LogFolder + "LM.log"
 
 log = get_logger()
 
-algo_to_file = {'SimplePath': 'simplepathlb.py', 
+algo_to_file = {'None': 'lbcontroller.py',
+                'SimplePath': 'simplepathlb.py', 
                 'ECMP': 'ecmplb.py'}
 
 class MyCustomHost(_node.Host):
@@ -52,7 +53,7 @@ class MyCustomHost(_node.Host):
         elif 'isLBController' in kwargs.keys() and kwargs.get('isLBController') == True:
             log.info("\nStarting LoadBalancing Controller\n")
             # Fetch which algorithm is running
-            algorithm = kwargs.get('algorithm', 'SimplePath')
+            algorithm = kwargs.get('algorithm', 'None')
             lbcl = open(lbc_logfile, 'w')
             tec = self.popen(dconf.LBC_Path+algo_to_file[algorithm],
                              stdin=None, stdout=lbcl, stderr=lbcl)
