@@ -110,11 +110,16 @@ class LBController(DatabaseHandler):
         # Fill the host2Ip and router2ip attributes
         self._createHost2IPBindings()
         self._createRouter2IPBindings()
+        
         t = time.strftime("%H:%M:%S", time.gmtime())
         log.info("%s - Created IP-names bindings\n"%t)
+        log.info("\tHostname\tip\tsubnet\n")
         for name, data in self.hosts_to_ip.iteritems():
-            log.info("\tHostname: %s --> %s with ip:%s\n"%(name,data['router_name'], data['router_id']))
-
+            log.info("\t%s\t%s\t%s\n"%(name, data['iface_host'], data['iface_router']))
+        log.info("\tRouter name\tip\t\n")
+        for name, ip in self.routers_to_ip.iteritems():
+            log.info("\t%s\t%s\n"%(name, ip))
+            
         # Create here the initial DAGS
         self._createInitialDags()
         t = time.strftime("%H:%M:%S", time.gmtime())
@@ -126,61 +131,93 @@ class LBController(DatabaseHandler):
         t = time.strftime("%H:%M:%S", time.gmtime())
         log.info("%s - Json listener thread created\n"%t)
 
-        
-    def _createInitialDags(self):
-        """Populates the self.dags attribute by creating a complete DAG for
-        each destination.
+
+    def run(self):
+        """Main loop that deals with new incoming events
         """
-        apdp = nx.all_pairs_dijkstra_path(self.initial_graph)
-        for hostname, values in self.hosts_to_ip.iteritems():
-            dag = nx.DiGraph()
-            # Get IP of the connected router
-            cr = values['router_id']
-
-            # Get subnet prefix
-            subnet_prefix = values['iface_router']
+        while not self.isStopped():
+            # Get event from the queue (blocking)
+            event = self.eventQueue.get()
+            log.info(lineend)
+            t = time.strftime("%H:%M:%S", time.gmtime())
+            log.info("%s - run(): NEW event in the queue\n"%t)
+            log.info("\t* Type: %s\n"%event['type'])
             
-            other_routers = [rip for rn, rip in self.routers_to_ip.iteritems() if rn != cr]
-            for r in other_routers:
-                # Get the shortest path
-                dpath = apdp[r][cr]
+            if event['type'] == 'newFlowStarted':
+                # Fetch flow from queue
+                flow = event['data']
+                log.info("\t* Flow: %s\n"%self.toLogFlowNames(flow))
                 
-                # Are there possibly more paths with the same cost? Let's check:
-                # Get length of the default dijkstra shortest path
-                dlength = self.getPathLength(dpath+[subnet_prefix])
+                # Deal with new flow
+                self.dealWithNewFlow(flow)
+                
+            else:
+                t = time.strftime("%H:%M:%S", time.gmtime())
+                log.info("%s - run(): UNKNOWN Event\n"%t)
+                log.info("\t* Event: "%str(event))
+
+
+    def dealWithNewFlow(self, flow):
+        """Called when a new flow arrives. This method should be overwritten
+        by each of the subclasses performing the various algorithms.
+
+        When this function is called, no algorithm to allocate flows
+        is called. The LBController only keeps track of the default
+        allocations of the flows.
+        """
+
+        # In general, this won't be True that often...
+        ecmp = False
         
-                # Get all paths with length equal to the defaul path length
-                default_paths = self._getAllPathsLim(self.initial_graph, r, subnet_prefix, dlength)
+        # Get the flow prefixes
+        src_prefix = flow['src'].network.compressed
+        dst_prefix = flow['dst'].network.compressed
+        
+        # Get the current path from source to destination
+        currentPaths = self.getActivePaths(src_prefix, dst_prefix)
+
+        if len(currentPaths) > 1:
+            # ECMP is happening
+            ecmp = True
+            t = time.strftime("%H:%M:%S", time.gmtime())
+            log.info("%s - dealWithNewFlow(): ECMP is ACTIVE\n"%t)
+        elif len(currentPaths) == 1:
+            ecmp = False
+            t = time.strftime("%H:%M:%S", time.gmtime())
+            log.info("%s - dealWithNewFlow(): ECMP is NOT active\n"%t)
+        else:
+            t = time.strftime("%H:%M:%S", time.gmtime())
+            log.info("%s - dealWithNewFlow(): ERROR\n"%t)
+
+        # Detect if flow is going to create congestion
+        if self.canAllocateFlow(flow, currentPaths):
+            t = time.strftime("%H:%M:%S", time.gmtime())
+            log.info("%s - dealWithNewFlow(): Flow can be ALLOCATED\n"%t)
+
+        else:
+            t = time.strftime("%H:%M:%S", time.gmtime())
+            log.info("%s - dealWithNewFlow(): Flow will cause CONGESTION\n"%t)
+
+        # We just allocate the flow to the currentPaths
+        self.addAllocationEntry(dst_prefix, flow, currentPaths)
                 
-                if len(default_paths) > 1:
-                    # ECMP is happening
-                    ecmp = True
-                    t = time.strftime("%H:%M:%S", time.gmtime())
-                    to_print = "%s - _createInitialDags(): ECMP is ACTIVE between %s and %s (%s)\n"
-                    log.info(to_print%(t, self._db_getNameFromIP(r), self._db_getNameFromIP(subnet_prefix), subnet_prefix))  
-                elif len(default_paths) == 1:
-                    ecmp = False
-                    default_paths = [dpath]
-                else:
-                    t = time.strftime("%H:%M:%S", time.gmtime())
-                    log.info("%s - _createInitialDags(): ERROR. At least there should be a path\n"%t)
 
-                # Iterate through paths and add edges to DAG
-                for path in default_paths:
-                    edge_list = zip(path[:-1], path[1:])
-                    for (u,v) in edge_list:
-                        if self.isRouter(u) and self.isRouter(v):
-                            dag.add_edge(u,v)
-                            edge_data = dag.get_edge_data(u,v)
-                            edge_data['active'] = True
-                            edge_data['fibbed'] = False
-                            edge_data['ongoing_flows'] = False
+    def stop(self):
+        """Stop the LBController correctly
+        """
+        #Here we should deal with the handlers of the spawned threads
+        #and subprocesses...
+        self._stop.set()
 
-            # Add DAG to prefix
-            self.dags[subnet_prefix] = dag
+        
+    def isStopped(self):
+        """Check if LBController is set to be stopped or not
+        """
+        return self._stop.isSet()
 
 
-            
+    ## Functions (private) that populate the data structures of the load balancer ###################
+    
     def _readBwDataFromDB(self):
         """Introduces BW data from /tmp/db.topo into the network DiGraph and
         sets the capacity to the link bandwidth.
@@ -257,8 +294,14 @@ class LBController(DatabaseHandler):
                 name = self._db_getNameFromIP(node_ip)
                 self.routers_to_ip[name] = node_ip
 
+    #########################################################################################################
+
+
+    ## Useful functions to query network nodes IP, hostnames, connected nodes, etc. #########################
+                
     def getSubnetFromHostName(self, hostname):
-        """
+        """Given a hostname, it returns the subnet in which this hostname
+        resides
         """
         subnets = [data['iface_router'] for name, data in
                    self.hosts_to_ip.iteritems() if name == hostname]
@@ -296,43 +339,9 @@ class LBController(DatabaseHandler):
         """
         return self.initial_graph.get_edge_data(x,y)['capacity']
 
-    def stop(self):
-        """Stop the LBController correctly
-        """
-        #Here we should deal with the handlers of the spawned threads
-        #and subprocesses...
-        self._stop.set()
+    #########################################################################################################
 
-    def isStopped(self):
-        """Check if LBController is set to be stopped or not
-        """
-        return self._stop.isSet()
-
-    
-    def run(self):
-        """Main loop that deals with new incoming events
-        """
-        while not self.isStopped():
-            # Get event from the queue (blocking)
-            event = self.eventQueue.get()
-            log.info(lineend)
-            t = time.strftime("%H:%M:%S", time.gmtime())
-            log.info("%s - run(): NEW event in the queue\n"%t)
-            log.info("\t* Type: %s\n"%event['type'])
-            
-            if event['type'] == 'newFlowStarted':
-                # Fetch flow from queue
-                flow = event['data']
-                log.info("\t* Flow: %s\n"%self.toFlowHostnames(flow))
-                
-                # Deal with new flow
-                self.dealWithNewFlow(flow)
-                
-            else:
-                t = time.strftime("%H:%M:%S", time.gmtime())
-                log.info("%s - run(): UNKNOWN Event\n"%t)
-                log.info("\t* Event: "%str(event))
-
+    ## Functions related with DAGS ####################################################
     def getCurrentDag(self, dst):
         """
         Returns a copy of the current DAG towards destination
@@ -355,6 +364,9 @@ class LBController(DatabaseHandler):
         return activeEdges
 
     def getFibbedEdges(self, dag, node):
+        """
+        Returns the fibbed edges in the
+        """
         fibbedEdges = []
         for n, data in dag[node].iteritems():
             if data['fibbed'] == True:
@@ -362,32 +374,14 @@ class LBController(DatabaseHandler):
         return fibbedEdges
 
     def getDefaultEdges(self, dag, node):
+        """Returns the defaul OSPF-created DAG for a given destination node.
+        """
         defaultEdges = []
         for n, data in dag[node].iteritems():
             if data['fibbed'] == False:
                 defaultEdges.append((node, n))
         return defaultEdges
     
-    
-    def getEdgesFromPathList(self, path_list):
-        """Given a list of paths, returns a list of all the edges contained
-        in these paths.
-        """
-        edge_list = []
-        for path in path_list:
-            edge_list += zip(path[:-1], path[1:])
-        return edge_list
-                
-    def getActiveDag(self, dst):
-        """Returns the DAG being currently deployed in practice for the given
-        destination.
-        """
-        dag = self.dags[dst]
-        active_dag = dag.copy()
-        action = [active_dag.remove_edge(u,v) for (u,v, data) in
-                  active_dag.edges(data=True) if data['active'] == False]
-        return active_dag
-
     def switchDagEdgesData(self, dag, path_list, **kwargs):
         """Sets the data of the edges in path_list to the attributes expressed
         in kwargs.
@@ -427,11 +421,21 @@ class LBController(DatabaseHandler):
         # Return modified dag when finished
         return dag            
 
+
+    def getActiveDag(self, dst):
+        """Returns the DAG being currently deployed in practice for the given
+        destination.
+        """
+        dag = self.dags[dst]
+        active_dag = dag.copy()
+        action = [active_dag.remove_edge(u,v) for (u,v, data) in
+                  active_dag.edges(data=True) if data['active'] == False]
+        return active_dag
+
+
     
     def getActivePaths(self, src, dst):
         """Both src and dst must be strings representing subnet prefixes
-
-        TODO: Should return multiple paths in case of ECMP
         """
         # Get current active DAG for that destination
         active_dag = self.getActiveDag(dst)
@@ -446,14 +450,76 @@ class LBController(DatabaseHandler):
 
         # Calculate path and return it
         active_paths = self._getAllPathsLimDAG(active_dag, src_rid, dst_rid, 0)
-        return active_paths
-
+        return active_paths    
     
+    def _createInitialDags(self):
+        """Populates the self.dags attribute by creating a complete DAG for
+        each destination.
+        """
+        apdp = nx.all_pairs_dijkstra_path(self.initial_graph, weight='metric')
+        for hostname, values in self.hosts_to_ip.iteritems():
+            dag = nx.DiGraph()
+            # Get IP of the connected router
+            cr = values['router_id']
+
+            # Get subnet prefix
+            subnet_prefix = values['iface_router']
+            
+            other_routers = [rip for rn, rip in self.routers_to_ip.iteritems() if rn != cr]
+            for r in other_routers:
+                # Get the shortest path
+                dpath = apdp[r][cr]
+                
+                # Are there possibly more paths with the same cost? Let's check:
+                # Get length of the default dijkstra shortest path
+                dlength = self.getPathLength(dpath+[subnet_prefix])
+        
+                # Get all paths with length equal to the defaul path length
+                default_paths = self._getAllPathsLim(self.initial_graph, r, subnet_prefix, dlength)
+                
+                if len(default_paths) > 1:
+                    # ECMP is happening
+                    ecmp = True
+                    t = time.strftime("%H:%M:%S", time.gmtime())
+                    to_print = "%s - _createInitialDags(): ECMP is ACTIVE between %s and %s (%s)\n"
+                    log.info(to_print%(t, self._db_getNameFromIP(r), self._db_getNameFromIP(subnet_prefix), subnet_prefix))  
+                elif len(default_paths) == 1:
+                    ecmp = False
+                    default_paths = [dpath]
+                else:
+                    t = time.strftime("%H:%M:%S", time.gmtime())
+                    log.info("%s - _createInitialDags(): ERROR. At least there should be a path\n"%t)
+
+                # Iterate through paths and add edges to DAG
+                for path in default_paths:
+                    edge_list = zip(path[:-1], path[1:])
+                    for (u,v) in edge_list:
+                        if self.isRouter(u) and self.isRouter(v):
+                            dag.add_edge(u,v)
+                            edge_data = dag.get_edge_data(u,v)
+                            edge_data['active'] = True
+                            edge_data['fibbed'] = False
+                            edge_data['ongoing_flows'] = False
+
+            # Add DAG to prefix
+            self.dags[subnet_prefix] = dag
+
+            
+    ######################################################################################
+    
+    def getEdgesFromPathList(self, path_list):
+        """Given a list of paths, returns a list of all the edges contained
+        in these paths.
+        """
+        edge_list = []
+        for path in path_list:
+            edge_list += zip(path[:-1], path[1:])
+        return edge_list
+                
                 
     def isFibbed(self, dst_prefix):
         """Returns true if there exist fake LSA for that prefix in the
         network.
-
 
         TODO: probably must be changed...
         
@@ -461,61 +527,16 @@ class LBController(DatabaseHandler):
         return (self.getLiesFromPrefix(dst_prefix) != None)
 
     
-    def dealWithNewFlow(self, flow):
-        """Called when a new flow arrives. This method should be overwritten
-        by each of the subclasses performing the various algorithms.
-
-        When this function is called, no algorithm to allocate flows
-        is called. The LBController only keeps track of the default
-        allocations of the flows.
+    def isFibbedPath(self, dst_prefix, path):
+        """Returns True if it finds a fibbed edge active along the path in
+        dst_prefix DAG
         """
-
-        # In general, this won't be True that often...
-        ecmp = False
-        
-        # Get the flow prefixes
-        src_prefix = flow['src'].network.compressed
-        dst_prefix = flow['dst'].network.compressed
-        
-        # Get the current path from source to destination
-        currentPaths = self.getActivePaths(src_prefix, dst_prefix)
-
-        if len(currentPaths) > 1:
-            # ECMP is happening
-            ecmp = True
-            t = time.strftime("%H:%M:%S", time.gmtime())
-            log.info("%s - dealWithNewFlow(): ECMP is ACTIVE\n"%t)
-        elif len(currentPaths) == 1:
-            ecmp = False
-            t = time.strftime("%H:%M:%S", time.gmtime())
-            log.info("%s - dealWithNewFlow(): ECMP is NOT active\n"%t)
-        else:
-            t = time.strftime("%H:%M:%S", time.gmtime())
-            log.info("%s - dealWithNewFlow(): ERROR\n"%t)
-
-        # Detect if flow is going to create congestion
-        if self.canAllocateFlow(flow, currentPaths):
-            t = time.strftime("%H:%M:%S", time.gmtime())
-            log.info("%s - dealWithNewFlow(): Flow can be ALLOCATED\n"%t)
-
-        else:
-            t = time.strftime("%H:%M:%S", time.gmtime())
-            log.info("%s - dealWithNewFlow(): Flow will cause CONGESTION\n"%t)
-
-        # We just allocate the flow to the currentPaths
-        self.addAllocationEntry(dst_prefix, flow, currentPaths)
-        
-                
-    def isFibbedPath(self, path):
-        """
-        Returns True if it finds a fake edge along the path
-        """
+        currentDag = self.getCurrentDag(dst_prefix)        
         for (u,v) in zip(path[:-1], path[1:]):
-            if self.network_graph.get_edge_data(u,v)['weight'] == 1:
-                data_i = self.network_graph.get_edge_data(v,u)
-                if data_i == None:
-                    # Fake edge found
-                    return True
+            edge_data = currentDag.get_edge_data(u,v)
+            if edge_data['fibbed'] == True and edge_data['active'] == True:
+                # Fake edge found
+                return True
         return False
 
 
@@ -540,15 +561,15 @@ class LBController(DatabaseHandler):
         to_print += "flow ALLOCATED to Paths\n"
         log.info(to_print%t)
         log.info("\t* Dest_prefix: %s\n"%self._db_getNameFromIP(prefix))
-        log.info("\t* Paths (%s): %s\n"%(len(path_list), str([self.toRouterNames(path) for path in path_list])))
-        log.info("\t* Flow: %s\n"%self.toFlowHostnames(flow))
+        log.info("\t* Paths (%s): %s\n"%(len(path_list), str([self.toLogRouterNames(path) for path in path_list])))
+        log.info("\t* Flow: %s\n"%self.toLogFlowNames(flow))
                         
         # Check first how many ECMP paths are there
         ecmp_paths = float(len(path_list))
 
         # Current dag for destination
         current_dag = self.getCurrentDag(prefix)
-
+        
         # Iterate the paths
         for path in path_list:
             # Calculate paths with only routers
@@ -611,8 +632,8 @@ class LBController(DatabaseHandler):
         t = time.strftime("%H:%M:%S", time.gmtime())
         log.info("%s - removeAllocationEntry(): Flow REMOVED from Paths\n"%t)
         log.info("\t* Dest_prefix: %s\n"%self._db_getNameFromIP(prefix))
-        log.info("\t* Paths (%s): %s\n"%(len(path_list), str([self.toRouterNames(path) for path in path_list])))
-        log.info("\t* Flow: %s\n"%self.toFlowHostnames(flow))
+        log.info("\t* Paths (%s): %s\n"%(len(path_list), str([self.toLogRouterNames(path) for path in path_list])))
+        log.info("\t* Flow: %s\n"%self.toLogFlowNames(flow))
 
         # Check first how many ECMP paths are there
         ecmp_paths = float(len(path_list))
@@ -626,7 +647,7 @@ class LBController(DatabaseHandler):
         # Acumulate edges for which there are flows ongoing
         ongoing_edge_list = []
         for (f, f_path_list) in remaining_flows:
-            ongoing_edge_list += self.getEdgeFromPathList(f_path_list)
+            ongoing_edge_list += self.getEdgesFromPathList(f_path_list)
         
         # Iterate the path_list
         for path in path_list:
@@ -674,15 +695,16 @@ class LBController(DatabaseHandler):
         dst_network = flow['dst'].network.compressed
 
         # We take only routers in the route
-        route = nx.dijkstra_path(network_graph, src_router_id, dst_network)
+        route = nx.dijkstra_path(network_graph, src_router_id, dst_network, weight='metric')
         return route
 
 
     def getPathLength(self, path):
-        """
+        """Given a path as a list of traversed routers, it returns the sum of
+        the weights of the traversed links along the path.
         """
         routers = [n for n in path if self.initial_graph.is_router(n)]
-        edges = [self.initial_graph.get_edge_data(u,v)['weight'] for
+        edges = [self.initial_graph.get_edge_data(u,v)['metric'] for
                  (u,v) in zip(path[:-1], path[1:])]
         return sum(edges)
         
@@ -698,56 +720,18 @@ class LBController(DatabaseHandler):
 
         # We take only routers in the route
         try:
-            default_length = nx.dijkstra_path_length(network_graph, src_router_id, dst_network)
+            default_length = nx.dijkstra_path_length(network_graph, src_router_id, dst_network, weight='metric')
         except nx.NetworkXNoPath:
             t = time.strftime("%H:%M:%S", time.gmtime())
             to_print = "%s - getDefaultDijkstraPathLength(): ERROR: "
             to_print += "No path exists between flow.src and flow.dst\n"
             log.info(to_print%t)
-            log.info("\t* Flow: %s\n"%self.toFlowHostnames(flow))
+            log.info("\t* Flow: %s\n"%self.toLogFlowNames(flow))
             raise nx.NetworkXNoPath
         else:
             return default_length
 
 
-    def toDagNames(self, dag):
-        """
-        """
-        dag_to_print = nx.DiGraph()
-        
-        for (u,v, data) in dag.edges(data=True):
-            u_temp = self._db_getNameFromIP(u)
-            v_temp = self._db_getNameFromIP(v)
-            dag_to_print.add_edge(u_temp, v_temp, **data)
-        return dag_to_print
-    
-    
-    def toRouterNames(self, path_list):
-        """
-        """
-        total = []
-        if isinstance(path_list[0], list):
-            for path in path_list:
-                r = [self._db_getNameFromIP(p) for p in path if self.isRouter(p)] 
-                total.append(r)
-            return total
-        elif isinstance(path_list[0], tuple):
-                r = [(self._db_getNameFromIP(u),
-                      self._db_getNameFromIP(v)) for (u,v) in path_list
-                     if self.isRouter(u) and self.isRouter(v)] 
-                return r
-        else:
-            return [self._db_getNameFromIP(p) for p in path_list if self.isRouter(p)] 
-
-
-    def toFlowHostnames(self, flow):
-        a = "(%s -> %s): %s, t_o: %s, duration: %s" 
-        return a%(self._db_getNameFromIP(flow.src.compressed),
-                  self._db_getNameFromIP(flow.dst.compressed),
-                  flow.setSizeToStr(flow.size),
-                  flow.setTimeToStr(flow.start_time),
-                  flow.setTimeToStr(flow.duration))
-    
     def canAllocateFlow(self, flow, path_list):
         """Returns true if there is at least flow.size bandwidth available in
         all links along the path (or multiple paths in case of ECMP)
@@ -812,17 +796,21 @@ class LBController(DatabaseHandler):
         :param path_list: List of paths from source to
                           destination. E.g: [[A,B,C],[A,D,C]]
         """
+
+        log.info("******************************\n")
         # Get the current DAG for that prefix
         current_dag = self.getCurrentDag(prefix)
-        
-        dtp = self.toDagNames(current_dag)
-        t = time.strftime("%H:%M:%S", time.gmtime())
-        log.info("\n%s - removePrefixLies(): Initial DAG\n"%t)
-        log.info("%s\n\n"%str(dtp.edges(data=True)))
-        
+
+        #Log it
+        #dtp = self.toLogDagNames(current_dag)
+        #t = time.strftime("%H:%M:%S", time.gmtime())
+        #log.info("\n%s - removePrefixLies(): Initial DAG\n"%t)
+        #log.info("%s\n\n"%str(dtp.edges(data=True)))
+
         # Get the lies for prefix
         lsa = self.getLiesFromPrefix(prefix)
         if lsa:
+            log.info("THERE ARE LSA for prefix\n")
             # Fibbed prefix
             # Let's check if there are other flows for prefix fist
             allocated_flows = self.getAllocatedFlows(prefix)
@@ -831,6 +819,7 @@ class LBController(DatabaseHandler):
             # path in path_list. If not, we can delete the
             # lies. Otherwise, we must wait.
             if allocated_flows == []:
+                log.info("NO ALLOCATED FLOWS REMAIN FOR PREFIX\n")
                 # Obviously, if no flows are found, we can already
                 # remove the lies.
                 self.sbmanager.remove_lsa(lsa)
@@ -858,21 +847,26 @@ class LBController(DatabaseHandler):
                 log.info("\t* LSAs: %s\n"%(str(lsa)))
                 
             else:
+                log.info("SOME FLOWS REMAIN TOWARDS PREFIX\n")
                 canRemoveLSA = True
 
                 # Collect first the edges of the paths to remove
                 path_edges_list = []
                 for path in path_list:
                     path_edges_list += zip(path[:-1], path[1:])
-                    
+
+                
+                log.info("Edges of the paths to remove: %s\n"%self.toLogRouterNames(path_edges_list))
                 for (flow, flow_path_list) in allocated_flows:
+                    log.info("flow: %s, path: %s\n"%(self.toLogFlowNames(flow), self.toLogRouterNames(flow_path_list)))
                     # Get all edges used by flows sending to same
                     # destination prefix
                     flow_edges_list = []
                     for flow_path in flow_path_list:
                         flow_edges_list += zip(flow_path[:-1], flow_path[1:])
-                                   
+
                     check = [True if (u,v) in path_edges_list else False for (u,v) in flow_edges_list]
+                    log.info("CHECK list: %s\n"%str(check))
                     if sum(check) > 0:
                         # Do not remove lsas yet. Other flows ongoing
                         # in one of the paths in path_list
@@ -887,7 +881,7 @@ class LBController(DatabaseHandler):
                     to_print += "lies for prefix %s not removed. Flows yet ongoing:\n"
                     log.info(to_print%(t, self._db_getNameFromIP(prefix)))
                     for f in flows:
-                        log.info("\t%s\n"%(self.toFlowHostnames(f)))
+                        log.info("\t%s\n"%(self.toLogFlowNames(f)))
                 else:
                     # Remove lies
                     self.sbmanager.remove_lsa(lsa)
@@ -928,11 +922,12 @@ class LBController(DatabaseHandler):
         self.sbmanager.fwd_dags[prefix] = current_dag.copy() 
         self.sbmanager.refresh_lsas()
 
+        log.info("******************************\n")
         # Log it
-        dtp = self.toDagNames(current_dag)
-        t = time.strftime("%H:%M:%S", time.gmtime())
-        log.info("\n%s - removePrefixLies(): Final DAG\n"%t)
-        log.info("%s\n\n"%str(dtp.edges(data=True)))
+        #dtp = self.toLogDagNames(current_dag)
+        #t = time.strftime("%H:%M:%S", time.gmtime())
+        #log.info("\n%s - removePrefixLies(): Final DAG\n"%t)
+        #log.info("%s\n\n"%str(dtp.edges(data=True)))
 
             
     def getAllocatedFlows(self, prefix):
@@ -948,11 +943,10 @@ class LBController(DatabaseHandler):
             to_print += "prefix %s not yet in flow_allocation table\n"
             log.info(to_print%(t, self._db_getNameFromIP(prefix)))
             return []
-
         
     def getFlowSizes(self, prefix):
-        """
-        Returns the sum of flows with destination prefix
+        """Returns the sum of flows with destination prefix, and how many
+        flows there are
         """
         allocated_flows = self.getAllocatedFlows(prefix)
         sizes = [f['size'] for (f, p) in allocated_flows]
@@ -962,6 +956,7 @@ class LBController(DatabaseHandler):
     def getLiesFromPrefix(self, prefix):
         """Retrieves the LSA of the associated prefix from the southbound
         manager.
+
         """
         lsa_set = self.sbmanager.advertized_lsa.copy()
         while lsa_set != set():
@@ -970,7 +965,6 @@ class LBController(DatabaseHandler):
             if prefix == dst:
                 return lsa
         return None
-
 
     def getFullEdges(self, network_graph, min_size):
         """
@@ -987,7 +981,6 @@ class LBController(DatabaseHandler):
                  data.keys() and data['capacity'] < min_size]
 
         return full_edges
-    
         
     def getNetworkWithoutEdge(self, network_graph, x, y):
         """Returns a nx.DiGraph representing the network graph without the
@@ -1018,14 +1011,15 @@ class LBController(DatabaseHandler):
                 removed.append((edge_s, cap))
                 ng_temp.remove_edge(x, y)
 
-        t = time.strftime("%H:%M:%S", time.gmtime())
-        to_print = "%s - getNetworkWithoutFullEdges(): "
-        to_print += "The following edges can't allocate flow of size: %d\n"
-        log.info(to_print%(t, flow_size))
-        for (edge,cap) in removed:
-            log.info("\tEdge: %s, capacity: %d\n"%(edge, cap))
+        #t = time.strftime("%H:%M:%S", time.gmtime())
+        #to_print = "%s - getNetworkWithoutFullEdges(): "
+        #to_print += "The following edges can't allocate flow of size: %d\n"
+        #log.info(to_print%(t, flow_size))
+        #for (edge,cap) in removed:
+        #    log.info("\tEdge: %s, capacity: %d\n"%(edge, cap))
         return ng_temp
 
+    
     def getAllPathsRanked(self, igp_graph, start, end):
         """Recursive function that returns an ordered list representing all
         paths between node x and y in network_graph. Paths are ordered
@@ -1052,7 +1046,7 @@ class LBController(DatabaseHandler):
                 len_path = 0
             else:
                 last_node = path[-1]
-                len_path += igp_graph.get_edge_data(last_node, start)['weight']
+                len_path += igp_graph.get_edge_data(last_node, start)['metric']
                 
             # Accumulate nodes in path
             path = path + [start]
@@ -1116,8 +1110,6 @@ class LBController(DatabaseHandler):
                     for newpath in newpaths:
                         paths.append(newpath)
         return paths
-
-
         
     def _orderByLength(self, paths):
         """Given a list of arbitrary paths. It ranks them by lenght (or total
@@ -1130,12 +1122,53 @@ class LBController(DatabaseHandler):
             pathlen = 0
             for (u,v) in zip(path[:-1], path[1:]):
                 if self.network_graph.is_router(v):
-                    pathlen += self.network_graph.get_edge_data(u,v)['weight']
+                    pathlen += self.network_graph.get_edge_data(u,v)['metric']
             ordered_paths.append((path, pathlen))
         # Now rank them
         ordered_paths = sorted(ordered_paths, key=lambda x: x[1])
         return ordered_paths
 
+
+    def toLogDagNames(self, dag):
+        """
+        """
+        dag_to_print = nx.DiGraph()
+        
+        for (u,v, data) in dag.edges(data=True):
+            u_temp = self._db_getNameFromIP(u)
+            v_temp = self._db_getNameFromIP(v)
+            dag_to_print.add_edge(u_temp, v_temp, **data)
+        return dag_to_print
+    
+    
+    def toLogRouterNames(self, path_list):
+        """
+        """
+        total = []
+        if isinstance(path_list[0], list):
+            for path in path_list:
+                r = [self._db_getNameFromIP(p) for p in path if self.isRouter(p)] 
+                total.append(r)
+            return total
+        elif isinstance(path_list[0], tuple):
+                r = [(self._db_getNameFromIP(u),
+                      self._db_getNameFromIP(v)) for (u,v) in path_list
+                     if self.isRouter(u) and self.isRouter(v)] 
+                return r
+        else:
+            return [self._db_getNameFromIP(p) for p in path_list if self.isRouter(p)] 
+
+
+    def toLogFlowNames(self, flow):
+        a = "(%s -> %s): %s, t_o: %s, duration: %s" 
+        return a%(self._db_getNameFromIP(flow.src.compressed),
+                  self._db_getNameFromIP(flow.dst.compressed),
+                  flow.setSizeToStr(flow.size),
+                  flow.setTimeToStr(flow.start_time),
+                  flow.setTimeToStr(flow.duration))
+    
+
+    
 
 if __name__ == '__main__':
     log.info("NO-ALGORITHM LOAD BALANCER CONTROLLER\n")
