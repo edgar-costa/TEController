@@ -354,7 +354,14 @@ class LBController(DatabaseHandler):
         Sets the current DAG towards destination
         """
         self.dags[dst] = dag
-
+        
+        
+    def getDefaultDag(self, dst):
+        currentDag = getCurrentDag(dst)
+        ddag = nx.DiGraph()
+        for (u,v,data) in currentDag.edges(data=True):
+            if data['fibbed'] = False:
+                
 
     def getActiveEdges(self, dag, node):
         activeEdges = []
@@ -381,7 +388,7 @@ class LBController(DatabaseHandler):
             if data['fibbed'] == False:
                 defaultEdges.append((node, n))
         return defaultEdges
-    
+
     def switchDagEdgesData(self, dag, path_list, **kwargs):
         """Sets the data of the edges in path_list to the attributes expressed
         in kwargs.
@@ -663,7 +670,7 @@ class LBController(DatabaseHandler):
             # Set them
             current_dag = self.switchDagEdgesData(current_dag, edges_without_flows, ongoing_flows=False)
 
-            # Now add capacities to edges
+            # Now add back capacities to edges
             for (u, v) in edges:
                 data = self.initial_graph.get_edge_data(u, v)
                 capacity = data.get('capacity', None)
@@ -786,6 +793,7 @@ class LBController(DatabaseHandler):
         else:
             raise StandardError("%s has no edges!"%str(path))
 
+        
     def removePrefixLies(self, prefix, path_list):
         """Remove lies for a given prefix only if there are no more flows
         allocated for that prefix flowing through some edge of
@@ -807,10 +815,23 @@ class LBController(DatabaseHandler):
         #log.info("\n%s - removePrefixLies(): Initial DAG\n"%t)
         #log.info("%s\n\n"%str(dtp.edges(data=True)))
 
-        # Get the lies for prefix
-        lsa = self.getLiesFromPrefix(prefix)
-        if lsa:
-            log.info("THERE ARE LSA for prefix\n")
+        # Check if fibbed edge in paths
+        thereIsFibbedPath = False
+        for path in path_list:
+            thereIsFibbedPath = thereIsFibbedPath or self.isFibbedPath(prefix, path)
+
+        if not thereIsFibbedPath:
+            # Paths for this flow are not fibbed
+            t = time.strftime("%H:%M:%S", time.gmtime())
+            to_print = "%s - removePrefixLies(): no fibbed edges found in paths %s for prefix: %s\n"
+            log.info(to_print%(t, str(self.toLogRouters(path_list)), self._db_getNameFromIP(prefix)))
+
+        else:
+            # Get the lies for prefix
+            lsa = self.getLiesFromPrefix(prefix)
+
+            log.info("Found fibbed edges in paths: %s\n"%str(self.toLogRouters(path_list)))
+
             # Fibbed prefix
             # Let's check if there are other flows for prefix fist
             allocated_flows = self.getAllocatedFlows(prefix)
@@ -819,10 +840,9 @@ class LBController(DatabaseHandler):
             # path in path_list. If not, we can delete the
             # lies. Otherwise, we must wait.
             if allocated_flows == []:
-                log.info("NO ALLOCATED FLOWS REMAIN FOR PREFIX\n")
+                log.info("No allocated flows remain for prefix\n")
                 # Obviously, if no flows are found, we can already
                 # remove the lies.
-                self.sbmanager.remove_lsa(lsa)
 
                 # Set the DAG for the prefix destination to its
                 # original version
@@ -840,14 +860,23 @@ class LBController(DatabaseHandler):
                         
                         fibbed_edges = self.getFibbedEdges(current_dag, node)
                         current_dag = self.switchDagEdgesData(current_dag, fibbed_edges, active=False)
+
+                # Set current Dag
+                self.setCurrentDag(current_dag)
                 
+                # Get the active Dag
+                activeDag = self.getActiveDag(prefix)
+
+                # Force it to fibbing
+                self.sbmanager.add_dag_requirement(prefix, activeDag.copy())
+
                 # Log it
                 t = time.strftime("%H:%M:%S", time.gmtime())
                 log.info("%s - removePrefixLies(): removed lies for prefix: %s\n"%(t, self._db_getNameFromIP(prefix)))
                 log.info("\t* LSAs: %s\n"%(str(lsa)))
                 
             else:
-                log.info("SOME FLOWS REMAIN TOWARDS PREFIX\n")
+                log.info("Some flows for prefix still remain\n")
                 canRemoveLSA = True
 
                 # Collect first the edges of the paths to remove
@@ -855,7 +884,6 @@ class LBController(DatabaseHandler):
                 for path in path_list:
                     path_edges_list += zip(path[:-1], path[1:])
 
-                
                 log.info("Edges of the paths to remove: %s\n"%self.toLogRouterNames(path_edges_list))
                 for (flow, flow_path_list) in allocated_flows:
                     log.info("flow: %s, path: %s\n"%(self.toLogFlowNames(flow), self.toLogRouterNames(flow_path_list)))
@@ -883,9 +911,6 @@ class LBController(DatabaseHandler):
                     for f in flows:
                         log.info("\t%s\n"%(self.toLogFlowNames(f)))
                 else:
-                    # Remove lies
-                    self.sbmanager.remove_lsa(lsa)
-
                     # Set the DAG for the prefix destination to its
                     # original version
                     path_list_edges = []
@@ -903,6 +928,14 @@ class LBController(DatabaseHandler):
                             fibbed_edges = self.getFibbedEdges(current_dag, node)
                             current_dag = self.switchDagEdgesData(current_dag, fibbed_edges, active=False)
 
+                    self.setCurrentDag(current_dag)
+                
+                    # Get the active Dag
+                    activeDag = self.getActiveDag(prefix)
+
+                    # Force it to fibbing
+                    self.sbmanager.add_dag_requirement(prefix, activeDag.copy())
+                
                     # Log it
                     t = time.strftime("%H:%M:%S", time.gmtime())
                     to_print = "%s - removePrefixLies(): removed lies for prefix: %s\n"
@@ -913,14 +946,6 @@ class LBController(DatabaseHandler):
             t = time.strftime("%H:%M:%S", time.gmtime())
             to_print = "%s - removePrefixLies(): no lies for prefix: %s\n"
             log.info(to_print%(t, self._db_getNameFromIP(prefix)))
-
-        # Set the current DAG to prefix again
-        self.setCurrentDag(prefix, current_dag)
-        
-        # Insert it into fibbing
-        current_dag = self.getActiveDag(prefix)
-        self.sbmanager.fwd_dags[prefix] = current_dag.copy() 
-        self.sbmanager.refresh_lsas()
 
         log.info("******************************\n")
         # Log it
