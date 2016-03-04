@@ -51,7 +51,7 @@ class SimplePathLB(LBController):
 
         t = time.strftime("%H:%M:%S", time.gmtime())
         to_print = "%s - dealWithNewFlow(): Current paths for flow: %s\n"
-        log.info(to_print%(t, str(self.toRouterNames(currentPaths))))
+        log.info(to_print%(t, str(self.toLogRouterNames(currentPaths))))
 
         if len(currentPaths) > 1:
             # ECMP is happening
@@ -109,18 +109,18 @@ class SimplePathLB(LBController):
             # Allocate flow to Path
             self.addAllocationEntry(dst_prefix, flow, initial_paths)
             log.info("\t* Dest_prefix: %s\n"%self._db_getNameFromIP(dst_prefix))
-            log.info("\t* Paths (%s): %s\n"%(len(path_list), str([self.toRouterNames(path) for path in initial_paths])))
-
+            log.info("\t* Paths (%s): %s\n"%(len(path_list), str([self.toLogRouterNames(path) for path in initial_paths])))
+            
         else:
             t = time.strftime("%H:%M:%S", time.gmtime())
             log.info("%s - flowAllocationAlgorithm(): Found path that can allocate flow\n"%t)
-            log.info("\t\t* Path (readable): %s\n"%str(self.toRouterNames(shortest_congestion_free_path)))
+            log.info("\t\t* Path (readable): %s\n"%str(self.toLogRouterNames(shortest_congestion_free_path)))
             log.info("\t\t* Path (ips): %s\n"%str(shortest_congestion_free_path))
 
             # Modify destination DAG
             dag = self.getCurrentDag(dst_prefix)
             
-            dtp = self.toDagNames(dag)
+            dtp = self.toLogDagNames(dag)
             t = time.strftime("%H:%M:%S", time.gmtime())
             log.info("%s - flowAllocationAlgorithm(): Initial DAG\n"%t)
             log.info("%s\n"%str(dtp.edges(data=True)))
@@ -162,7 +162,7 @@ class SimplePathLB(LBController):
             # Retrieve only the active edges to force fibbing
             final_dag = self.getActiveDag(dst_prefix)
             
-            dtp = self.toDagNames(final_dag)
+            dtp = self.toLogDagNames(final_dag)
             t = time.strftime("%H:%M:%S", time.gmtime())
             log.info("%s - flowAllocationAlgorithm(): Final DAG\n"%t)
             log.info("%s\n"%str(dtp.edges(data=True)))
