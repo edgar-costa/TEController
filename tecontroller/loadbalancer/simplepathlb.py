@@ -29,7 +29,6 @@ class SimplePathLB(LBController):
     If the flow can't be allocated in any path from source to
     destination, the algorithm falls back to the original dijsktra
     path and does not fib the network.
-
     """
     
     def __init__(self, *args, **kwargs):
@@ -68,7 +67,73 @@ class SimplePathLB(LBController):
                 longest_match = (prefix, prefix_len)
         return longest_match[0]
 
+    def getReversedEdgesSet(self, edges_set):
+        """Given a set of edges, it returns a set with the reversed edges."""
+        reversed_set = set()
+        while edges_set != set():
+            (u,v) = edges_set.pop()
+            reversed_set.update((v,u))
+
+        return reversed_set
+
+    def getNextNonCollidingPrefix(self, dst_ip, dst_network, new_path_list):
+        """
+        """
+        # get allocated flows for network_object prefix
+        dst_prefix = dst_network.compressed
+        allocated_flows = self.getAllocatedFlows(dst_prefix)   
+
+        # Calculate which of them are colliding with our new path
+        edges_new_pl = set(self.getEdgesFromPathList(new_path_list))
+
+        # Acumulate flow destinations ips for which the flows collide
+        # with our path
+        ips = []
+        for (flow, fpl) in allocated_flows:
+            edges_flow = set(self.getEdgesFromPathList(fpl))
+            edges_flow_r = self.getReversedEdges(edges_flow)
+            if edges_flow.intersection(edges_new_pl) != set() or edges_flow_r.intersection(edges_new_pl) != set():
+                ips.append(flow['dst'].ip)
+            
+        # Find the shortest longer prefix that does not collide with flows
+        max_prefix_len = (None, 0)
+        for ip in ips:
+            differ_bit = -1
+            xor = int(dst_ip)^int(ip)
+            while xor != 0:
+                differ_bit += 1
+                xor = xor >> 1
+                
+            if differ_bit == -1:
+                log.info("No more longer prefixes that do not collide!\n")
+                return None
+            
+            else:
+                prefix_len = 32 - differ_bit
+                if prefix_len > max_prefix_len[1]:
+                    max_prefix_len = (ip, prefix_len)
+
+        # Return the subnet that includes the ip of the new flow!
+        subnets = dst_network.subnets(max_prefix=max_prefix_len)
+        action = [subnet for subnet in subnets if dst_ip in subnet]
+        if len(action) == 1:
+            return action[0]
+        else:
+            raise KeyError("No subnet could be found")
+
         
+    def getNextLongerPrefix(self, interface_ip, network_object):
+        """Given an host interface ip, and the network_object that represents
+        the currently advertised network prefix, returns the
+
+        """
+        iface_ip = ipaddress.ip_interface(interface_ip).ip
+        subnets = list(network_object.subnets())
+        for subnet in subnets:
+            if iface_ip in subnet:
+                return subnet
+    
+    
     def dealWithNewFlow(self, flow):
         """
         Implements the abstract method
@@ -78,9 +143,11 @@ class SimplePathLB(LBController):
         
         # Get the flow prefixes
         src_prefix = flow['src'].network.compressed
-        dst_prefix = flow['dst'].network.compressed
-
-        #dst_prefix = self.getCurrentOSPFPrefix(flow['dst'])
+        dst_ip = flow['dst'].ip
+        
+        # Get destination longest advertized prefix
+        dst_network = self.getCurrentOSPFPrefix(flow['dst'])
+        dst_prefix = dst_network.compressed
         
         # Get the current path from source to destination
         currentPaths = self.getActivePaths(src_prefix, dst_prefix)
@@ -137,17 +204,18 @@ class SimplePathLB(LBController):
             shortest_congestion_free_path = shortest_congestion_free_path[:-1]
             
         except nx.NetworkXNoPath:
-            # There is no congestion-free path to allocate all traffic to dst_prefix
+            # There is no congestion-free path to allocate flow to dst_prefix
             t = time.strftime("%H:%M:%S", time.gmtime())
             log.info("%s - flowAllocationAlgorithm(): Flow can't be allocated in the network\n"%t)
             log.info("\tAllocating it the default Dijkstra path for the moment...\n")
-            log.info("\tBut we should look for longer prefix fibbing...\n")
+            log.info("\tBut we should look for re-arrangement of already allocated flows...\n")
             
             # Allocate flow to Path
             self.addAllocationEntry(dst_prefix, flow, initial_paths)
             log.info("\t* Dest_prefix: %s\n"%self._db_getNameFromIP(dst_prefix))
             log.info("\t* Paths (%s): %s\n"%(len(path_list), str([self.toLogRouterNames(path) for path in initial_paths])))
-            # Here, we should search fibbing for longer prefixes!!!!!!!!
+            # Here, we should try to re-arrange flows in a way that
+            # all of them can be allocated.
             pass
         
         else:
@@ -158,9 +226,27 @@ class SimplePathLB(LBController):
 
             # Rename
             scfp = shortest_congestion_free_path
-            
-            if not self.longerPrefixNeeded(dst_prefix, initial_paths, [scfp]):
 
+            # While no path found that does not collide with already
+            # ongoing flows for same destination
+            if not self.longerPrefixNeeded(dst_prefix, initial_paths, [scfp]):
+                # Get destination host ip
+                dst_ip = flow['dst'].ip
+
+                # Get next non-colliding (with ongoing flows) prefix
+                new_dst_network = self.getNextNonCollidingPrefix(dst_ip, dst_network, [scfp])
+                new_dst_prefix = new_dst_network.compressed
+
+                # Fib new found path with new found destination prefix
+                #self.sbmanager.add_dag_requirement()
+                
+                pass
+
+        
+            
+                
+
+                
                 # Modify destination DAG
                 dag = self.getCurrentDag(dst_prefix)
                 
