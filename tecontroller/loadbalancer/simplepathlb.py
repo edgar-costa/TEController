@@ -6,6 +6,7 @@ from tecontroller.res import defaultconf as dconf
 from fibbingnode.misc.mininetlib import get_logger
 
 import networkx as nx
+import ipaddress
 import threading
 import time
 
@@ -33,8 +34,41 @@ class SimplePathLB(LBController):
     
     def __init__(self, *args, **kwargs):
         super(SimplePathLB, self).__init__(*args, **kwargs)
+        
+        # Mantains the list of the network prefixes advertised by the OSPF routers
+        self.ospf_prefixes = self._fillInitialOSPFPrefixes()
 
+    def _fillInitialOSPFPrefixes(self):
+        """
+        Fills up the data structure
+        """
+        prefixes = []
+        for host, data in self.hosts_to_ip.iteritems():
+            ip_network_object = ipaddress.ip_network(data['iface_router'])
+            prefixes.append(ip_network_object)
+        return prefixes
 
+    def getCurrentOSPFPrefix(self, interface_ip):
+        """Given a interface ip address of a host in the mininet network,
+        returns the longest prefix currently being advertised by the
+        OSPF routers.
+
+        :param interface_ip: string representing a host's interface ip
+                             address. E.g: '192.168.233.254/30'
+
+        Returns: an ipaddress.IPv4Network object
+        """
+        iface = ipaddress.ip_interface(interface_ip)
+        iface_nw = iface.network
+        iface_ip = iface.ip
+        longest_match = (None, 0)
+        for prefix in self.ospf_prefixes:
+            prefix_len = prefix.prefixlen
+            if iface_ip in prefix and prefix_len > longest_match[1]:
+                longest_match = (prefix, prefix_len)
+        return longest_match[0]
+
+        
     def dealWithNewFlow(self, flow):
         """
         Implements the abstract method
@@ -45,6 +79,8 @@ class SimplePathLB(LBController):
         # Get the flow prefixes
         src_prefix = flow['src'].network.compressed
         dst_prefix = flow['dst'].network.compressed
+
+        #dst_prefix = self.getCurrentOSPFPrefix(flow['dst'])
         
         # Get the current path from source to destination
         currentPaths = self.getActivePaths(src_prefix, dst_prefix)
@@ -92,7 +128,7 @@ class SimplePathLB(LBController):
         # Remove edges that can't allocate flow from graph
         required_size = flow['size']
         tmp_nw = self.getNetworkWithoutFullEdges(self.initial_graph, required_size)
-        
+
         try:
             # Calculate new default dijkstra path
             shortest_congestion_free_path = self.getDefaultDijkstraPath(tmp_nw, flow)
@@ -119,11 +155,6 @@ class SimplePathLB(LBController):
             log.info("%s - flowAllocationAlgorithm(): Found path that can allocate flow\n"%t)
             log.info("\t\t* Path (readable): %s\n"%str(self.toLogRouterNames(shortest_congestion_free_path)))
             log.info("\t\t* Path (ips): %s\n"%str(shortest_congestion_free_path))
-
-            #dtp = self.toLogDagNames(dag)
-            #t = time.strftime("%H:%M:%S", time.gmtime())
-            #log.info("%s - flowAllocationAlgorithm(): Initial DAG\n"%t)
-            #log.info("%s\n"%str(dtp.edges(data=True)))
 
             # Rename
             scfp = shortest_congestion_free_path
@@ -155,11 +186,6 @@ class SimplePathLB(LBController):
                 # Retrieve only the active edges to force fibbing
                 final_dag = self.getActiveDag(dst_prefix)
             
-                #dtp = self.toLogDagNames(final_dag)
-                #t = time.strftime("%H:%M:%S", time.gmtime())
-                #log.info("%s - flowAllocationAlgorithm(): Final DAG\n"%t)
-                #log.info("%s\n"%str(dtp.edges(data=True)))
-
                 # Force DAG for dst_prefix
                 self.sbmanager.add_dag_requirement(dst_prefix, final_dag)
             
