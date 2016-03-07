@@ -114,7 +114,7 @@ class SimplePathLB(LBController):
                     max_prefix_len = (ip, prefix_len)
 
         # Return the subnet that includes the ip of the new flow!
-        subnets = dst_network.subnets(max_prefix=max_prefix_len)
+        subnets = list(dst_network.subnets(new_prefix=max_prefix_len[1]))
         action = [subnet for subnet in subnets if dst_ip in subnet]
         if len(action) == 1:
             return action[0]

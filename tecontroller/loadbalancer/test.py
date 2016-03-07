@@ -25,14 +25,42 @@ s3 = lbc.getSubnetFromHostName('s3')
 s4 = lbc.getSubnetFromHostName('s4')
 s5 = lbc.getSubnetFromHostName('s5')
 
-d1 = lbc.getSubnetFromHostName('d1')
-d2 = lbc.getSubnetFromHostName('d2')
-d3 = lbc.getSubnetFromHostName('d3')
-d4 = lbc.getSubnetFromHostName('d4')
+d1 = lbc.hosts_to_ip['d1']['iface_host']
+d2 = lbc.hosts_to_ip['d2']['iface_host']
+d3 = lbc.hosts_to_ip['d3']['iface_host']
+t1 = lbc.hosts_to_ip['t1']['iface_host']
+t2 = lbc.hosts_to_ip['t2']['iface_host']
+t3 = lbc.hosts_to_ip['t3']['iface_host']
+x1 = lbc.hosts_to_ip['x1']['iface_host']
+x2 = lbc.hosts_to_ip['x2']['iface_host']
+x3 = lbc.hosts_to_ip['x3']['iface_host']
+y1 = lbc.hosts_to_ip['y1']['iface_host']
+y2 = lbc.hosts_to_ip['y2']['iface_host']
+y3 = lbc.hosts_to_ip['y3']['iface_host']
+
+
+"""
+# LONGER PREFIX TEST
+
+# Create traffic to x1 first (tgcommander)
+
+# Test destination
+dst_prefix = lbc.getCurrentOSPFPrefix(x1)
 
 # Create DAG
 dag = nx.DiGraph()
 dag.add_edges_from([(r1,r4),(r4,r3),(r2,r3)])
+
+# Fib it
+lbc.sbmanager.add_dag_requirement(dst_prefix.compressed, dag)
+
+x2_ip = ip.ip_interface(x2).ip
+
+dst_prefix = lbc.getCurrentOSPFPrefix(x2)
+
+lbc.getNextNonCollidingPrefix(x2_ip, dst_prefix, [[r1,r2,r3]])
+
+
 
 
 dst_iface = d1
@@ -50,7 +78,7 @@ lbc.flow_allocation[dst_nw.compressed]={f1:[[r1,r4,r3]], f2:[[r2,r3]]}
 dst_ip = ip.ip_address('192.168.255.221')
 
 
-"""
+
 
 
 
