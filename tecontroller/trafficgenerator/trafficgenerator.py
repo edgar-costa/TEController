@@ -55,10 +55,8 @@ class TrafficGenerator(Base):
         if hostname not in self.db.network.keys():
             return None
         else:
-            routers = [r for r in self.db.network.keys() if 'r' in r]
-            ip = [self.db.interface(hostname, r) for r in routers if r
-                  in self.db.network[hostname].keys()]
-            return str(ip[0])    
+            ip = [v['ip'] for k, v in self.db.network[hostname].iteritems() if isinstance(v, dict)][0]
+            return ip
 
     def informLBController(self, flow):
         """Part of the code that deals with the JSON interface to inform to
@@ -228,8 +226,10 @@ if __name__ == '__main__':
 
     # Go start the JSON API server and listen for commands
     app = create_app(app, tg)
-    app.run(host=MyOwnIp)
-
+    try:
+        app.run(host=MyOwnIp)
+    except Exception:
+        import ipdb; ipdb.set_trace() #TRACEE 
 
 
     
