@@ -91,7 +91,7 @@ class SimplePathLB(LBController):
         ips = []
         for (flow, fpl) in allocated_flows:
             edges_flow = set(self.getEdgesFromPathList(fpl))
-            edges_flow_r = self.getReversedEdges(edges_flow)
+            edges_flow_r = self.getReversedEdgesSet(edges_flow)
             if edges_flow.intersection(edges_new_pl) != set() or edges_flow_r.intersection(edges_new_pl) != set():
                 ips.append(flow['dst'].ip)
             

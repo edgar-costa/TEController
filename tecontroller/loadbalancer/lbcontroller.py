@@ -356,13 +356,6 @@ class LBController(DatabaseHandler):
         self.dags[dst] = dag
         
         
-    def getDefaultDag(self, dst):
-        currentDag = getCurrentDag(dst)
-        ddag = nx.DiGraph()
-        for (u,v,data) in currentDag.edges(data=True):
-            if data['fibbed'] = False:
-                
-
     def getActiveEdges(self, dag, node):
         activeEdges = []
         for n, data in dag[node].iteritems():
@@ -941,11 +934,6 @@ class LBController(DatabaseHandler):
                     to_print = "%s - removePrefixLies(): removed lies for prefix: %s\n"
                     log.info(to_print%(t, self._db_getNameFromIP(prefix)))
                     log.info("\tLSAs: %s\n"%(str(lsa)))
-        else:
-            # Prefix not fibbed
-            t = time.strftime("%H:%M:%S", time.gmtime())
-            to_print = "%s - removePrefixLies(): no lies for prefix: %s\n"
-            log.info(to_print%(t, self._db_getNameFromIP(prefix)))
 
         log.info("******************************\n")
         # Log it
