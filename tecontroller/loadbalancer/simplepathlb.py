@@ -196,13 +196,14 @@ class SimplePathLB(LBController):
         required_size = flow['size']
         tmp_nw = self.getNetworkWithoutFullEdges(self.initial_graph, required_size)
 
+        # Try if new congestion-free path found
         try:
             # Calculate new default dijkstra path
             shortest_congestion_free_path = self.getDefaultDijkstraPath(tmp_nw, flow)
 
-            # Remove the destination subnet node from the path
+            # Remove the destination subnet hop node from the path
             shortest_congestion_free_path = shortest_congestion_free_path[:-1]
-            
+
         except nx.NetworkXNoPath:
             # There is no congestion-free path to allocate flow to dst_prefix
             t = time.strftime("%H:%M:%S", time.gmtime())
@@ -216,6 +217,8 @@ class SimplePathLB(LBController):
             log.info("\t* Paths (%s): %s\n"%(len(path_list), str([self.toLogRouterNames(path) for path in initial_paths])))
             # Here, we should try to re-arrange flows in a way that
             # all of them can be allocated.
+
+            # Or maybe take 
             pass
         
         else:
@@ -227,78 +230,68 @@ class SimplePathLB(LBController):
             # Rename
             scfp = shortest_congestion_free_path
 
-            # While no path found that does not collide with already
-            # ongoing flows for same destination
-            if not self.longerPrefixNeeded(dst_prefix, initial_paths, [scfp]):
+            # Will be overwritten if longer prefix is needed
+            new_dst_prefix = dst_prefix
+
+            # Check if longer prefix needed
+            if self.longerPrefixNeeded(dst_prefix, initial_paths, [scfp]):
+                
                 # Get destination host ip
                 dst_ip = flow['dst'].ip
 
                 # Get next non-colliding (with ongoing flows) prefix
                 new_dst_network = self.getNextNonCollidingPrefix(dst_ip, dst_network, [scfp])
+                if new_dst_network == None:
+                    # If there are no more specific prefixes... we are
+                    # fucked! ECMP part of the algorithm must be
+                    # activated
+                    raise KeyError("We must deal with that")
+
+                # Extract the prefix string
                 new_dst_prefix = new_dst_network.compressed
 
-                # Fib new found path with new found destination prefix
-                #self.sbmanager.add_dag_requirement()
-                
-                pass
+                # Get initial DAG from previously existing parent-prefix
+                new_dst_dag = self.getInitialDag(dst_prefix)
 
-        
-            
+                # Set it to the new found prefix
+                self.setCurrentDag(new_dst_prefix, new_dst_dag)
                 
-
+            # Modify destination DAG
+            dag = self.getCurrentDag(new_dst_prefix)
                 
-                # Modify destination DAG
-                dag = self.getCurrentDag(dst_prefix)
+            # Get edges of new found path
+            new_path_edges = set(zip(scfp[:-1], scfp[1:]))
                 
-                # Get edges of new found path
-                new_path_edges = set(zip(scfp[:-1], scfp[1:]))
-                
-                # Deactivate old edges from initial path nodes (won't
-                # be used anymore)
-                for node in scfp:
-                    # Get active edges of node
-                    active_edges = self.getActiveEdges(dag, node)
-                    for a_e in active_edges:
-                        if a_e not in new_path_edges:
-                            dag = self.switchDagEdgesData(dag, [(a_e)], active=False)
+            # Deactivate old edges from initial path nodes (won't
+            # be used anymore)
+            for node in scfp:
+                # Get active edges of node
+                active_edges = self.getActiveEdges(dag, node)
+                for a_e in active_edges:
+                    if a_e not in new_path_edges:
+                        dag = self.switchDagEdgesData(dag, [(a_e)], active=False)
                             
+            # Add new edges from new computed path
+            dag = self.switchDagEdgesData(dag, [scfp], active=True)
+            
+            # This complete DAG goes to the prefix-dag data attribute
+            self.setCurrentDag(new_dst_prefix, dag)
                 
-                # Add new edges from new computed path
-                dag = self.switchDagEdgesData(dag, [scfp], active=True)
+            # Retrieve only the active edges to force fibbing
+            final_dag = self.getActiveDag(new_dst_prefix)
             
-                # This complete DAG goes to the prefix-dag data attribute
-                self.setCurrentDag(dst_prefix, dag)
-                
-                # Retrieve only the active edges to force fibbing
-                final_dag = self.getActiveDag(dst_prefix)
+            # Force DAG for dst_prefix
+            self.sbmanager.add_dag_requirement(new_dst_prefix, final_dag)
             
-                # Force DAG for dst_prefix
-                self.sbmanager.add_dag_requirement(dst_prefix, final_dag)
-            
-                # Allocate flow to Path. It HAS TO BE DONE after changing the DAG...
-                self.addAllocationEntry(dst_prefix, flow, [shortest_congestion_free_path])
+            # Allocate flow to Path. It HAS TO BE DONE after changing the DAG...
+            self.addAllocationEntry(new_dst_prefix, flow, [scfp])
 
-                # Log 
-                t = time.strftime("%H:%M:%S", time.gmtime())
-                to_print = "%s - flowAllocationAlgorithm(): "
-                to_print += "Forced forwarding DAG in Southbound Manager\n"
-                log.info(to_print%t)
+            # Log 
+            t = time.strftime("%H:%M:%S", time.gmtime())
+            to_print = "%s - flowAllocationAlgorithm(): "
+            to_print += "Forced forwarding DAG in Southbound Manager\n"
+            log.info(to_print%t)
                 
-            else:
-                # We should get a longer prefix for the current flow
-                # that the one advertised in the routers. And then
-                # calculate allocation again for that more specific
-                # prefix.
-
-                # We should be aware that that new prefix may include
-                # also previously allocated flows
-                t = time.strftime("%H:%M:%S", time.gmtime())
-                to_print = "%s - flowAllocationAlgorithm(): "
-                to_print += "Longer Prefix FIBBING needed\n"
-                log.info(to_print%t)
-                log.info("\t Doing nothing for the moment...\n")
-                pass
-                        
         # Do this allways
         elapsed_time = time.time() - start_time
         t = time.strftime("%H:%M:%S", time.gmtime())

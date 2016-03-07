@@ -1,3 +1,4 @@
+import ipaddress as ip
 import networkx as nx
 from tecontroller.res.flow import Flow
 from tecontroller.loadbalancer.simplepathlb import SimplePathLB
@@ -29,7 +30,30 @@ d2 = lbc.getSubnetFromHostName('d2')
 d3 = lbc.getSubnetFromHostName('d3')
 d4 = lbc.getSubnetFromHostName('d4')
 
+# Create DAG
+dag = nx.DiGraph()
+dag.add_edges_from([(r1,r4),(r4,r3),(r2,r3)])
+
+
+dst_iface = d1
+dst_iface = ip.ip_interface(dst_iface)
+dst_ip = dst_iface.ip
+dst_nw = dst_iface.network
+current_nw_prefix = lbc.getCurrentOSPFPrefix(dst_iface)
+
+# Add some ongoing flows
+f1 = Flow(src=s1, dst=d1)
+f2 = Flow(src=s3, dst=d1)
+
+lbc.flow_allocation[dst_nw.compressed]={f1:[[r1,r4,r3]], f2:[[r2,r3]]}
+
+dst_ip = ip.ip_address('192.168.255.221')
+
+
 """
+
+
+
 ## DO FOR ALL TESTS ##############################################################
 # Get the event from the queue
 event = lbc.eventQueue.get()

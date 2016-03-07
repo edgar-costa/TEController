@@ -319,7 +319,6 @@ class LBController(DatabaseHandler):
                 values.values()][0]
         return name
     
-    
     def getEdgeBw(self, x, y):
         """
         Returns the total bandwidth of the network edge between x and y
@@ -348,6 +347,18 @@ class LBController(DatabaseHandler):
         """
         return self.dags[dst].copy()
 
+    def getInitialDag(self, dst):
+        currentDag = self.getCurrentDag(dst)
+        initialDag = currentDag.copy()
+        
+        # set fibbed edges to notactive and default-ones to active
+        for (u, v, data) in currentDag.edges(data=True):
+            if data['fibbed'] == True:
+                initialDag.get_edge_data(u,v)['active'] = False
+            else:
+                initialDag.get_edge_data(u,v)['active'] = True
+        return initialDag
+        
     
     def setCurrentDag(self, dst, dag):
         """
@@ -373,9 +384,10 @@ class LBController(DatabaseHandler):
                 fibbedEdges.append((node, n))
         return fibbedEdges
 
+    
     def getDefaultEdges(self, dag, node):
-        """Returns the defaul OSPF-created DAG for a given destination node.
-        """
+        """Returns the list of edges from node that are used by default in
+        OSPF"""
         defaultEdges = []
         for n, data in dag[node].iteritems():
             if data['fibbed'] == False:
@@ -419,8 +431,7 @@ class LBController(DatabaseHandler):
                     edge_data[key] = value
 
         # Return modified dag when finished
-        return dag            
-
+        return dag
 
     def getActiveDag(self, dst):
         """Returns the DAG being currently deployed in practice for the given
@@ -431,8 +442,6 @@ class LBController(DatabaseHandler):
         action = [active_dag.remove_edge(u,v) for (u,v, data) in
                   active_dag.edges(data=True) if data['active'] == False]
         return active_dag
-
-
     
     def getActivePaths(self, src, dst):
         """Both src and dst must be strings representing subnet prefixes
