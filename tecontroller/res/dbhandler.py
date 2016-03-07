@@ -65,19 +65,38 @@ class DatabaseHandler(object):
         else:
             raise TypeError("Routers can't")
 
+    def _db_isSwitch(self, hostname):
+        return self.db.network[hostname]['type'] == 'switch'
+
+        
     def _db_getConnectedRouter(self, hostname):
         """Get connected router information from hostname given its name.
 
         """
         hostinfo = [values for name, values in
                     self.db.network.iteritems() if name == hostname
-                    and values['type'] != 'router'][0]
-        
+                    and values['type'] != 'router' and values['type'] != 'switch'][0]
+
         if hostinfo is not None:
             for key, val in hostinfo.iteritems():
                 if isinstance(val, dict) and 'ip' in val.keys():
-                    router_name = key
-                    router_id = self._db_getIPFromHostName(router_name)
+                    if self._db_isSwitch(key):
+                        # Parse all routers and check which of them
+                        # has key as a connection. Then retreive its
+                        # name and router id
+                        switch_name = key
+                        
+                        routers = [(name, values) for (name, values)
+                                   in self.db.network.iteritems() if
+                                   values['type'] == 'router']
+                        get_the_one = [(n, v[switch_name]['ip']) for (n, v) in routers if switch_name in v.keys()]
+                        if get_the_one:
+                            (router_name, _) = get_the_one[0]
+                            router_id = self.db.network[router_name]['routerid']
+                    else:
+                        router_name = key
+                        router_id = self._db_getIPFromHostName(router_name)
+
                     return router_name, router_id
 
 
