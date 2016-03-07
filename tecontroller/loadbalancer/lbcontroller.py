@@ -28,6 +28,7 @@ import abc
 import traceback
 import Queue
 import copy
+import sys
 
 HAS_INITIAL_GRAPH = threading.Event()
 
@@ -119,12 +120,15 @@ class LBController(DatabaseHandler):
         log.info("\tRouter name\tip\t\n")
         for name, ip in self.routers_to_ip.iteritems():
             log.info("\t%s\t%s\n"%(name, ip))
-            
+
+
         # Create here the initial DAGS
         self._createInitialDags()
         t = time.strftime("%H:%M:%S", time.gmtime())
         log.info("%s - Initial DAGS created\n"%t)
-        
+
+        #import ipdb; ipdb.set_trace()#TRACE
+
         #spawn Json listener thread
         jl = JsonListener(self.eventQueue)
         jl.start()
@@ -268,23 +272,23 @@ class LBController(DatabaseHandler):
     def _bwInAllRouterEdges(self, n_router_links):
         current_count = self._countWrittenBw()
         return current_count == n_router_links and current_count != 0
-   
+
     def _createHost2IPBindings(self):
         """Fills the dictionary self.hosts_to_ip with the corresponding
         name-ip pairs
         """
-        for node_ip in self.network_graph.nodes():
-            if not self.network_graph.is_controller(node_ip) and not self.network_graph.is_router(node_ip):
-                name = self._db_getNameFromIP(node_ip)
-                if name:
-                    ip_iface_host = self._db_getIPFromHostName(name)
-                    ip_iface_router = self._db_getSubnetFromHostName(name)
-                    router_name, router_id = self._db_getConnectedRouter(name) 
-                    self.hosts_to_ip[name] = {'iface_host': ip_iface_host,
-                                              'iface_router': ip_iface_router,
-                                              'router_name': router_name,
-                                              'router_id': router_id}
-
+        # Collect hosts only
+        hosts = [(name, data) for (name, data) in self.db.network.iteritems() if data['type'] == 'host']
+        for (name, data) in hosts:
+            node_ip = [v['ip'] for (k, v) in data.iteritems() if isinstance(v, dict)][0]
+            ip_iface_host = self._db_getIPFromHostName(name)
+            ip_iface_router = self._db_getSubnetFromHostName(name)
+            router_name, router_id = self._db_getConnectedRouter(name) 
+            self.hosts_to_ip[name] = {'iface_host': ip_iface_host,
+                                      'iface_router': ip_iface_router,
+                                      'router_name': router_name,
+                                      'router_id': router_id}
+                        
     def _createRouter2IPBindings(self):
         """Fills the dictionary self.routers_to_ip with the corresponding
         name-ip pairs
@@ -465,7 +469,9 @@ class LBController(DatabaseHandler):
         """Populates the self.dags attribute by creating a complete DAG for
         each destination.
         """
+    
         apdp = nx.all_pairs_dijkstra_path(self.initial_graph, weight='metric')
+
         for hostname, values in self.hosts_to_ip.iteritems():
             dag = nx.DiGraph()
             # Get IP of the connected router
@@ -482,7 +488,7 @@ class LBController(DatabaseHandler):
                 # Are there possibly more paths with the same cost? Let's check:
                 # Get length of the default dijkstra shortest path
                 dlength = self.getPathLength(dpath+[subnet_prefix])
-        
+
                 # Get all paths with length equal to the defaul path length
                 default_paths = self._getAllPathsLim(self.initial_graph, r, subnet_prefix, dlength)
                 
