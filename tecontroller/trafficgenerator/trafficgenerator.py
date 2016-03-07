@@ -196,14 +196,12 @@ def trafficGeneratorCommandListener():
         log.info(traceback.format_exc())
 
 
-
 if __name__ == '__main__':
+    # Wait for the network to be created correcly: IP's assigned, etc.
+    time.sleep(dconf.TG_InitialWaitingTime+10)
 
     # Start the traffic generator object
     tg = TrafficGenerator()
-
-    # Wait for the network to be created correcly: IP's assigned, etc.
-    time.sleep(dconf.TG_InitialWaitingTime)
     
     # Get Traffic Generator hosts's IP.
     MyOwnIp = tg.getHostIPByName(dconf.TG_Hostname).split('/')[0]
@@ -226,10 +224,11 @@ if __name__ == '__main__':
 
     # Go start the JSON API server and listen for commands
     app = create_app(app, tg)
-    try:
-        app.run(host=MyOwnIp)
-    except Exception:
-        import ipdb; ipdb.set_trace() #TRACEE 
+    app.run(host=MyOwnIp)
+
+
+
+
 
 
     
