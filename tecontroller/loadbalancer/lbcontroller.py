@@ -99,6 +99,7 @@ class LBController(DatabaseHandler):
         i = 0
         while not self._bwInAllRouterEdges(n_router_links):
             i += 1
+            time.sleep(1)
             self._readBwDataFromDB()            
         t = time.strftime("%H:%M:%S", time.gmtime())
         log.info("%s - Bandwidths written in network_graph after %d iterations\n"%(t,i))
@@ -240,7 +241,7 @@ class LBController(DatabaseHandler):
                     data['capacity'] = int(bw*1e6)
             else:
                 t = time.strftime("%H:%M:%S", time.gmtime())
-                log.info("%s - _readBwDataFromDB(): ERROR: did not find xname and yname"%t)
+                log.info("%s - _readBwDataFromDB(): ERROR: did not find xname and yname\n"%t)
 
                 
     def _countRouter2RouterEdges(self):
@@ -280,19 +281,15 @@ class LBController(DatabaseHandler):
         # Collect hosts only
         hosts = [(name, data) for (name, data) in self.db.network.iteritems() if data['type'] == 'host']
         for (name, data) in hosts:
-            try:
-                node_ip = [v['ip'] for (k, v) in data.iteritems() if isinstance(v, dict)][0]
-                ip_iface_host = self._db_getIPFromHostName(name)
-                ip_iface_router = self._db_getSubnetFromHostName(name)
-                router_name, router_id = self._db_getConnectedRouter(name) 
-                self.hosts_to_ip[name] = {'iface_host': ip_iface_host,
-                                          'iface_router': ip_iface_router,
-                                          'router_name': router_name,
-                                          'router_id': router_id}
-            except Exception:
-                log.info(str(traceback.print_exc(file=sys.stdout)))
-                import ipdb; ipdb.set_trace()
-
+            node_ip = [v['ip'] for (k, v) in data.iteritems() if isinstance(v, dict)][0]
+            ip_iface_host = self._db_getIPFromHostName(name)
+            ip_iface_router = self._db_getSubnetFromHostName(name)
+            router_name, router_id = self._db_getConnectedRouter(name) 
+            self.hosts_to_ip[name] = {'iface_host': ip_iface_host,
+                                      'iface_router': ip_iface_router,
+                                      'router_name': router_name,
+                                      'router_id': router_id}
+            
                 
     def _createRouter2IPBindings(self):
         """Fills the dictionary self.routers_to_ip with the corresponding
@@ -452,24 +449,35 @@ class LBController(DatabaseHandler):
                   active_dag.edges(data=True) if data['active'] == False]
         return active_dag
     
-    def getActivePaths(self, src, dst):
-        """Both src and dst must be strings representing subnet prefixes
+    def getActivePaths(self, src_iface, dst_iface, dst_prefix):
+        """Returns the current active path between two host interface ips and
+        the destination prefix for which we want to retrieve the
+        current active path.
         """
         # Get current active DAG for that destination
-        active_dag = self.getActiveDag(dst)
+        active_dag = self.getActiveDag(dst_prefix)
         
-        # Get hostnames
-        src_hostname = self._db_getNameFromIP(src)
-        dst_hostname = self._db_getNameFromIP(dst)
+        # Get hostnames and attached routers
+        src_hostname = [(n, v['router_name'], v['router_id']) for (n, v)
+                        in self.hosts_to_ip.iteritems() if v['iface_host'] == src_iface]
 
-        # Get attached routers
-        (src_rname, src_rid) = self._db_getConnectedRouter(src_hostname)
-        (dst_rname, dst_rid) = self._db_getConnectedRouter(dst_hostname)
+        dst_hostname = [(n, v['router_name'], v['router_id']) for (n, v)
+                        in self.hosts_to_ip.iteritems() if v['iface_host'] == dst_iface]
 
-        # Calculate path and return it
-        active_paths = self._getAllPathsLimDAG(active_dag, src_rid, dst_rid, 0)
-        return active_paths    
-    
+        if src_hostname != [] and dst_hostname != []:
+            (src_hostname, src_rname, src_rid) = src_hostname[0]
+            (dst_hostname, dst_rname, dst_rid) = dst_hostname[0]
+
+            # Calculate path and return it
+            active_paths = self._getAllPathsLimDAG(active_dag, src_rid, dst_rid, 0)
+            return active_paths
+        else:
+            t = time.strftime("%H:%M:%S", time.gmtime())
+            to_print = "%s - getActivePaths(): No paths could be found between %s and %s for subnet prefix %s\n"
+            log.info(to_print%(src_iface, dst_iface, dst_prefix))
+            return [[]]
+
+        
     def _createInitialDags(self):
         """Populates the self.dags attribute by creating a complete DAG for
         each destination.
