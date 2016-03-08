@@ -74,13 +74,13 @@ class DatabaseHandler(object):
         
     def _db_getConnectedRouter(self, hostname):
         """Get connected router information from hostname given its name.
-
         """
         hostinfo = [values for name, values in
                     self.db.network.iteritems() if name == hostname
-                    and values['type'] != 'router' and values['type'] != 'switch'][0]
+                    and values['type'] != 'router' and values['type'] != 'switch']
 
-        if hostinfo is not None:
+        if hostinfo != []:
+            hostinfo = hostinfo[0]
             for key, val in hostinfo.iteritems():
                 if isinstance(val, dict) and 'ip' in val.keys():
                     if self._db_isSwitch(key):
