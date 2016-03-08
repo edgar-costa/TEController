@@ -875,7 +875,7 @@ class LBController(DatabaseHandler):
                         current_dag = self.switchDagEdgesData(current_dag, fibbed_edges, active=False)
 
                 # Set current Dag
-                self.setCurrentDag(current_dag)
+                self.setCurrentDag(prefix, current_dag)
                 
                 # Get the active Dag
                 activeDag = self.getActiveDag(prefix)
@@ -941,7 +941,7 @@ class LBController(DatabaseHandler):
                             fibbed_edges = self.getFibbedEdges(current_dag, node)
                             current_dag = self.switchDagEdgesData(current_dag, fibbed_edges, active=False)
 
-                    self.setCurrentDag(current_dag)
+                    self.setCurrentDag(prefix, current_dag)
                 
                     # Get the active Dag
                     activeDag = self.getActiveDag(prefix)
