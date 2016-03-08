@@ -32,7 +32,7 @@ class DatabaseHandler(object):
                     for key, val in values.iteritems():    
                         if isinstance(val, dict):
                             ip_iface2 = ipaddress.ip_interface(val['ip'])
-                            if ip_iface.network == ip_iface2.network:
+                            if ip_iface.ip == ip_iface2.ip:
                                 return name
                 else:
                     return None
