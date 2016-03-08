@@ -28,13 +28,15 @@ class DatabaseHandler(object):
                            # weird C_0
             ip_iface = ipaddress.ip_interface(x)
             for name, values in self.db.network.iteritems():
-                if values['type'] != 'router':
+                if values['type'] != 'router' and values['type'] != 'switch':
                     for key, val in values.iteritems():    
                         if isinstance(val, dict):
                             ip_iface2 = ipaddress.ip_interface(val['ip'])
                             if ip_iface.network == ip_iface2.network:
                                 return name
-
+                else:
+                    return None
+                            
     def _db_getIPFromHostName(self, hostname):
         """Given the hostname of the host/host subnet, it returns the ip address
         of the interface in the hosts side. It is obtained from TopoDB
@@ -44,10 +46,11 @@ class DatabaseHandler(object):
         values = self.db.network[hostname]
         if values['type'] == 'router':
             return ipaddress.ip_address(values['routerid']).compressed
+        elif values['type'] == 'host':
+            ip = [v['ip'] for v in values.values() if isinstance(v, dict)][0]
+            return ip
         else:
-            ip = [ipaddress.ip_interface(v['ip']) for v in
-                  values.values() if isinstance(v, dict)][0]
-            return ip.compressed
+            return None
         
     def _db_getSubnetFromHostName(self, hostname):
         """Given the hostname of a host (e.g 's1'), returns the subnet address
