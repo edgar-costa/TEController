@@ -114,7 +114,7 @@ class SimplePathLB(LBController):
                 if prefix_len > max_prefix_len[1]:
                     max_prefix_len = (ip, prefix_len)
 
-        log.info("New prefix len found: /%s to ip: %s"%(max_prefix_len[1], str(max_prefix_len[0])))
+        log.info("New prefix len found: /%s to ip: %s\n"%(max_prefix_len[1], str(max_prefix_len[0])))
         if max_prefix_len[0] != None:
             # Return the subnet that includes the ip of the new flow!
             subnets = list(previous_dst_network.subnets(new_prefix=max_prefix_len[1]))
@@ -147,16 +147,24 @@ class SimplePathLB(LBController):
         # In general, this won't be True that often...
         ecmp = False
         
-        # Get the flow prefixes
-        src_prefix = flow['src'].network.compressed
-        dst_ip = flow['dst'].ip
-        
-        # Get destination longest advertized prefix
-        dst_network = self.getCurrentOSPFPrefix(flow['dst'])
+        # Get the communicating interfaces
+        src_iface = flow['src']
+        dst_iface = flow['dst']
+
+        # Get host ip's
+        src_ip = src_iface.ip
+        dst_ip = dst_iface.ip
+
+        # Get their correspoding networks
+        src_network = src_iface.network
+        dst_network = self.getCurrentOSPFPrefix(dst_iface.compressed)
+
+        # Get the string-type prefixes        
+        src_prefix = src_network.compressed
         dst_prefix = dst_network.compressed
-        
+
         # Get the current path from source to destination
-        currentPaths = self.getActivePaths(src_prefix, dst_prefix)
+        currentPaths = self.getActivePaths(src_iface.compressed, dst_iface.compressed, dst_prefix)
 
         t = time.strftime("%H:%M:%S", time.gmtime())
         to_print = "%s - dealWithNewFlow(): Current paths for flow: %s\n"
@@ -223,8 +231,6 @@ class SimplePathLB(LBController):
             log.info("\t* Paths (%s): %s\n"%(len(path_list), str([self.toLogRouterNames(path) for path in initial_paths])))
             # Here, we should try to re-arrange flows in a way that
             # all of them can be allocated.
-
-            # Or maybe take 
             pass
         
         else:
@@ -242,6 +248,11 @@ class SimplePathLB(LBController):
             # Check if longer prefix needed
             if self.longerPrefixNeeded(dst_prefix, initial_paths, [scfp]):
                 
+                # Log it first
+                t = time.strftime("%H:%M:%S", time.gmtime())
+                to_print = "%s - flowAllocationAlgorithm(): longer prefix fibbing needed\n"
+                log.info(to_print%t)
+
                 # Get destination host ip
                 dst_ip = flow['dst'].ip
                 # Create network object from dst_prefix
@@ -249,6 +260,7 @@ class SimplePathLB(LBController):
                 
                 # Get next non-colliding (with ongoing flows) prefix
                 new_dst_network = self.getNextNonCollidingPrefix(dst_ip, dst_network, [scfp])
+
                 if new_dst_network == None:
                     # If there are no more specific prefixes... we are
                     # fucked! ECMP part of the algorithm must be
@@ -258,11 +270,26 @@ class SimplePathLB(LBController):
                 # Extract the prefix string
                 new_dst_prefix = new_dst_network.compressed
 
+                # Log it
+                log.info("\t* New longer prefix found: %s\n"%new_dst_prefix)
+
                 # Get initial DAG from previously existing parent-prefix
                 new_dst_dag = self.getInitialDag(dst_prefix)
 
+                # Log it
+                dtp = self.toLogDagNames(new_dst_dag)
+                t = time.strftime("%H:%M:%S", time.gmtime())
+                log.info("\* Initial dag for new prefix:\n"%t)
+                log.info("\t\t%s\n\n"%str(dtp.edges(data=True)))
+                
                 # Set it to the new found prefix
                 self.setCurrentDag(new_dst_prefix, new_dst_dag)
+
+            else:
+                # Log it first
+                t = time.strftime("%H:%M:%S", time.gmtime())
+                to_print = "%s - flowAllocationAlgorithm(): longer prefix NOT needed\n"
+                log.info(to_print%t)
                 
             # Modify destination DAG
             dag = self.getCurrentDag(new_dst_prefix)
@@ -287,6 +314,12 @@ class SimplePathLB(LBController):
                 
             # Retrieve only the active edges to force fibbing
             final_dag = self.getActiveDag(new_dst_prefix)
+
+            # Log it
+            dtp = self.toLogDagNames(final_dag)
+            t = time.strftime("%H:%M:%S", time.gmtime())
+            log.info("\* Final modified dag for new prefix: the one with which we fib the prefix\n"%t)
+            log.info("\t\t%s\n\n"%str(dtp.edges(data=True)))
             
             # Force DAG for dst_prefix
             self.sbmanager.add_dag_requirement(new_dst_prefix, final_dag)
