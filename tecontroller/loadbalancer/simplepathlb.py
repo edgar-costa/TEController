@@ -72,15 +72,15 @@ class SimplePathLB(LBController):
         reversed_set = set()
         while edges_set != set():
             (u,v) = edges_set.pop()
-            reversed_set.update((v,u))
+            reversed_set.update({(v,u)})
 
         return reversed_set
 
-    def getNextNonCollidingPrefix(self, dst_ip, dst_network, new_path_list):
+    def getNextNonCollidingPrefix(self, dst_ip, previous_dst_network, new_path_list):
         """
         """
         # get allocated flows for network_object prefix
-        dst_prefix = dst_network.compressed
+        dst_prefix = previous_dst_network.compressed
         allocated_flows = self.getAllocatedFlows(dst_prefix)   
 
         # Calculate which of them are colliding with our new path
@@ -90,9 +90,10 @@ class SimplePathLB(LBController):
         # with our path
         ips = []
         for (flow, fpl) in allocated_flows:
-            edges_flow = set(self.getEdgesFromPathList(fpl))
-            edges_flow_r = self.getReversedEdgesSet(edges_flow)
-            if edges_flow.intersection(edges_new_pl) != set() or edges_flow_r.intersection(edges_new_pl) != set():
+            edges_flow = self.getEdgesFromPathList(fpl)
+            edges_flow = set(edges_flow)
+            edges_flow_r = self.getReversedEdgesSet(edges_flow.copy())
+            if edges_flow.intersection(edges_new_pl) == set() and edges_flow_r.intersection(edges_new_pl) == set():
                 ips.append(flow['dst'].ip)
             
         # Find the shortest longer prefix that does not collide with flows
@@ -113,13 +114,18 @@ class SimplePathLB(LBController):
                 if prefix_len > max_prefix_len[1]:
                     max_prefix_len = (ip, prefix_len)
 
-        # Return the subnet that includes the ip of the new flow!
-        subnets = list(dst_network.subnets(new_prefix=max_prefix_len[1]))
-        action = [subnet for subnet in subnets if dst_ip in subnet]
-        if len(action) == 1:
-            return action[0]
+        log.info("New prefix len found: /%s to ip: %s"%(max_prefix_len[1], str(max_prefix_len[0])))
+        if max_prefix_len[0] != None:
+            # Return the subnet that includes the ip of the new flow!
+            subnets = list(previous_dst_network.subnets(new_prefix=max_prefix_len[1]))
+            action = [subnet for subnet in subnets if dst_ip in subnet]
+            if len(action) == 1:
+                return action[0]
+            else:
+                log.info("No subnet could be found\n")
+                return None
         else:
-            raise KeyError("No subnet could be found")
+            return None
 
         
     def getNextLongerPrefix(self, interface_ip, network_object):
@@ -238,7 +244,9 @@ class SimplePathLB(LBController):
                 
                 # Get destination host ip
                 dst_ip = flow['dst'].ip
-
+                # Create network object from dst_prefix
+                dst_network = ipaddress.ip_network(dst_prefix)
+                
                 # Get next non-colliding (with ongoing flows) prefix
                 new_dst_network = self.getNextNonCollidingPrefix(dst_ip, dst_network, [scfp])
                 if new_dst_network == None:
@@ -327,7 +335,7 @@ class SimplePathLB(LBController):
         for path in initial_paths:
             edges_initial_paths.update(edges_initial_paths.union(zip(path[:-1], path[1:])))
 
-        if edges_initial_paths.intersection(ongoing_flow_edges) != set():
+        if edges_initial_paths.intersection(ongoing_flows_edges) != set():
             # Longer prefix fibbing is needed
             return True
         else:

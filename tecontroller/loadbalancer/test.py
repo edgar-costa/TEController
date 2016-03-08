@@ -40,25 +40,49 @@ y3 = lbc.hosts_to_ip['y3']['iface_host']
 
 
 """
-# LONGER PREFIX TEST
-
+# LONGER PREFIX TEST ####################################
 # Create traffic to x1 first (tgcommander)
 
-# Test destination
-dst_prefix = lbc.getCurrentOSPFPrefix(x1)
+# Get the event from the queue
+event = lbc.eventQueue.get()
+print "Event Collected!"
 
-# Create DAG
+# Retrieve flow
+flow = event['data']
+
+# Get current advertised prefix for flow
+current_prefix = lbc.getCurrentOSPFPrefix(flow['dst'].compressed)
+
+# Defaut path (hardcoded) as if it was fibbed
+# we make it collide with flow to x2
+path_list = [[r1,r4,r3]]
+
+# Add it in the allocation table
+lbc.flow_allocation[current_prefix.compressed] = {}
+lbc.flow_allocation[current_prefix.compressed][flow] = path_list
+
+# Test destination
+x2_dd = lbc.getCurrentOSPFPrefix(x2)
+x2_ip = ip.ip_interface(x2).ip
+new_path_list = [[r1,r2,r3]]
+
+# Create DAG for x2
 dag = nx.DiGraph()
-dag.add_edges_from([(r1,r4),(r4,r3),(r2,r3)])
+dag.add_edges_from([(r1,r2),(r2,r3),(r4,r3)])
+
+# Get the longer prefix
+newLongerPrefix = lbc.getNextNonCollidingPrefix(x2_ip, x2_dd, [[r1,r2,r3]])
+if newLongerPrefix == None:
+    print "Error"
+
 
 # Fib it
-lbc.sbmanager.add_dag_requirement(dst_prefix.compressed, dag)
+lbc.sbmanager.add_dag_requirement(newLongerPrefix.compressed, dag)
 
-x2_ip = ip.ip_interface(x2).ip
+# Then start new flow towards x2 to see if it worked
 
-dst_prefix = lbc.getCurrentOSPFPrefix(x2)
 
-lbc.getNextNonCollidingPrefix(x2_ip, dst_prefix, [[r1,r2,r3]])
+##############################################
 
 
 
