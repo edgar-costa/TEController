@@ -114,7 +114,10 @@ class SimplePathLB(LBController):
                 if prefix_len > max_prefix_len[1]:
                     max_prefix_len = (ip, prefix_len)
 
-        log.info("New prefix len found: /%s to ip: %s\n"%(max_prefix_len[1], str(max_prefix_len[0])))
+        # Log it
+        to_log = "New prefix len found: /%s to differenciate from other host %s\n"
+        log.info(to_log%(max_prefix_len[1], str(max_prefix_len[0])))
+        
         if max_prefix_len[0] != None:
             # Return the subnet that includes the ip of the new flow!
             subnets = list(previous_dst_network.subnets(new_prefix=max_prefix_len[1]))
@@ -236,8 +239,8 @@ class SimplePathLB(LBController):
         else:
             t = time.strftime("%H:%M:%S", time.gmtime())
             log.info("%s - flowAllocationAlgorithm(): Found path that can allocate flow\n"%t)
-            log.info("\t\t* Path (readable): %s\n"%str(self.toLogRouterNames(shortest_congestion_free_path)))
-            log.info("\t\t* Path (ips): %s\n"%str(shortest_congestion_free_path))
+            log.info("\t* Path (readable): %s\n"%str(self.toLogRouterNames(shortest_congestion_free_path)))
+            log.info("\t* Path (ips): %s\n"%str(shortest_congestion_free_path))
 
             # Rename
             scfp = shortest_congestion_free_path
@@ -278,9 +281,8 @@ class SimplePathLB(LBController):
 
                 # Log it
                 dtp = self.toLogDagNames(new_dst_dag)
-                t = time.strftime("%H:%M:%S", time.gmtime())
-                log.info("\* Initial dag for new prefix:\n"%t)
-                log.info("\t\t%s\n\n"%str(dtp.edges(data=True)))
+                log.info("\t* Initial dag for new prefix:\n")
+                log.info("\n\t%s\n"%str(dtp.edges(data=True)))
                 
                 # Set it to the new found prefix
                 self.setCurrentDag(new_dst_prefix, new_dst_dag)
@@ -317,9 +319,8 @@ class SimplePathLB(LBController):
 
             # Log it
             dtp = self.toLogDagNames(final_dag)
-            t = time.strftime("%H:%M:%S", time.gmtime())
-            log.info("\* Final modified dag for new prefix: the one with which we fib the prefix\n"%t)
-            log.info("\t\t%s\n\n"%str(dtp.edges(data=True)))
+            log.info("\t* Final modified dag for new prefix: the one with which we fib the prefix\n")
+            log.info("\n\t%s\n"%str(dtp.edges(data=True)))
             
             # Force DAG for dst_prefix
             self.sbmanager.add_dag_requirement(new_dst_prefix, final_dag)
