@@ -27,13 +27,13 @@ class DatabaseHandler(object):
         elif 'C' not in x: # it means x is an interface ip and not the
                            # weird C_0
             ip_iface = ipaddress.ip_interface(x)
-            hosts = [(n,v) for n, v in self.db.network.iteritems() if values['type'] == 'host']
+            hosts = [(n,v) for n, v in self.db.network.iteritems() if v['type'] == 'host']
             for (n, v) in hosts:
                 for key, val in v.iteritems():    
                     if isinstance(val, dict):
                         ip_iface2 = ipaddress.ip_interface(val['ip'])
                         if ip_iface.ip == ip_iface2.ip:
-                            return name
+                            return n
         else:
             return None
                             
