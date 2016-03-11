@@ -248,15 +248,15 @@ if __name__ == '__main__':
     # Wait for the network to be created correcly: IP's assigned, etc.
     time.sleep(dconf.TG_InitialWaitingTime)
 
+    # Start the traffic generator object
+    tg = TrafficGenerator()
+    
     # Get Traffic Generator hosts's IP.
     MyOwnIp = tg.getHostIPByName(dconf.TG_Hostname).split('/')[0]
     t = time.strftime("%H:%M:%S", time.gmtime())
     log.info("%s - TRAFFIC GENERATOR - HOST %s\n"%(t, MyOwnIp))
     log.info("-"*60+"\n")
 
-    # Start the traffic generator object
-    tg = TrafficGenerator()
-    
     # Schedule flows from file
     flowfile = dconf.FlowFile
 
