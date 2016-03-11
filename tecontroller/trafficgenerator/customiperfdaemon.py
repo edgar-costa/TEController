@@ -35,22 +35,26 @@ def trafficGeneratorSlave():
     hosts.
 
     """
+
+    t = time.strftime("%H:%M:%S", time.gmtime())
+    log.info("%s - StartFlow command from Traffic Generator arrived\n"%t)
+    
     flow = flask.request.json
     aux = Base()
-    log.info("LOG: (Type) and Size of the flow: (%s) %s\n"%(str(type(flow['size'])), flow['size']))
     size = aux.setSizeToStr(flow['size'])
-    log.info("LOG: Size set to string: %s"%size)
+
+    # Log it
+    log.info("\t* Starting iperf client command...\n")
+    log.info("\t  - src: %s:%s\n"%(flow['src'], flow['sport']))                
+    log.info("\t  - dst: %s:%s\n"%(flow['src'], flow['dport']))
+    log.info("\t  - size: %s\n"%size)
+    log.info("\t  - duration: %s\n"%str(flow['duration']))
+
+    Popen(["iperf", "-c", flow['dst'], "-u",
+           "-b", size,
+           "-t", str(flow['duration']),
+           "-p", str(flow['dport'])])
     
-    try:
-        Popen(["iperf", "-c", flow['dst'], "-u",
-               "-b", size,
-               "-t", str(flow['duration']),
-               "-p", str(flow['dport'])])
-    except Exception, err:
-        print flow
-        print(traceback.format_exc())
-
-
 if __name__ == "__main__":
     #Waiting for the IP's to be assigned...
     time.sleep(dconf.Hosts_InitialWaitingTime)

@@ -30,6 +30,7 @@ import sched
 import json
 import copy
 import sys, traceback
+import ipaddress
 
 import flask
 app = flask.Flask(__name__)
@@ -47,8 +48,12 @@ class TrafficGenerator(Base):
         self.db = TopologyDB(db=dconf.DB_Path)
         
         #IP of the Load Balancer Controller host.
-        self._lbc_ip = self.getHostIPByName(dconf.LBC_Hostname).split('/')[0]
-
+        try:
+            self._lbc_ip = ipaddress.ip_interface(self.getHostIPByName(dconf.LBC_Hostname)).ip.compressed
+        except:
+            log.info("WARNING: Load balancer controller could not be found in the network\n")
+            self._lbc_ip = None
+            
     def getHostIPByName(self, hostname):
         """Searches in the topology database for the hostname's ip address.
         """
@@ -58,6 +63,7 @@ class TrafficGenerator(Base):
             ip = [v['ip'] for k, v in self.db.network[hostname].iteritems() if isinstance(v, dict)][0]
             return ip
 
+        
     def informLBController(self, flow):
         """Part of the code that deals with the JSON interface to inform to
         LBController a new flow created in the network.
@@ -65,8 +71,9 @@ class TrafficGenerator(Base):
         url = "http://%s:%s/newflowstarted" %(self._lbc_ip, dconf.LBC_JsonPort)
         t = time.strftime("%H:%M:%S", time.gmtime())
         log.info('%s - Informing LBController...\n'%t)
-        log.info('\t\t* Flow: %s\n'%str(flow))
-        log.info('\t\t* URL: %s\n'%url)
+        log.info('\t   * Flow: %s\n'%self.toLogFlowNames(flow))
+        log.info('\t   * URL: %s\n'%url)
+
         try:
             requests.post(url, json = flow.toJSON())
         except Exception:
@@ -75,6 +82,41 @@ class TrafficGenerator(Base):
             log.info('-'*60+'\n')
             log.info(traceback.print_exc())
             log.info('-'*60+'\n')            
+
+    def toLogFlowNames(self, flow):
+        a = "(%s -> %s): %s, t_o: %s, duration: %s" 
+        return a%(self.getNameFromIP(flow.src.compressed),
+                  self.getNameFromIP(flow.dst.compressed),
+                  flow.setSizeToStr(flow.size),
+                  flow.setTimeToStr(flow.start_time),
+                  flow.setTimeToStr(flow.duration))
+
+    def getNameFromIP(self, x):
+        """Returns the name of the host or the router given the ip of the
+        router or the ip of the router's interface towards that
+        subnet.
+        """
+        if x.find('/') == -1: # it means x is a router id
+            ip_router = ipaddress.ip_address(x)
+            name = [name for name, values in
+                    self.db.network.iteritems() if values['type'] ==
+                    'router' and
+                    ipaddress.ip_address(values['routerid']) ==
+                    ip_router][0]
+            return name
+        
+        elif 'C' not in x: # it means x is an interface ip and not the
+                           # weird C_0
+            ip_iface = ipaddress.ip_interface(x)
+            for name, values in self.db.network.iteritems():
+                if values['type'] != 'router' and values['type'] != 'switch':
+                    for key, val in values.iteritems():    
+                        if isinstance(val, dict):
+                            ip_iface2 = ipaddress.ip_interface(val['ip'])
+                            if ip_iface.ip == ip_iface2.ip:
+                                return name
+                else:
+                    return None
 
     def createFlow(self, flow):
         """Calls _createFlow in a different Thread (for efficiency)
@@ -88,24 +130,27 @@ class TrafficGenerator(Base):
         """
         # Sleep after it is your time to start
         time.sleep(flow['start_time'])
+
+        # Create new flow with hosts ip's instead of interfaces
+        # Iperf only understands ip's
+        flow2 = Flow(src = flow['src'].ip.compressed,
+                     dst = flow['dst'].ip.compressed,
+                     sport = flow['sport'],
+                     dport = flow['dport'],
+                     size = flow['size'],
+                     start_time = flow['start_time'],
+                     duration = flow['duration'])
         
-        # Remove the interface mask part from the addresses, because
-        # hosts only recognise their IP, not their interface ip.
-        flow_cpy = copy.deepcopy(flow)
-        flow_cpy['src'] = flow['src'].compressed.split('/')[0]
-        flow_cpy['dst'] = flow['dst'].compressed.split('/')[0]
-        
-        url = "http://%s:%s/startflow" %(flow_cpy['src'], dconf.Hosts_JsonPort)
+        url = "http://%s:%s/startflow" %(flow2['src'], dconf.Hosts_JsonPort)
 
         t = time.strftime("%H:%M:%S", time.gmtime())
-        log.info('%s - _createFlow(): starting Flow:\n'%t)
-        log.info('\tSending request to host\n')
-        log.info('\t\t* FLOW (sent to Host): %s\n'%str(flow_cpy))
-        log.info('\t\t* URL: %s\n'%url)
+        log.info('%s - _createFlow(): starting Flow - Sending request to host\n'%t)
+        log.info('\t   * FLOW (sent to Host): %s\n'%self.toLogFlowNames(flow))
+        log.info('\t   * URL: %s\n'%url)
 
         # Send request to host to start new iperf client session
         try:
-            requests.post(url, json = flow_cpy.toJSON())
+            requests.post(url, json = flow2.toJSON())
         except Exception:
             log.info("ERROR: Request could not be sent to Host!\n")
             log.info("LOG: Exception in user code:\n")
@@ -113,8 +158,9 @@ class TrafficGenerator(Base):
             log.info(traceback.print_exc())
             log.info('-'*60+'\n')
             
-        # Call to informLBController 
-        self.informLBController(flow)
+        # Call to informLBController if it is active
+        if self._lbc_ip:
+            self.informLBController(flow)
         
     def createRandomFlow(self):
         """Creates a random flow in the network
@@ -140,14 +186,16 @@ class TrafficGenerator(Base):
                     try:
                         [s, d, sp, dp, size, s_t, dur] = flowline.strip('\n').split(',')
                         # Get hosts IPs
-                        srcip = self.getHostIPByName(s)
-                        dstip = self.getHostIPByName(d)
+                        src_iface = self.getHostIPByName(s)
+                        dst_iface = self.getHostIPByName(d)
                     except Exception:
-                        srcip = None
-                        dstip = None
-                    if srcip != None and dstip != None:
-                        flow = Flow(src = srcip,
-                                    dst = dstip,
+                        log.info("EP, SOMETHING HAPPENS HERE\n")
+                        src_iface = None
+                        dst_iface = None
+                        
+                    if src_iface != None and dst_iface != None:
+                        flow = Flow(src = src_iface,
+                                    dst = dst_iface,
                                     sport = sp,
                                     dport = dp,
                                     size = size,
@@ -200,18 +248,17 @@ if __name__ == '__main__':
     # Wait for the network to be created correcly: IP's assigned, etc.
     time.sleep(dconf.TG_InitialWaitingTime)
 
-    # Start the traffic generator object
-    tg = TrafficGenerator()
-    
     # Get Traffic Generator hosts's IP.
     MyOwnIp = tg.getHostIPByName(dconf.TG_Hostname).split('/')[0]
     t = time.strftime("%H:%M:%S", time.gmtime())
     log.info("%s - TRAFFIC GENERATOR - HOST %s\n"%(t, MyOwnIp))
     log.info("-"*60+"\n")
 
+    # Start the traffic generator object
+    tg = TrafficGenerator()
+    
     # Schedule flows from file
     flowfile = dconf.FlowFile
-    #flowfile = dconf.TG_Path + 'flowfile2.csv'
 
     t = time.strftime("%H:%M:%S", time.gmtime())
     st = time.time()
@@ -220,7 +267,7 @@ if __name__ == '__main__':
     tg.scheduleFileFlows(flowfile)
     
     t2 = time.strftime("%H:%M:%S", time.gmtime())
-    log.info("%s - main(): Scheduled flow file after %.2f seconds\n"%(t2, time.time()-st))
+    log.info("%s - main(): Scheduled flow file after %.3f seconds\n"%(t2, time.time()-st))
 
     # Go start the JSON API server and listen for commands
     app = create_app(app, tg)
