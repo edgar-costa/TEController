@@ -274,6 +274,7 @@ class LBController(DatabaseHandler):
         current_count = self._countWrittenBw()
         return current_count == n_router_links and current_count != 0
 
+    
     def _createHost2IPBindings(self):
         """Fills the dictionary self.hosts_to_ip with the corresponding
         name-ip pairs
@@ -311,7 +312,6 @@ class LBController(DatabaseHandler):
         """
         subnets = [data['iface_router'] for name, data in
                    self.hosts_to_ip.iteritems() if name == hostname]
-
         if len(subnets) == 1:
             return subnets[0]
         else:
