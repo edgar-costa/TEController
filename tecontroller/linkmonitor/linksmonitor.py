@@ -100,7 +100,6 @@ class LinksMonitor(DatabaseHandler):
         if name != []:
             name = name[0]
         self.links[name]['load'] = load
-
         
     def updateLinks(self):
         # Update the counters first
