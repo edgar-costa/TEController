@@ -282,14 +282,16 @@ class LBController(DatabaseHandler):
         # Collect hosts only
         hosts = [(name, data) for (name, data) in self.db.network.iteritems() if data['type'] == 'host']
         for (name, data) in hosts:
-            node_ip = [v['ip'] for (k, v) in data.iteritems() if isinstance(v, dict)][0]
-            ip_iface_host = self._db_getIPFromHostName(name)
-            ip_iface_router = self._db_getSubnetFromHostName(name)
-            router_name, router_id = self._db_getConnectedRouter(name) 
-            self.hosts_to_ip[name] = {'iface_host': ip_iface_host,
-                                      'iface_router': ip_iface_router,
-                                      'router_name': router_name,
-                                      'router_id': router_id}
+            node_ip = [v['ip'] for (k, v) in data.iteritems() if isinstance(v, dict)]
+            if node_ip:
+                node_ip = node_ip[0]
+                ip_iface_host = self._db_getIPFromHostName(name)
+                ip_iface_router = self._db_getSubnetFromHostName(name)
+                router_name, router_id = self._db_getConnectedRouter(name) 
+                self.hosts_to_ip[name] = {'iface_host': ip_iface_host,
+                                          'iface_router': ip_iface_router,
+                                          'router_name': router_name,
+                                          'router_id': router_id}
             
                 
     def _createRouter2IPBindings(self):
