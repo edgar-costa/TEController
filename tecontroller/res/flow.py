@@ -124,17 +124,24 @@ class Flow(Base):
         self.start_time = self.setTimeToInt(start_time)
         self.duration = self.setTimeToInt(duration)
 
-    def _setAddr(self, ipaddr):
-        if not isinstance(ipaddr, ip.IPv4Interface):
-            if not isinstance(ipaddr, ip.IPv4Address):
-                if '/' in ipaddr: #regarded as interface
-                    return ip.ip_interface(ipaddr)
+    def _setAddr(self, addr):
+        """If addr is a string representing an interface address, returns the
+        corresponding IPv4Interface object.
+
+        Otherwise, if it is a string representing an host address,
+        returns the corresponding IPv4Address object.
+
+        """
+        if not isinstance(addr, ip.IPv4Interface):
+            if not isinstance(addr, ip.IPv4Address):
+                if '/' in addr: #regarded as interface
+                    return ip.ip_interface(addr)
                 else:
-                    return ip.ip_address(ipaddr)    
+                    return ip.ip_address(addr)
             else:
-                return ipaddr
+                return addr
         else:
-            return ipaddr
+            return addr
 
                 
     def __repr__(self):

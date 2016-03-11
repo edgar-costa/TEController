@@ -27,31 +27,37 @@ class DatabaseHandler(object):
         elif 'C' not in x: # it means x is an interface ip and not the
                            # weird C_0
             ip_iface = ipaddress.ip_interface(x)
-            for name, values in self.db.network.iteritems():
-                if values['type'] != 'router' and values['type'] != 'switch':
-                    for key, val in values.iteritems():    
-                        if isinstance(val, dict):
-                            ip_iface2 = ipaddress.ip_interface(val['ip'])
-                            if ip_iface.ip == ip_iface2.ip:
-                                return name
-                else:
-                    return None
+            hosts = [(n,v) for n, v in self.db.network.iteritems() if values['type'] == 'host']
+            for (n, v) in hosts:
+                for key, val in v.iteritems():    
+                    if isinstance(val, dict):
+                        ip_iface2 = ipaddress.ip_interface(val['ip'])
+                        if ip_iface.ip == ip_iface2.ip:
+                            return name
+        else:
+            return None
                             
     def _db_getIPFromHostName(self, hostname):
         """Given the hostname of the host/host subnet, it returns the ip address
         of the interface in the hosts side. It is obtained from TopoDB
 
         It can also be called with a router name i.e: 'r1'
+        
+        switches will return None.
         """
         values = self.db.network[hostname]
-        if values['type'] == 'router':
-            return ipaddress.ip_address(values['routerid']).compressed
+        if values['type'] == 'switch':
+            return None
+
+        elif values['type'] == 'router':
+            return values['routerid']
+        
         elif values['type'] == 'host':
             ip = [v['ip'] for v in values.values() if isinstance(v, dict)][0]
             return ip
         else:
             return None
-        
+
     def _db_getSubnetFromHostName(self, hostname):
         """Given the hostname of a host (e.g 's1'), returns the subnet address
         in which it is connected.
@@ -68,40 +74,32 @@ class DatabaseHandler(object):
         else:
             raise TypeError("Routers can't")
 
+        
     def _db_isSwitch(self, hostname):
         return self.db.network[hostname]['type'] == 'switch'
-
+    
         
     def _db_getConnectedRouter(self, hostname):
         """Get connected router information from hostname given its name.
         """
-        hostinfo = [values for name, values in
-                    self.db.network.iteritems() if name == hostname
-                    and values['type'] != 'router' and values['type'] != 'switch']
 
-        if hostinfo != []:
-            hostinfo = hostinfo[0]
+        hostinfo = self.db.network.get(hostname, None)
+
+        if hostinfo and hostinfo['type'] == 'host':
             for key, val in hostinfo.iteritems():
                 if isinstance(val, dict) and 'ip' in val.keys():
                     if self._db_isSwitch(key):
-                        # Parse all routers and check which of them
-                        # has key as a connection. Then retreive its
-                        # name and router id
                         switch_name = key
-                        
-                        routers = [(name, values) for (name, values)
-                                   in self.db.network.iteritems() if
-                                   values['type'] == 'router']
+                        routers = [(n,v) for n,v in self.db.network.iteritems() if v['type'] == 'router']
                         get_the_one = [(n, v[switch_name]['ip']) for (n, v) in routers if switch_name in v.keys()]
-                        if get_the_one:
+                        if get_the_one != []:
                             (router_name, _) = get_the_one[0]
                             router_id = self.db.network[router_name]['routerid']
                     else:
                         router_name = key
-                        router_id = self._db_getIPFromHostName(router_name)
+                        router_id = self.db.network[router_name]['routerid']
 
                     return router_name, router_id
-
 
     def _db_getRouters(self):
         """Returns a list of name-routerid bindings: [('r1', '192.153.2.2'),
@@ -119,7 +117,7 @@ class DatabaseHandler(object):
     
     def _db_getAllEdges(self):
         """Returns all edge information from the network. It is used in the
-        Links Monitor object.
+        Links Monitor custom host.
         """
         i = 0
         edges = {}

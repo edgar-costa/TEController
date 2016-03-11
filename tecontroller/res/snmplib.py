@@ -1,6 +1,12 @@
 """This module implements the SnmpCounters class that helps dealing
 with the SNMP data that we extract from the routers. Specifically,
 keeps track of the interface counters.
+
+TODO
+====
+
+ * The module should be rewritten to use pysnmp library instead of
+   calling the Linux snmp command line tools
 """
 from pysnmp.hlapi import *
 from tecontroller.res.flow import Base
@@ -39,22 +45,27 @@ class SnmpCounters(Base):
         for i, data in enumerate(self.interfaces):
             mac = data['mac']
             bytes_observed = self.countersDiff[i]
-            
-            s += "    Iface Number: %s\tName: %s\tMAC: %s\tTraffic Observed: %s\tPeriod length: %s\n"%(data['number'],data['name'],mac, self.setSizeToStr2(bytes_observed), self.setTimeToStr(duration))
+
+            to_s = "    Iface Number: %s\tName: %s\tMAC: %s\tTraffic Observed: %s\tPeriod length: %s\n"
+            s += to_s%(data['number'], data['name'], mac,
+                       self.setSizeToStr2(bytes_observed),
+                       self.setTimeToStr(duration))
         return s
 
 
     
     def setRefreshTimeToMinimum(self):
         start = time.time()
-        p = subprocess.Popen(['snmpset','-v','1','-c',dconf.SNMP_CommunityString, self.routerIp, 'nsCacheTimeout.1.3.6.1.2.1.2.2', 'i', '1'],
+        command_args = ['snmpset','-v','1','-c',
+                        dconf.SNMP_CommunityString, self.routerIp,
+                        'nsCacheTimeout.1.3.6.1.2.1.2.2', 'i', '1' ]
+        p = subprocess.Popen(command_args,
                              stdout=subprocess.PIPE,
                              stderr=subprocess.PIPE)
         out, err = p.communicate()
-        #log.info("snmplib.py: setRefreshTimeToMinimum: OUT: %s\n"%out)
-        #log.info("snmplib.py: setRefreshTimeToMinimum: ERR: %s\n"%err)
         if time_info:
-            log.info("snmplib.py: setRefreshTimeToMinimum() took: %d seconds\n"%(time.time()-start))
+            to_log = "snmplib.py: setRefreshTimeToMinimum() took: %d seconds\n"
+            log.info(to_log%(time.time()-start))
 
     
     def getInterfaces(self):
@@ -91,7 +102,8 @@ class SnmpCounters(Base):
 
         # then the physical addresses
         OID = "ifPhysAddress"
-        p = subprocess.Popen(['snmpwalk', '-v', '1', '-c', dconf.SNMP_CommunityString, self.routerIp, OID],
+        phy_snmp_command = ['snmpwalk', '-v', '1', '-c', dconf.SNMP_CommunityString, self.routerIp, OID]
+        p = subprocess.Popen(phy_snmp_command,
                              stdout=subprocess.PIPE,
                              stderr=subprocess.PIPE)
         out, err = p.communicate()
@@ -150,8 +162,6 @@ class SnmpCounters(Base):
         out_counters_t = [a.split(" = ")[1] for a in out.split('\n') if len(a.split(" = ")) == 2]
         out_counters = np.asarray([int(a[a.index(':')+2:]) for a in out_counters_t if a][1:])
 
-        #ERRRRRRRRRRRRRRORR IS HEERE!!!!!
-
         # Treated as np.arrays from here on
         total_counters = np.multiply((in_counters + out_counters), 8) # in bits
 
@@ -187,5 +197,3 @@ class SnmpCounters(Base):
             return load[0]
         else:
             raise KeyError("iface_name: %s does not belong to any router interface"%iface_name)
-
-            
