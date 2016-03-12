@@ -18,16 +18,16 @@ import numpy as np
 log = get_logger()
 time_info = False
 
-class LinksMonitor(DatabaseHandler):
+class LinksMonitor(object):
     """
     Implements the class.
     """
     def __init__(self, interval=1, logfile = dconf.LinksMonitor_LogFile):
-        super(LinksMonitor, self).__init__()
+        self.db = DatabaseHandler() 
         log.info("LINKS MONITOR -- interval: %s -- logfile: %s --\n"%(str(interval),logfile))
         log.info("-"*60+"\n")
         log.info("Read all edges from network...\n")
-        self.links = self._db_getAllEdges()
+        self.links = self.db.getAllEdges()
         self.interval = interval
         log.info("Start all counters...\n")
         self.counters = self._startCounters()
@@ -75,7 +75,7 @@ class LinksMonitor(DatabaseHandler):
 
     def _startCounters(self):
         start = time.time()
-        routers = self._db_getRouters()
+        routers = self.db.getRouters()
         counters_dict = {name:{'routerid':rid, 'counter': SnmpCounters(routerIp=rid)} for name, rid in routers}
         if time_info:
             log.info("linksmonitor.py: _startCounters() took %d seconds\n"%(time.time()-start))

@@ -55,7 +55,7 @@ class MyGraphProvider(SouthboundManager):
         super(MyGraphProvider, self).received_initial_graph()
         HAS_INITIAL_GRAPH.set()        
                 
-class LBController(DatabaseHandler):
+class LBController(object):
     def __init__(self):
         """It basically reads the network topology from the MyGraphProvider,
         which is running in another thread because
@@ -64,36 +64,56 @@ class LBController(DatabaseHandler):
         Here we are assuming that the topology does not change.
         """
         super(LBController, self).__init__()
-        self.flow_allocation = {} # {prefixA: {flow1:path1, flow2:path2},
-                                  #  prefixB: {flow1:path3, flow2:path2}}
-                                  
-        self.eventQueue = eventQueue #From where to read events 
-        self.thread_handlers = {} #Used to schedule flow
-                                  #alloc. removals
-        self.dags = {}
+
+        # Dictionary that keeps the allocation of the flows in the network paths
+        self.flow_allocation = {} 
+        # {prefixA: {flow1 : [path_list], flow2 : [path_list]},
+        #  prefixB: {flow4 : [path_list], flow3 : [path_list]}}
         
-        self._stop = threading.Event() #Used to stop the thread
-        self.hosts_to_ip = {}
-        self.routers_to_ip = {}
+        # From where to read events 
+        self.eventQueue = eventQueue
+        
+        # Used to schedule flow alloc. removals
+        self.thread_handlers = {} 
 
-        CFG.read(dconf.C1_Cfg) #Must be called before create instance
-                               #of SouthboundManager
+        # Data structure that holds the current forwarding dags for
+        # all advertised destinations in the network
+        self.dags = {}
 
-        # Start the Southbound manager in a different thread    
+        # Used to stop the thread
+        self._stop = threading.Event() 
+
+        # Object that handles the topology database
+        self.db = DatabaseHandler()
+    
+        # Connects to the southbound controller. Must be called before
+        # create instance of SouthboundManager
+        CFG.read(dconf.C1_Cfg) 
+
+        # Start the Southbound manager in a different thread.    
         self.sbmanager = MyGraphProvider()
         t = threading.Thread(target=self.sbmanager.run, name="Graph Listener")
         t.start()
         t = time.strftime("%H:%M:%S", time.gmtime())
         log.info("%s - Graph Listener thread started\n"%t)
 
-        HAS_INITIAL_GRAPH.wait() #Blocks until initial graph arrives
+        # Blocks until initial graph arrived notification is received
+        # from southbound manager
+        HAS_INITIAL_GRAPH.wait() 
         t = time.strftime("%H:%M:%S", time.gmtime())
         log.info("%s - Initial graph received\n"%t)
 
-        # Retreieve network from Fibbing Controller
+        # Retreieve network graph from southbound manager
         self.network_graph = self.sbmanager.igp_graph
-                 
-        # Include BW data inside the initial graph
+
+        # Fill the data structure that keeps track of the currently
+        # advertised prefixes
+        self.ospf_prefixes = self._fillInitialOSPFPrefixes()
+
+        # Mantains the list of the network prefixes advertised by the OSPF routers
+        self.ospf_prefixes = self._fillInitialOSPFPrefixes()
+       
+        # Include BW data inside the initial graph.
         n_router_links = self._countRouter2RouterEdges()
         self._readBwDataFromDB()
         i = 0
@@ -109,28 +129,23 @@ class LBController(DatabaseHandler):
         # capacities of the links are kept.
         self.initial_graph = self.network_graph.copy()
         
-        # Fill the host2Ip and router2ip attributes
-        self._createHost2IPBindings()
-        self._createRouter2IPBindings()
-        
         t = time.strftime("%H:%M:%S", time.gmtime())
         log.info("%s - Created IP-names bindings\n"%t)
         log.info("\tHostname\tip\tsubnet\n")
-        for name, data in self.hosts_to_ip.iteritems():
+        for name, data in self.db.hosts_to_ip.iteritems():
             log.info("\t%s\t%s\t%s\n"%(name, data['iface_host'], data['iface_router']))
         log.info("\tRouter name\tip\t\n")
-        for name, ip in self.routers_to_ip.iteritems():
+        for name, ip in self.db.routers_to_ip.iteritems():
             log.info("\t%s\t%s\n"%(name, ip))
 
 
-        # Create here the initial DAGS
+        # Create here the initial DAGS for each destination in the
+        # network
         self._createInitialDags()
         t = time.strftime("%H:%M:%S", time.gmtime())
         log.info("%s - Initial DAGS created\n"%t)
 
-        #import ipdb; ipdb.set_trace()#TRACE
-
-        #spawn Json listener thread
+        # Spawn Json listener thread
         jl = JsonListener(self.eventQueue)
         jl.start()
         t = time.strftime("%H:%M:%S", time.gmtime())
@@ -170,16 +185,27 @@ class LBController(DatabaseHandler):
         is called. The LBController only keeps track of the default
         allocations of the flows.
         """
-
         # In general, this won't be True that often...
         ecmp = False
         
-        # Get the flow prefixes
-        src_prefix = flow['src'].network.compressed
-        dst_prefix = flow['dst'].network.compressed
-        
+        # Get the communicating interfaces
+        src_iface = flow['src']
+        dst_iface = flow['dst']
+
+        # Get host ip's
+        src_ip = src_iface.ip
+        dst_ip = dst_iface.ip
+
+        # Get their correspoding networks
+        src_network = src_iface.network
+        dst_network = self.getCurrentOSPFPrefix(dst_iface.compressed)
+
+        # Get the string-type prefixes        
+        src_prefix = src_network.compressed
+        dst_prefix = dst_network.compressed
+
         # Get the current path from source to destination
-        currentPaths = self.getActivePaths(src_prefix, dst_prefix)
+        currentPaths = self.getActivePaths(src_iface, dst_iface, dst_prefix)
 
         if len(currentPaths) > 1:
             # ECMP is happening
@@ -221,8 +247,7 @@ class LBController(DatabaseHandler):
         return self._stop.isSet()
 
 
-    ## Functions (private) that populate the data structures of the load balancer ###################
-    
+    ## Functions (private) that populate the data structures of the load balancer ###################    
     def _readBwDataFromDB(self):
         """Introduces BW data from /tmp/db.topo into the network DiGraph and
         sets the capacity to the link bandwidth.
@@ -230,8 +255,8 @@ class LBController(DatabaseHandler):
         for (x, y, data) in self.network_graph.edges(data=True):
             if 'C' in x or 'C' in y: # means is the controller...
                 continue
-            xname = self._db_getNameFromIP(x)
-            yname = self._db_getNameFromIP(y)
+            xname = self.db.getNameFromIP(x)
+            yname = self.db.getNameFromIP(y)
             
             if xname and yname:
                 if self.sbmanager.igp_graph.is_router(x) and self.sbmanager.igp_graph.is_router(y):
@@ -240,9 +265,9 @@ class LBController(DatabaseHandler):
                     data['bw'] = int(bw*1e6)
                     data['capacity'] = int(bw*1e6)
             else:
-                t = time.strftime("%H:%M:%S", time.gmtime())
-                log.info("%s - _readBwDataFromDB(): ERROR: did not find xname and yname\n"%t)
-
+                #t = time.strftime("%H:%M:%S", time.gmtime())
+                #log.info("%s - _readBwDataFromDB(): ERROR: did not find %s (%s) and %s (%s)\n"%(t, x,xname, y,yname))
+                pass
                 
     def _countRouter2RouterEdges(self):
         """
@@ -274,46 +299,43 @@ class LBController(DatabaseHandler):
         current_count = self._countWrittenBw()
         return current_count == n_router_links and current_count != 0
 
+
+    def _fillInitialOSPFPrefixes(self):
+        """
+        Fills up the data structure
+        """
+        prefixes = []
+        for prefix in self.network_graph.prefixes:
+            prefixes.append(ipaddress.ip_network(prefix))
+        return prefixes
+
+    def getCurrentOSPFPrefix(self, interface_ip):
+        """Given a interface ip address of a host in the mininet network,
+        returns the longest prefix currently being advertised by the
+        OSPF routers.
+
+        :param interface_ip: string representing a host's interface ip
+                             address. E.g: '192.168.233.254/30'
+
+        Returns: an ipaddress.IPv4Network object
+        """
+        iface = ipaddress.ip_interface(interface_ip)
+        iface_nw = iface.network
+        iface_ip = iface.ip
+        longest_match = (None, 0)
+        for prefix in self.ospf_prefixes:
+            prefix_len = prefix.prefixlen
+            if iface_ip in prefix and prefix_len > longest_match[1]:
+                longest_match = (prefix, prefix_len)
+        return longest_match[0]
     
-    def _createHost2IPBindings(self):
-        """Fills the dictionary self.hosts_to_ip with the corresponding
-        name-ip pairs
-        """
-        # Collect hosts only
-        hosts = [(name, data) for (name, data) in self.db.network.iteritems() if data['type'] == 'host']
-        for (name, data) in hosts:
-            node_ip = [v['ip'] for (k, v) in data.iteritems() if isinstance(v, dict)]
-            if node_ip:
-                node_ip = node_ip[0]
-                ip_iface_host = self._db_getIPFromHostName(name)
-                ip_iface_router = self._db_getSubnetFromHostName(name)
-                router_name, router_id = self._db_getConnectedRouter(name) 
-                self.hosts_to_ip[name] = {'iface_host': ip_iface_host,
-                                          'iface_router': ip_iface_router,
-                                          'router_name': router_name,
-                                          'router_id': router_id}
-            
-                
-    def _createRouter2IPBindings(self):
-        """Fills the dictionary self.routers_to_ip with the corresponding
-        name-ip pairs
-        """
-        for node_ip in self.network_graph.nodes():
-            if self.network_graph.is_router(node_ip):
-                name = self._db_getNameFromIP(node_ip)
-                self.routers_to_ip[name] = node_ip
-
-    #########################################################################################################
-
-
     ## Useful functions to query network nodes IP, hostnames, connected nodes, etc. #########################
-                
     def getSubnetFromHostName(self, hostname):
         """Given a hostname, it returns the subnet in which this hostname
         resides
         """
         subnets = [data['iface_router'] for name, data in
-                   self.hosts_to_ip.iteritems() if name == hostname]
+                   self.db.hosts_to_ip.iteritems() if name == hostname]
         if len(subnets) == 1:
             return subnets[0]
         else:
@@ -323,7 +345,7 @@ class LBController(DatabaseHandler):
         """Returns the name of the host/or subnet of hosts, given the IP.
         """
         name = [name for name, values in
-                self.hosts_to_ip.iteritems() if ip in
+                self.db.hosts_to_ip.iteritems() if ip in
                 values.values()][0]
         return name
     
@@ -339,7 +361,7 @@ class LBController(DatabaseHandler):
         
         :param x: string representing the IPv4 of a router.
         """
-        return x in self.routers_to_ip.values()
+        return x in self.db.routers_to_ip.values()
 
     def getEdgeCapacity(self, x, y):
         """Returns the capacity of the network edge between x and y
@@ -455,47 +477,50 @@ class LBController(DatabaseHandler):
         """Returns the current active path between two host interface ips and
         the destination prefix for which we want to retrieve the
         current active path.
+        
+        :param src_iface, dst_iface: ipaddres.ip_interface object
+
+        :param dst_prefix: 
         """
         # Get current active DAG for that destination
         active_dag = self.getActiveDag(dst_prefix)
-        
-        # Get hostnames and attached routers
-        src_hostname = [(n, v['router_name'], v['router_id']) for (n, v)
-                        in self.hosts_to_ip.iteritems() if v['iface_host'] == src_iface]
 
-        dst_hostname = [(n, v['router_name'], v['router_id']) for (n, v)
-                        in self.hosts_to_ip.iteritems() if v['iface_host'] == dst_iface]
-
-        if src_hostname != [] and dst_hostname != []:
-            (src_hostname, src_rname, src_rid) = src_hostname[0]
-            (dst_hostname, dst_rname, dst_rid) = dst_hostname[0]
-
+        # Get src_iface and dst_iface attached routers
+        routers = list(self.network_graph.routers)
+        src_rid = None
+        dst_rid = None
+        for r in routers:
+            if self.network_graph.has_successor(r, src_iface.network.compressed):
+                src_rid = r
+            if self.network_graph.has_successor(r, dst_iface.network.compressed):
+                dst_rid = r
+                
+        if src_rid and dst_rid:
             # Calculate path and return it
             active_paths = self._getAllPathsLimDAG(active_dag, src_rid, dst_rid, 0)
             return active_paths
         else:
             t = time.strftime("%H:%M:%S", time.gmtime())
             to_print = "%s - getActivePaths(): No paths could be found between %s and %s for subnet prefix %s\n"
-            log.info(to_print%(src_iface, dst_iface, dst_prefix))
+            log.info(to_print%(str(src_iface), str(dst_iface), dst_prefix))
             return [[]]
-
         
     def _createInitialDags(self):
         """Populates the self.dags attribute by creating a complete DAG for
         each destination.
         """
-    
         apdp = nx.all_pairs_dijkstra_path(self.initial_graph, weight='metric')
 
-        for hostname, values in self.hosts_to_ip.iteritems():
+        for prefix in self.network_graph.prefixes:
             dag = nx.DiGraph()
-            # Get IP of the connected router
-            cr = values['router_id']
 
-            # Get subnet prefix
-            subnet_prefix = values['iface_router']
+            # Get IP of the connected router
+            cr = [r for r in self.network_graph.routers if self.network_graph.has_successor(r, prefix)][0]
             
-            other_routers = [rip for rn, rip in self.routers_to_ip.iteritems() if rn != cr]
+            # Get subnet prefix
+            subnet_prefix = prefix
+            
+            other_routers = [rn for rn in self.network_graph.routers if rn != cr]
             for r in other_routers:
                 # Get the shortest path
                 dpath = apdp[r][cr]
@@ -512,7 +537,7 @@ class LBController(DatabaseHandler):
                     ecmp = True
                     t = time.strftime("%H:%M:%S", time.gmtime())
                     to_print = "%s - _createInitialDags(): ECMP is ACTIVE between %s and %s (%s)\n"
-                    log.info(to_print%(t, self._db_getNameFromIP(r), self._db_getNameFromIP(subnet_prefix), subnet_prefix))  
+                    log.info(to_print%(t, self.db.getNameFromIP(r), self.db.getNameFromIP(subnet_prefix), subnet_prefix))  
                 elif len(default_paths) == 1:
                     ecmp = False
                     default_paths = [dpath]
@@ -534,7 +559,6 @@ class LBController(DatabaseHandler):
             # Add DAG to prefix
             self.dags[subnet_prefix] = dag
 
-            
     ######################################################################################
     
     def getEdgesFromPathList(self, path_list):
@@ -720,8 +744,8 @@ class LBController(DatabaseHandler):
         """        
         # We assume here that Flow is well formed, and that the
         # interface addresses of the hosts are given.
-        src_name = self._db_getNameFromIP(flow['src'].compressed)
-        src_router_name, src_router_id = self._db_getConnectedRouter(src_name)
+        src_name = self.db.getNameFromIP(flow['src'].compressed)
+        src_router_name, src_router_id = self.db.getConnectedRouter(src_name)
         dst_network = flow['dst'].network.compressed
 
         # We take only routers in the route
@@ -744,8 +768,8 @@ class LBController(DatabaseHandler):
         """        
         # We assume here that Flow is well formed, and that the
         # interface addresses of the hosts are given.
-        src_name = self._db_getNameFromIP(flow['src'].compressed)
-        src_router_name, src_router_id = self._db_getConnectedRouter(src_name)
+        src_name = self.db.getNameFromIP(flow['src'].compressed)
+        src_router_name, src_router_id = self.db.getConnectedRouter(src_name)
         dst_network = flow['dst'].network.compressed
 
         # We take only routers in the route
@@ -1050,7 +1074,7 @@ class LBController(DatabaseHandler):
             cap = data.get('capacity')
             if cap and cap <= flow_size and self.isRouter(x) and self.isRouter(y):
                 edge = (x, y)
-                edge_s = (self._db_getNameFromIP(x), self._db_getNameFromIP(y))
+                edge_s = (self.db.getNameFromIP(x), self.db.getNameFromIP(y))
                 removed.append((edge_s, cap))
                 ng_temp.remove_edge(x, y)
 
@@ -1178,8 +1202,8 @@ class LBController(DatabaseHandler):
         dag_to_print = nx.DiGraph()
         
         for (u,v, data) in dag.edges(data=True):
-            u_temp = self._db_getNameFromIP(u)
-            v_temp = self._db_getNameFromIP(v)
+            u_temp = self.db.getNameFromIP(u)
+            v_temp = self.db.getNameFromIP(v)
             dag_to_print.add_edge(u_temp, v_temp, **data)
         return dag_to_print
     
@@ -1190,22 +1214,22 @@ class LBController(DatabaseHandler):
         total = []
         if isinstance(path_list[0], list):
             for path in path_list:
-                r = [self._db_getNameFromIP(p) for p in path if self.isRouter(p)] 
+                r = [self.db.getNameFromIP(p) for p in path if self.isRouter(p)] 
                 total.append(r)
             return total
         elif isinstance(path_list[0], tuple):
-                r = [(self._db_getNameFromIP(u),
-                      self._db_getNameFromIP(v)) for (u,v) in path_list
+                r = [(self.db.getNameFromIP(u),
+                      self.db.getNameFromIP(v)) for (u,v) in path_list
                      if self.isRouter(u) and self.isRouter(v)] 
                 return r
         else:
-            return [self._db_getNameFromIP(p) for p in path_list if self.isRouter(p)] 
+            return [self.db.getNameFromIP(p) for p in path_list if self.isRouter(p)] 
 
 
     def toLogFlowNames(self, flow):
         a = "(%s -> %s): %s, t_o: %s, duration: %s" 
-        return a%(self._db_getNameFromIP(flow.src.compressed),
-                  self._db_getNameFromIP(flow.dst.compressed),
+        return a%(self.db.getNameFromIP(flow.src.compressed),
+                  self.db.getNameFromIP(flow.dst.compressed),
                   flow.setSizeToStr(flow.size),
                   flow.setTimeToStr(flow.start_time),
                   flow.setTimeToStr(flow.duration))

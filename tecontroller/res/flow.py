@@ -34,7 +34,6 @@ class Base(object):
             return int(magnitude*digit)
         else:
             return int(size)
-
         
     def setSizeToStr(self, size):
         """Expects an integer representing number of bytes as input.
@@ -51,7 +50,6 @@ class Base(object):
                 string = string % val
                 string = string + unit
                 return string
-
             
     def setSizeToStr2(self, size):
         """Expects an integer representing number of bytes as input.
@@ -104,7 +102,7 @@ class Base(object):
         """
         m, s = divmod(time, 60)
         return "%dm%ds"%(m,s)
-    
+
 
 class Flow(Base):
     """
@@ -131,6 +129,7 @@ class Flow(Base):
         Otherwise, if it is a string representing an host address,
         returns the corresponding IPv4Address object.
 
+        TODO: flows should only contain IP addresses, not interfaces
         """
         if not isinstance(addr, ip.IPv4Interface):
             if not isinstance(addr, ip.IPv4Address):

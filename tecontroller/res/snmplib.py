@@ -6,7 +6,11 @@ TODO
 ====
 
  * The module should be rewritten to use pysnmp library instead of
-   calling the Linux snmp command line tools
+   calling the Linux snmp command line tools. 
+
+ * For the moment, using pysnmp library still pops up the following
+   error: https://sourceforge.net/p/pysnmp/mailman/message/34615777/
+
 """
 from pysnmp.hlapi import *
 from tecontroller.res.flow import Base

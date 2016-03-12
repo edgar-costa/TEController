@@ -133,8 +133,6 @@ class SimpleTopo(IPTopo):
         c1 = self.addController(C1, cfg_path=C1_cfg)
         self.addLink(c1, r1, cost = 1000)
 
-        
-
         # Add Link Monitorer
         #m1 = self.addHost(M1, isMonitorer=True)
         #self.addLink(m1, r1)
@@ -144,8 +142,8 @@ class SimpleTopo(IPTopo):
         #self.addLink(c2, r2)
         
         # Adding Traffic Engineering Controller
-        #c3 = self.addHost(LBC, isLBController=True, algorithm='SimplePath')
-        #self.addLink(c3, r2) 
+        c3 = self.addHost(LBC, isLBController=True, algorithm='SimplePath')
+        self.addLink(c3, r2) 
 
         
         
@@ -239,7 +237,7 @@ class SIGTopo(IPTopo):
 
 def launch_network():
 #    print SIG_TOPO
-    net = IPNet(topo=SimpleTopo(),
+    net = IPNet(topo=SIGTopo(),
                 debug=_lib.DEBUG_FLAG,
                 intf=custom(TCIntf, bw=BW),
                 host=MyCustomHost)
@@ -249,7 +247,7 @@ def launch_network():
     FibbingCLI(net)
     net.stop()
 
-
+    
 
 def launch_controller():
     CFG.read(C1_cfg)

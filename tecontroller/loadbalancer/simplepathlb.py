@@ -29,44 +29,12 @@ class SimplePathLB(LBController):
     If the flow can't be allocated in any path from source to
     destination, the algorithm falls back to the original dijsktra
     path and does not fib the network.
+
     """
     
     def __init__(self, *args, **kwargs):
         super(SimplePathLB, self).__init__(*args, **kwargs)
         
-        # Mantains the list of the network prefixes advertised by the OSPF routers
-        self.ospf_prefixes = self._fillInitialOSPFPrefixes()
-
-    def _fillInitialOSPFPrefixes(self):
-        """
-        Fills up the data structure
-        """
-        prefixes = []
-        for host, data in self.hosts_to_ip.iteritems():
-            ip_network_object = ipaddress.ip_network(data['iface_router'])
-            prefixes.append(ip_network_object)
-        return prefixes
-
-    def getCurrentOSPFPrefix(self, interface_ip):
-        """Given a interface ip address of a host in the mininet network,
-        returns the longest prefix currently being advertised by the
-        OSPF routers.
-
-        :param interface_ip: string representing a host's interface ip
-                             address. E.g: '192.168.233.254/30'
-
-        Returns: an ipaddress.IPv4Network object
-        """
-        iface = ipaddress.ip_interface(interface_ip)
-        iface_nw = iface.network
-        iface_ip = iface.ip
-        longest_match = (None, 0)
-        for prefix in self.ospf_prefixes:
-            prefix_len = prefix.prefixlen
-            if iface_ip in prefix and prefix_len > longest_match[1]:
-                longest_match = (prefix, prefix_len)
-        return longest_match[0]
-
     def getReversedEdgesSet(self, edges_set):
         """Given a set of edges, it returns a set with the reversed edges."""
         reversed_set = set()
@@ -167,7 +135,7 @@ class SimplePathLB(LBController):
         dst_prefix = dst_network.compressed
 
         # Get the current path from source to destination
-        currentPaths = self.getActivePaths(src_iface.compressed, dst_iface.compressed, dst_prefix)
+        currentPaths = self.getActivePaths(src_iface, dst_iface, dst_prefix)
 
         t = time.strftime("%H:%M:%S", time.gmtime())
         to_print = "%s - dealWithNewFlow(): Current paths for flow: %s\n"
@@ -230,7 +198,7 @@ class SimplePathLB(LBController):
             
             # Allocate flow to Path
             self.addAllocationEntry(dst_prefix, flow, initial_paths)
-            log.info("\t* Dest_prefix: %s\n"%self._db_getNameFromIP(dst_prefix))
+            log.info("\t* Dest_prefix: %s\n"%self.db.getNameFromIP(dst_prefix))
             log.info("\t* Paths (%s): %s\n"%(len(path_list), str([self.toLogRouterNames(path) for path in initial_paths])))
             # Here, we should try to re-arrange flows in a way that
             # all of them can be allocated.
