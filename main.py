@@ -43,7 +43,6 @@ S3 = 's3'
 S4 = 's4'
 S5 = 's5'
 
-
 M1 = 'm1'
 
 BW = 1  # Absurdly low bandwidth for easy congestion (in Mb)
@@ -103,71 +102,66 @@ class snmpTestTopo(IPTopo):
         
 class SimpleTopo(IPTopo):
     def build(self, *args, **kwargs):
-        """       +---+         +---+
- +--+          ___|R3 |__       | D2|
- |S2|__     3 /   +---+  \3    _+---+
- +--+  \__   /            \   /
- +--+     \+----+   7   +---+        +--+
- |S1|------| R1 |--------| R2|--------|D1|
- +--+     _+----+        +---+_       +--+
-        _/    |            |   \_  
-   +---+    +---+        +---+   +---+
-   |M1 |    |C1 |        |LBC|   |TG |
-   +---+    +---+        +---+   +---+
-        """
+        # Create routers
         r1 = self.addRouter(R1, cls=MyCustomRouter)
         r2 = self.addRouter(R2, cls=MyCustomRouter)
         r3 = self.addRouter(R3, cls=MyCustomRouter)
+        self.addLink(r1, r3, cost = 4)
+        self.addLink(r3, r2, cost = 4)
         self.addLink(r1, r2, cost = 7)
-        self.addLink(r1, r3, cost = 3)
-        self.addLink(r3, r2, cost = 3)
-        
-        
+
+        # Create sources
         s1 = self.addHost(S1)
         s2 = self.addHost(S2)
-        d1 = self.addHost(D1)
-        d2 = self.addHost(D2)
-
         self.addLink(s1, r1)
         self.addLink(s2, r1)
-        self.addLink(d1, r2)
-        self.addLink(d2, r2)
+
+        # Create destinations
+        sw1 = self.addSwitch('sw1')
+        self.addLink(sw1, self.addHost('d1'))
+        self.addLink(sw1, self.addHost('d2'))
+        self.addLink(sw1, self.addHost('d3'))
+        self.addLink(sw1, r2)
+        
+        sw2 = self.addSwitch('sw2')
+        self.addLink(sw2, self.addHost('t1'))
+        self.addLink(sw2, self.addHost('t2'))
+        self.addLink(sw2, self.addHost('t3'))
+        self.addLink(sw2, r2)
 
         # Adding Fibbing Controller
         c1 = self.addController(C1, cfg_path=C1_cfg)
         self.addLink(c1, r1, cost = 1000)
 
+        
+
         # Add Link Monitorer
-        m1 = self.addHost(M1, isMonitorer=True)
-        self.addLink(m1, r1)
+        #m1 = self.addHost(M1, isMonitorer=True)
+        #self.addLink(m1, r1)
 
         # Adding Traffic Generator Host
-        c2 = self.addHost(TG, isTrafficGenerator=True)
-        
-        self.addLink(c2, r2)
+        #c2 = self.addHost(TG, isTrafficGenerator=True)
+        #self.addLink(c2, r2)
         
         # Adding Traffic Engineering Controller
-        c3 = self.addHost(LBC, isLBController=True)
         #c3 = self.addHost(LBC, isLBController=True, algorithm='SimplePath')
-        #c3 = self.addHost(LBC, isLBController=True, algorithm='ECMP')
-        self.addLink(c3, r2) 
+        #self.addLink(c3, r2) 
 
-
-
+        
         
 class SIGTopo(IPTopo):
     def build(self, *args, **kwargs):
         """
-            +--+         +--+  +--+
-            |S4|         |D1|  |D3|
-   +--+     +--+         +--+  +--+
+            +--+         +---+  +---+
+            |S4|         |D's|  |T's|
+   +--+     +--+         +--+   +---+
    |S3|___    |           |   __/
-   +--+   \_+---+        +---+     +--+
-            | R2|--------|R3 |-----|D2|
-            +---+       /+---+__   +--+
-              |     ___/   |    \__+--+
-           10 |    /       |       |D4|
-              |   /        |       +--+
+   +--+   \_+---+        +---+     +---+
+            | R2|--------|R3 |-----|X's|
+            +---+       /+---+__   +---+
+              |     ___/   |    \__+---+
+           10 |    /       |       |Y's|
+              |   /        |       +---+
  +--+      +----+'       +---+        +--+
  |S1|------| R1 |--------| R4|--------|C1|
  +--+     _+----+       _+---+_       +--+
@@ -176,6 +170,7 @@ class SIGTopo(IPTopo):
     |M1|    |S2 |   |S5|  |TG|    |LBC|
     +--+    +---+   +--+  +--+    +---+
         """
+        # Add routers and router-router links
         r1 = self.addRouter(R1, cls=MyCustomRouter)
         r2 = self.addRouter(R2, cls=MyCustomRouter)
         r3 = self.addRouter(R3, cls=MyCustomRouter)
@@ -187,31 +182,44 @@ class SIGTopo(IPTopo):
         self.addLink(r3, r4)
         self.addLink(r1, r3)
 
+        # Create broadcast domains
+        sw1 = self.addSwitch('sw1')
+        self.addLink(sw1, self.addHost('d1'))
+        self.addLink(sw1, self.addHost('d2'))
+        self.addLink(sw1, self.addHost('d3'))
+        self.addLink(sw1, r3)
+        
+        sw2 = self.addSwitch('sw2')
+        self.addLink(sw2, self.addHost('t1'))
+        self.addLink(sw2, self.addHost('t2'))
+        self.addLink(sw2, self.addHost('t3'))
+        self.addLink(sw2, r3)
+
+        sw3 = self.addSwitch('sw3')
+        self.addLink(sw3, self.addHost('x1'))
+        self.addLink(sw3, self.addHost('x2'))
+        self.addLink(sw3, self.addHost('x3'))
+        self.addLink(sw3, r3)
+
+        sw4 = self.addSwitch('sw4')
+        self.addLink(sw4, self.addHost('y1'))
+        self.addLink(sw4, self.addHost('y2'))
+        self.addLink(sw4, self.addHost('y3'))
+        self.addLink(sw4, r3)
+
         s1 = self.addHost(S1)
         s2 = self.addHost(S2)
         s3 = self.addHost(S3)
         s4 = self.addHost(S4)
-        s5 = self.addHost(S5)
 
-        d1 = self.addHost(D1)
-        d2 = self.addHost(D2)
-        d3 = self.addHost(D3)
-        d4 = self.addHost(D4)
-        
         self.addLink(s1, r1)
         self.addLink(s2, r1)
         self.addLink(s3, r2)
         self.addLink(s4, r2)
-        self.addLink(s5, r4)
-
-        self.addLink(d1, r3)
-        self.addLink(d2, r3)
-        self.addLink(d3, r3)
-        self.addLink(d4, r3)
-
+        
         # Adding Fibbing Controller
         c1 = self.addController(C1, cfg_path=C1_cfg)
-        self.addLink(c1, r4, cost=999)
+        self.addLink(c1, r4, cost=1000)
 
         # Add Link Monitorer
         m1 = self.addHost(M1, isMonitorer=True)
@@ -222,16 +230,16 @@ class SIGTopo(IPTopo):
         self.addLink(c2, r4)
 
         # Adding Traffic Engineering Controller
-        c3 = self.addHost(LBC, isLBController=True)
-        #c3 = self.addHost(LBC, isLBController=True, algorithm='SimplePath')
+        #c3 = self.addHost(LBC, isLBController=True)
+        c3 = self.addHost(LBC, isLBController=True, algorithm='SimplePath')
         #c3 = self.addHost(LBC, isLBController=True, algorithm='ECMP')
         self.addLink(c3, r4)
 
         
 
 def launch_network():
-    print SIG_TOPO
-    net = IPNet(topo=SIGTopo(),
+#    print SIG_TOPO
+    net = IPNet(topo=SimpleTopo(),
                 debug=_lib.DEBUG_FLAG,
                 intf=custom(TCIntf, bw=BW),
                 host=MyCustomHost)
@@ -243,9 +251,26 @@ def launch_network():
 
 
 
+def launch_controller():
+    CFG.read(C1_cfg)
+    db = TopologyDB(db='/tmp/db.topo')
+    manager = SouthboundManager(optimizer=OSPFSimple())
+        
+    import ipdb; ipdb.set_trace()
+    manager.simple_path_requirement(db.subnet(R3, D1), [db.routerid(r)
+                                                        for r in (R1, R2, R3)])
+    try:
+        manager.run()
+    except KeyboardInterrupt:
+        manager.stop()
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     group = parser.add_mutually_exclusive_group()
+    group.add_argument('-c', '--controller',
+                       help='Start the controller',
+                       action='store_true',
+                       default=False)
     group.add_argument('-n', '--net',
                        help='Start the Mininet topology',
                        action='store_true',
@@ -263,5 +288,8 @@ if __name__ == '__main__':
         import logging
         log.setLevel(logging.DEBUG)
         lg.setLogLevel('debug')
+    if args.controller:
+        launch_controller()
+
     elif args.net:
         launch_network()

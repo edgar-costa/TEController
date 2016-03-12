@@ -54,10 +54,10 @@ class MyCustomHost(_node.Host):
             log.info("\nStarting LoadBalancing Controller\n")
             # Fetch which algorithm is running
             algorithm = kwargs.get('algorithm', 'None')
-            lbcl = open(lbc_logfile, 'w')
-            tec = self.popen(dconf.LBC_Path+algo_to_file[algorithm],
-                             stdin=None, stdout=lbcl, stderr=lbcl)
-            lbcl.close()
+            #lbcl = open(lbc_logfile, 'w')
+            #tec = self.popen(dconf.LBC_Path+algo_to_file[algorithm],
+            #                 stdin=None, stdout=lbcl, stderr=lbcl)
+            #lbcl.close()
             
 
         elif 'isMonitorer' in kwargs.keys() and kwargs.get('isMonitorer') == True:
@@ -76,7 +76,7 @@ class MyCustomHost(_node.Host):
             log.info('\nHost %s: Creating iperf server process, port %s\n'%(self.name, dconf.Hosts_DefaultIperfPort))
             iperf_server_process = self.popen('iperf', '-u', '-s',
                                               '-p', dconf.Hosts_DefaultIperfPort,
-                                              '-i', '1', stdin=None,
+                                              '-i', '0.5', stdin=None,
                                               stdout=i, stderr=i)
             
             #Spawn the custom daemon process

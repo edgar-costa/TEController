@@ -46,7 +46,7 @@ def trafficGeneratorSlave():
     # Log it
     log.info("\t* Starting iperf client command...\n")
     log.info("\t  - src: %s:%s\n"%(flow['src'], flow['sport']))                
-    log.info("\t  - dst: %s:%s\n"%(flow['src'], flow['dport']))
+    log.info("\t  - dst: %s:%s\n"%(flow['dst'], flow['dport']))
     log.info("\t  - size: %s\n"%size)
     log.info("\t  - duration: %s\n"%str(flow['duration']))
 
@@ -54,7 +54,8 @@ def trafficGeneratorSlave():
            "-b", size,
            "-t", str(flow['duration']),
            "-p", str(flow['dport'])])
-    
+
+
 if __name__ == "__main__":
     #Waiting for the IP's to be assigned...
     time.sleep(dconf.Hosts_InitialWaitingTime)

@@ -16,14 +16,14 @@ lbc = SimplePathLB()
 r1 = lbc.db.routerid('r1')
 r2 = lbc.db.routerid('r2')
 r3 = lbc.db.routerid('r3')
-r4 = lbc.db.routerid('r4')
+#r4 = lbc.db.routerid('r4')
 
 # Get subnet addresses
 s1 = lbc.getSubnetFromHostName('s1')
 s2 = lbc.getSubnetFromHostName('s2')
-s3 = lbc.getSubnetFromHostName('s3')
-s4 = lbc.getSubnetFromHostName('s4')
-s5 = lbc.getSubnetFromHostName('s5')
+#s3 = lbc.getSubnetFromHostName('s3')
+#s4 = lbc.getSubnetFromHostName('s4')
+#s5 = lbc.getSubnetFromHostName('s5')
 
 d1 = lbc.hosts_to_ip['d1']['iface_host']
 d2 = lbc.hosts_to_ip['d2']['iface_host']
@@ -31,17 +31,49 @@ d3 = lbc.hosts_to_ip['d3']['iface_host']
 t1 = lbc.hosts_to_ip['t1']['iface_host']
 t2 = lbc.hosts_to_ip['t2']['iface_host']
 t3 = lbc.hosts_to_ip['t3']['iface_host']
-x1 = lbc.hosts_to_ip['x1']['iface_host']
-x2 = lbc.hosts_to_ip['x2']['iface_host']
-x3 = lbc.hosts_to_ip['x3']['iface_host']
-y1 = lbc.hosts_to_ip['y1']['iface_host']
-y2 = lbc.hosts_to_ip['y2']['iface_host']
-y3 = lbc.hosts_to_ip['y3']['iface_host']
+#x1 = lbc.hosts_to_ip['x1']['iface_host']
+#x2 = lbc.hosts_to_ip['x2']['iface_host']
+#x3 = lbc.hosts_to_ip['x3']['iface_host']
+#y1 = lbc.hosts_to_ip['y1']['iface_host']
+#y2 = lbc.hosts_to_ip['y2']['iface_host']
+#y3 = lbc.hosts_to_ip['y3']['iface_host']
 
 
 """
+## Super simple longer prefix test
+
+d1_currentPrefix = lbc.getCurrentOSPFPrefix(d1)
+d1_subnets = list(d1_currentPrefix.subnets())
+
+# d2 and d3 will match, but let's check it
+d1_longer_match = d1_subnets[0]
+d1_longer_prefix = d1_longer_match.compressed
+
+d2 = ip.ip_interface(d2).ip
+d3 = ip.ip_interface(d3).ip
+
+if d2 in d1_longer_match and d3 in d1_longer_match:
+    print "Yes, d2 and d3 are inside new fibbed prefix"
+
+# fib it
+dag = nx.DiGraph()
+dag.add_edges_from([(r1,r3),(r3,r2)])
+
+lbc.sbmanager.add_dag_requirement(d1_longer_prefix, dag)
+
+
+# Now if we create traffic from s2 to d2 or d3, it should go through [r1,r3,r2]
+
+
+
+
+
+
+
+
+
 # LONGER PREFIX TEST ####################################
-# Create traffic to x1 first (tgcommander)
+# Create traffic to x1 first (tgcommander) 600K
 
 # Get the event from the queue
 event = lbc.eventQueue.get()
@@ -55,11 +87,13 @@ current_prefix = lbc.getCurrentOSPFPrefix(flow['dst'].compressed)
 
 # Defaut path (hardcoded) as if it was fibbed
 # we make it collide with flow to x2
-path_list = [[r1,r4,r3]]
+path_list = [[r1,r3]]
 
 # Add it in the allocation table
 lbc.flow_allocation[current_prefix.compressed] = {}
 lbc.flow_allocation[current_prefix.compressed][flow] = path_list
+
+# Create traffic now to x2 (tgcommander) 200K
 
 # Test destination
 x2_dd = lbc.getCurrentOSPFPrefix(x2)
@@ -74,8 +108,6 @@ dag.add_edges_from([(r1,r2),(r2,r3),(r4,r3)])
 newLongerPrefix = lbc.getNextNonCollidingPrefix(x2_ip, x2_dd, [[r1,r2,r3]])
 if newLongerPrefix == None:
     print "Error"
-
-
 # Fib it
 lbc.sbmanager.add_dag_requirement(newLongerPrefix.compressed, dag)
 

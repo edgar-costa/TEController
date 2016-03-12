@@ -145,7 +145,7 @@ class TrafficGenerator(Base):
 
         t = time.strftime("%H:%M:%S", time.gmtime())
         log.info('%s - _createFlow(): starting Flow - Sending request to host\n'%t)
-        log.info('\t   * FLOW (sent to Host): %s\n'%self.toLogFlowNames(flow))
+        log.info('\t   * FLOW (sent to Host): %s\n'%str(flow))
         log.info('\t   * URL: %s\n'%url)
 
         # Send request to host to start new iperf client session
@@ -234,8 +234,10 @@ def trafficGeneratorCommandListener():
     #Beware that hosts in flowfile are given by hostnames: s1,d2, etc.
     src = tg.getHostIPByName(flow_tmp['src'])
     dst = tg.getHostIPByName(flow_tmp['dst'])
+    
     flow = Flow(src, dst, flow_tmp['sport'], flow_tmp['dport'],
                 flow_tmp['size'], flow_tmp['start_time'], flow_tmp['duration'])
+
     try:
         tg._createFlow(flow)
     except Exception, err:
@@ -243,7 +245,7 @@ def trafficGeneratorCommandListener():
         log.info(" * %s\n"%flow)
         log.info(traceback.format_exc())
 
-
+        
 if __name__ == '__main__':
     # Wait for the network to be created correcly: IP's assigned, etc.
     time.sleep(dconf.TG_InitialWaitingTime)

@@ -380,7 +380,7 @@ class SimplePathLB(LBController):
 
             # Check if edges that should be deactivated have ongoing
             # flows too
-            for path in new_path:
+            for path in new_paths:
                 for node in path:
                     active_edges = self.getActiveEdges(currentDag, node)
                     for edge in active_edges:
