@@ -20,6 +20,10 @@ from tecontroller.trafficgenerator.trafficgenerator import TrafficGenerator
 from tecontroller.res import defaultconf as dconf
 
 import networkx as nx
+import signal
+import sys
+
+
 
 C1_cfg = '/tmp/c1.cfg'
 
@@ -66,6 +70,12 @@ SIG_TOPO = """
    | M1|    |S2 |        |TG |     |LBC|
    +---+    +---+        +---+     +---+
         """
+
+
+def signal_handler(signal, frame):
+    print "You pressed Ctrl+C"
+    sys.exit(0)
+    
 
 class snmpTestTopo(IPTopo):
     def build(self, *args, **kwargs):
@@ -236,7 +246,7 @@ class SIGTopo(IPTopo):
         
 
 def launch_network():
-#    print SIG_TOPO
+    signal.signal(signal.SIGINT, signal_handler)
     net = IPNet(topo=SIGTopo(),
                 debug=_lib.DEBUG_FLAG,
                 intf=custom(TCIntf, bw=BW),
@@ -246,7 +256,7 @@ def launch_network():
     net.start()
     FibbingCLI(net)
     net.stop()
-
+    
     
 
 def launch_controller():

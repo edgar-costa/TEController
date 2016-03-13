@@ -63,8 +63,6 @@ class LBController(object):
         
         Here we are assuming that the topology does not change.
         """
-        super(LBController, self).__init__()
-
         # Dictionary that keeps the allocation of the flows in the network paths
         self.flow_allocation = {} 
         # {prefixA: {flow1 : [path_list], flow2 : [path_list]},
@@ -138,7 +136,6 @@ class LBController(object):
         for name, ip in self.db.routers_to_ip.iteritems():
             log.info("\t%s\t%s\n"%(name, ip))
 
-
         # Create here the initial DAGS for each destination in the
         # network
         self._createInitialDags()
@@ -150,7 +147,6 @@ class LBController(object):
         jl.start()
         t = time.strftime("%H:%M:%S", time.gmtime())
         log.info("%s - Json listener thread created\n"%t)
-
 
     def run(self):
         """Main loop that deals with new incoming events
