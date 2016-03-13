@@ -476,7 +476,8 @@ class LBController(object):
         
         :param src_iface, dst_iface: ipaddres.ip_interface object
 
-        :param dst_prefix: 
+        :param dst_prefix: string representing the destination prefix
+                           (i.e: 192.168.225.0/25).
         """
         # Get current active DAG for that destination
         active_dag = self.getActiveDag(dst_prefix)
@@ -848,15 +849,8 @@ class LBController(object):
                           destination. E.g: [[A,B,C],[A,D,C]]
         """
 
-        log.info("******************************\n")
         # Get the current DAG for that prefix
         current_dag = self.getCurrentDag(prefix)
-
-        #Log it
-        #dtp = self.toLogDagNames(current_dag)
-        #t = time.strftime("%H:%M:%S", time.gmtime())
-        #log.info("\n%s - removePrefixLies(): Initial DAG\n"%t)
-        #log.info("%s\n\n"%str(dtp.edges(data=True)))
 
         # Check if fibbed edge in paths
         thereIsFibbedPath = False
@@ -985,12 +979,7 @@ class LBController(object):
                     log.info(to_print%(t, prefix))
                     log.info("\tLSAs: %s\n"%(str(lsa)))
 
-        log.info("******************************\n")
-        # Log it
-        #dtp = self.toLogDagNames(current_dag)
-        #t = time.strftime("%H:%M:%S", time.gmtime())
-        #log.info("\n%s - removePrefixLies(): Final DAG\n"%t)
-        #log.info("%s\n\n"%str(dtp.edges(data=True)))
+        log.info(lineend)
 
             
     def getAllocatedFlows(self, prefix):
@@ -1045,43 +1034,21 @@ class LBController(object):
 
         return full_edges
         
-    def getNetworkWithoutEdge(self, network_graph, x, y):
-        """Returns a nx.DiGraph representing the network graph without the
-        (x,y) edge. x and y must be nodes of network_graph.
-
-        """
-        ng_temp = copy.deepcopy(network_graph)
-        ng_temp.remove_edge(x, y)
-        return ng_temp
-
     def getNetworkWithoutFullEdges(self, network_graph, flow_size):
         """Returns a nx.DiGraph representing the network graph without the
         edge that can't allocate a flow of flow_size.
         
+        :param network_graph: IGPGraph representing the network.
+
         :param flow_size: Attribute of a flow defining its size (in bytes).
         """
         ng_temp = network_graph.copy()
-        #full_edges = [ng_temp.remove_edge(x,y) for (x, y, data) in
-        #              network_graph.edges(data=True) if
-        #              data.get('capacity') and data.get('capacity') <=
-        #              flow_size and self.isRouter(x) and self.isRouter(y)]
-        removed = []
         for (x, y, data) in network_graph.edges(data=True):
             cap = data.get('capacity')
-            if cap and cap <= flow_size and self.isRouter(x) and self.isRouter(y):
+            if cap and cap <= flow_size and self.network_graph.is_router(x) and self.network_graph.is_router(y):
                 edge = (x, y)
-                edge_s = (self.db.getNameFromIP(x), self.db.getNameFromIP(y))
-                removed.append((edge_s, cap))
-                ng_temp.remove_edge(x, y)
-
-        #t = time.strftime("%H:%M:%S", time.gmtime())
-        #to_print = "%s - getNetworkWithoutFullEdges(): "
-        #to_print += "The following edges can't allocate flow of size: %d\n"
-        #log.info(to_print%(t, flow_size))
-        #for (edge,cap) in removed:
-        #    log.info("\tEdge: %s, capacity: %d\n"%(edge, cap))
+                ng_temp.remove_edge(x, y) 
         return ng_temp
-
     
     def getAllPathsRanked(self, igp_graph, start, end):
         """Recursive function that returns an ordered list representing all
@@ -1097,7 +1064,6 @@ class LBController(object):
         paths = self._getAllPathsLim(igp_graph, start, end, 0)
         ordered_paths = self._orderByLength(paths)
         return ordered_paths
-        
     
     def _getAllPathsLim(self, igp_graph, start, end, k, path=[], len_path=0, die=False):
         """Recursive function that finds all paths from start node to end
@@ -1144,10 +1110,23 @@ class LBController(object):
             pass
 
 
+    def _getAllPathsLimDAG(self, dag, start, end, k, path=[]):
+        """Recursive function that finds all paths from start node to end node
+        with maximum length of k.
 
-    def _getAllPathsLimDAG(self, igp_graph, start, end, k, path=[]):
-        """Recursive function that finds all paths from start node to end
-        node with maximum length of k.
+        If the function is called with k=0, returns all existing
+        loopless paths between start and end nodes.
+
+        :param dag: nx.DiGraph representing the current paths towards
+                    a certain destination.
+
+        :param start, end: string representing the ip address of the
+                           star and end routers (or nodes) (i.e:
+                           10.0.0.3).
+
+        :param k: specified maximum path length (here means hops,
+                  since the dags do not have weights).
+
         """
         # Accumulate nodes in path
         path = path + [start]
@@ -1156,24 +1135,24 @@ class LBController(object):
             # Arrived to the end. Go back returning everything
             return [path]
             
-            
-        if not start in igp_graph:
+        if not start in dag:
             return []
 
         paths = []
-        for node in igp_graph[start]:
+        for node in dag[start]:
             if node not in path: # Ommiting loops here
                 if k == 0:
                     # If we do not want any length limit
-                    newpaths = self._getAllPathsLimDAG(igp_graph, node, end, k, path=path)
+                    newpaths = self._getAllPathsLimDAG(dag, node, end, k, path=path)
                     for newpath in newpaths:
                         paths.append(newpath)
                 elif len(path) < k+1:
-                    newpaths = self._getAllPathsLimDAG(igp_graph, node, end, k, path=path)
+                    newpaths = self._getAllPathsLimDAG(dag, node, end, k, path=path)
                     for newpath in newpaths:
                         paths.append(newpath)
         return paths
-        
+
+
     def _orderByLength(self, paths):
         """Given a list of arbitrary paths. It ranks them by lenght (or total
         edges weight).

@@ -16,27 +16,25 @@ lbc = SimplePathLB()
 r1 = lbc.db.routerid('r1')
 r2 = lbc.db.routerid('r2')
 r3 = lbc.db.routerid('r3')
+
 #r4 = lbc.db.routerid('r4')
 
 # Get subnet addresses
-s1 = lbc.getSubnetFromHostName('s1')
-s2 = lbc.getSubnetFromHostName('s2')
-#s3 = lbc.getSubnetFromHostName('s3')
-#s4 = lbc.getSubnetFromHostName('s4')
-#s5 = lbc.getSubnetFromHostName('s5')
-
-d1 = lbc.hosts_to_ip['d1']['iface_host']
-d2 = lbc.hosts_to_ip['d2']['iface_host']
-d3 = lbc.hosts_to_ip['d3']['iface_host']
-t1 = lbc.hosts_to_ip['t1']['iface_host']
-t2 = lbc.hosts_to_ip['t2']['iface_host']
-t3 = lbc.hosts_to_ip['t3']['iface_host']
+d1 = lbc.db.hosts_to_ip['d1']['iface_host']
+d2 = lbc.db.hosts_to_ip['d2']['iface_host']
+d3 = lbc.db.hosts_to_ip['d3']['iface_host']
+t1 = lbc.db.hosts_to_ip['t1']['iface_host']
+t2 = lbc.db.hosts_to_ip['t2']['iface_host']
+t3 = lbc.db.hosts_to_ip['t3']['iface_host']
 #x1 = lbc.hosts_to_ip['x1']['iface_host']
 #x2 = lbc.hosts_to_ip['x2']['iface_host']
 #x3 = lbc.hosts_to_ip['x3']['iface_host']
 #y1 = lbc.hosts_to_ip['y1']['iface_host']
 #y2 = lbc.hosts_to_ip['y2']['iface_host']
 #y3 = lbc.hosts_to_ip['y3']['iface_host']
+s1 = lbc.db.hosts_to_ip['s1']['iface_host']
+s2 = lbc.db.hosts_to_ip['s2']['iface_host']
+
 
 
 """
