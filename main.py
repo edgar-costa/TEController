@@ -72,10 +72,6 @@ SIG_TOPO = """
         """
 
 
-def signal_handler(signal, frame):
-    print "You pressed Ctrl+C"
-    sys.exit(0)
-    
 
 class snmpTestTopo(IPTopo):
     def build(self, *args, **kwargs):
@@ -246,7 +242,9 @@ class SIGTopo(IPTopo):
         
 
 def launch_network():
-    signal.signal(signal.SIGINT, signal_handler)
+    #signal.signal(signal.SIGINT, signal_handler)
+    #signal.signal(signal.SIGTERM, signal_handler)
+    
     net = IPNet(topo=SIGTopo(),
                 debug=_lib.DEBUG_FLAG,
                 intf=custom(TCIntf, bw=BW),
@@ -254,9 +252,19 @@ def launch_network():
     
     TopologyDB(net=net).save(dconf.DB_Path)
     net.start()
-    FibbingCLI(net)
-    net.stop()
-    
+    fcli = FibbingCLI(net)
+    net.stop()    
+
+def signal_handler(signal, frame):
+    print ("Execution inside '{0}', " "with local namespace: {1}"
+           .format(frame.f_code.co_name, frame.f_locals.keys()))
+    print ("who is self?: {0}".format(frame.f_locals['self'].__class__))
+    fcli = frame.f_locals['self']
+    line = frame.f_locals['line']
+    import ipdb; ipdb.set_trace()
+    fcli.do_EOF(line)
+    sys.stdout.write("EOF\n")
+    sys.stdout.write("Signal catched!\n")
     
 
 def launch_controller():

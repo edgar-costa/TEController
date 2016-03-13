@@ -29,7 +29,7 @@ import requests
 import sched
 import json
 import copy
-import sys, traceback
+import signal, sys, traceback
 import ipaddress
 
 import flask
@@ -46,6 +46,8 @@ class TrafficGenerator(Base):
         
         self.scheduler = sched.scheduler(time.time, time.sleep)
         self.db = TopologyDB(db=dconf.DB_Path)
+        self.thread_handlers = []
+        
         
         #IP of the Load Balancer Controller host.
         try:
@@ -53,6 +55,22 @@ class TrafficGenerator(Base):
         except:
             log.info("WARNING: Load balancer controller could not be found in the network\n")
             self._lbc_ip = None
+
+
+    def _signal_handler(self, signal, frame):
+        """
+        Terminates trafficgenerator thread gracefully.
+        """
+        log.info("Signal caught... shuting down!\n")
+
+        # collect all open _createFlow threads
+        for t in self.thread_handlers:
+            #t.join()
+            log.info("_createFlow thread terminated\n")
+            
+        # exit
+        sys.exit(0)
+        
             
     def getHostIPByName(self, hostname):
         """Searches in the topology database for the hostname's ip address.
@@ -121,7 +139,11 @@ class TrafficGenerator(Base):
     def createFlow(self, flow):
         """Calls _createFlow in a different Thread (for efficiency)
         """
-        t = Thread(target=self._createFlow, args=(flow,)).start()
+        # Start thread that will send the Flask request
+        t = Thread(target=self._createFlow, name='_createFlow', args=(flow,)).start()
+        # Append thread handler to list
+        self.thread_handlers.append(t)
+
         
     def _createFlow(self, flow):
         """Creates the corresponding iperf command to actually install the
@@ -231,7 +253,7 @@ def trafficGeneratorCommandListener():
     tg = app.config['TG']
 
     # Create flow from json data.
-    #Beware that hosts in flowfile are given by hostnames: s1,d2, etc.
+    # Beware that hosts in flowfile are given by hostnames: s1,d2, etc.
     src = tg.getHostIPByName(flow_tmp['src'])
     dst = tg.getHostIPByName(flow_tmp['dst'])
     
@@ -239,12 +261,11 @@ def trafficGeneratorCommandListener():
                 flow_tmp['size'], flow_tmp['start_time'], flow_tmp['duration'])
 
     try:
-        tg._createFlow(flow)
+        tg.createFlow(flow)
     except Exception, err:
         log.info("ERROR: could not create flow:\n")
         log.info(" * %s\n"%flow)
         log.info(traceback.format_exc())
-
         
 if __name__ == '__main__':
     # Wait for the network to be created correcly: IP's assigned, etc.
@@ -252,6 +273,10 @@ if __name__ == '__main__':
 
     # Start the traffic generator object
     tg = TrafficGenerator()
+
+    # Set the signal handler function
+    signal.signal(signal.SIGTERM, tg._signal_handler)
+    signal.signal(signal.SIGINT, tg._signal_handler)
     
     # Get Traffic Generator hosts's IP.
     MyOwnIp = tg.getHostIPByName(dconf.TG_Hostname).split('/')[0]
@@ -275,6 +300,7 @@ if __name__ == '__main__':
     app = create_app(app, tg)
     app.run(host=MyOwnIp)
 
+    
 
 
 
