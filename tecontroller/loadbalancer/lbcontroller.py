@@ -104,10 +104,6 @@ class LBController(object):
         # Retreieve network graph from southbound manager
         self.network_graph = self.sbmanager.igp_graph
 
-        # Fill the data structure that keeps track of the currently
-        # advertised prefixes
-        self.ospf_prefixes = self._fillInitialOSPFPrefixes()
-
         # Mantains the list of the network prefixes advertised by the OSPF routers
         self.ospf_prefixes = self._fillInitialOSPFPrefixes()
        

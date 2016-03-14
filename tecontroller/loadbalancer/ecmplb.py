@@ -1,6 +1,6 @@
 #!/usr/bin/python
 
-from tecontroller.loadbalancer.lbcontroller import LBController
+from tecontroller.loadbalancer.simplepathlb import SimplePathLB
 from tecontroller.res import defaultconf as dconf
 
 from fibbingnode.misc.mininetlib import get_logger
@@ -13,102 +13,25 @@ import math
 log = get_logger()
 lineend = "-"*100+'\n'
 
-
-class ECMPLB(LBController):
+class ECMPLB(SimplePathLB):
     """Implements an load balancing algorithm that not only forces simple
-    path requirements in the network, but when thede fail to allocate
-    a flow, uses fibbing to force ECMP to find other possible
-    allocations for the flow.
+    path requirements in the network, but when the lb fails to allocate
+    a flow, uses fibbing to force ECMP to find other possible allocations
+    for the flow, or, i.e: move part of the traffic from the congested links.
 
     Simple overview of the algorithm:
     
-    First try to allocate flow in the default path. If it doesn't
-    work, try to allocate the whole flow to all possible paths from
-    surce to destination.
-
-    If an allocation is still not possible, then get all the possible
-    paths from source to destination ranked by increasing distance.
-    Iteratively, check remaining space in path and calculate the
-    number of other paths needed to perform ECMP towards
-    destination. 
-
-    If such number of paths exist, and they can allocate the
-    corresponding proportion of the flow, calculate DAG and insert
-    it. Otherwise, go to the next path in the ranked list.
-
     """
     def __init__(self, *args, **kwargs):
         super(ECMPLB, self).__init__(*args, **kwargs)
 
-    def dealWithNewFlow(self, flow):
-        """
-        """
-        # Get the destination network prefix
-        dst_prefix = flow['dst'].network
+    def ecmpAlgorithm(self, prefix, flow):
+        pass
 
-        # Get the default OSFP Dijkstra path
-        defaultPath = self.getDefaultDijkstraPath(self.network_graph, flow)
-        
-        # If it can be allocated, no Fibbing needed
-        if self.canAllocateFlow(flow, defaultPath):
-            # Log it
-            t = time.strftime("%H:%M:%S", time.gmtime())
-            log.info("%s - dealWithNewFlow(): default Dijkstra path can allocate flow\n"%t)
+    def getPrefixStatistics(self, prefix):
+        for prefix in self.ospf_prefixes:
 
-            # Allocate new flow and default path to destination prefix
-            self.addAllocationEntry(dst_prefix, flow, defaultPath)
-
-        else:
-            # Otherwise, call the abstract method
-            self.flowAllocationAlgorithm(dst_prefix, flow, defaultPath)
-
-
-    def flowAllocationAlgorithm(self, dst_prefix, flow, initial_path):
-        """
-        """
-        t = time.strftime("%H:%M:%S", time.gmtime())
-        log.info("%s - flowAllocationAlgorithm(): Greedy Algorithm started\n"%t)
-        start_time = time.time()
-        
-        # Remove edges that can't allocate flow from graph
-        required_size = flow['size']
-        tmp_nw = self.getNetworkWithoutFullEdges(self.network_graph, required_size)
-        
-        try:
-            # Calculate new default dijkstra path
-            shortest_congestion_free_path = self.getDefaultDijkstraPath(tmp_nw, flow)
-
-        except nx.NetworkXNoPath:
-            # There is no congestion-free path to allocate flow
-            t = time.strftime("%H:%M:%S", time.gmtime())
-            log.info("%s - flowAllocationAlgorithm(): Flow can't be allocated in the network in a single path\n"%t)
-            log.info("\tCalling the ECMP part of the algorithm...\n")
-
-            # Call the ECMP algorithm
-            self.ecmpAlgorithm(dst_prefix, flow)
-        else:
-            # Found single path to allocate flow
-            t = time.strftime("%H:%M:%S", time.gmtime())
-            log.info("%s - flowAllocationAlgorithm(): Found path that can allocate flow\n"%t)
-            # Allocate flow to Path
-            self.addAllocationEntry(dst_prefix, flow, shortest_congestion_free_path)
-            # Call to FIBBING Controller should be here
-            self.sbmanager.simple_path_requirement(dst_prefix.compressed,
-                                                   [r for r in shortest_congestion_free_path
-                                                    if self.isRouter(r)])
-
-            t = time.strftime("%H:%M:%S", time.gmtime())
-            to_print = "%s - flowAllocationAlgorithm(): "
-            to_print += "Forced forwarding DAG in Southbound Manager\n"
-            log.info(to_print%t)
-
-        # Do this allways
-        elapsed_time = time.time() - start_time
-        t = time.strftime("%H:%M:%S", time.gmtime())
-        log.info("%s - flowAllocationAlgorithm(): Greedy Algorithm Finished\n"%t)
-        log.info("\t* Elapsed time: %.3fs\n"%float(elapsed_time))
-
-    def ecmpAlgorithm(self, dst_prefix, flow):
+    def ecmpAlgorithmOLD(self, dst_prefix, flow):
         """
         Pseudocode:
 
