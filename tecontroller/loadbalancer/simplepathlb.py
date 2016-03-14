@@ -9,6 +9,7 @@ import networkx as nx
 import ipaddress
 import threading
 import time
+import abc
 
 log = get_logger()
 lineend = "-"*100+'\n'
@@ -35,108 +36,6 @@ class SimplePathLB(LBController):
     def __init__(self, *args, **kwargs):
         super(SimplePathLB, self).__init__(*args, **kwargs)
 
-
-    def getReversedEdgesSet(self, edges_set):
-        """Given a set of edges, it returns a set with the reversed edges."""
-        edges_set_copy = edges_set.copy()
-        reversed_set = set()
-        while edges_set_copy != set():
-            (u,v) = edges_set_copy.pop()
-            reversed_set.update({(v,u)})
-
-        return reversed_set
-
-
-    def getNextNonCollidingPrefix(self, dst_ip, previous_dst_network, new_path_list):
-        """Given an destination ip, its current subnet prefix and the paths
-        where it has to be fibbed, it computes a new subnet prefix
-        that includes the destination ip but isolates from all other
-        flows ongoing in these paths
-
-        :param dst_ip: Destination host ip
-
-        :param previous_dst_network: string representing the current
-                                     destination network matching
-                                     dst_ip so far.
-
-        :new_path_list: list of paths.
-
-        """
-        # get allocated flows for network_object prefix
-        dst_prefix = previous_dst_network.compressed
-        allocated_flows = self.getAllocatedFlows(dst_prefix)   
-
-        # Calculate which of them are colliding with our new path
-        edges_new_pl = set(self.getEdgesFromPathList(new_path_list))
-
-        # Acumulate flow destinations ips for which the flows collide
-        # with our path
-        ips = []
-        for (flow, fpl) in allocated_flows:
-            edges_flow = self.getEdgesFromPathList(fpl)
-            edges_flow = set(edges_flow)
-            edges_flow_r = self.getReversedEdgesSet(edges_flow)
-            if edges_flow.intersection(edges_new_pl) == set() and edges_flow_r.intersection(edges_new_pl) == set():
-                ips.append(flow['dst'].ip)
-            
-        # Find the shortest longer prefix that does not collide with flows
-        max_prefix_len = (None, 0)
-        for ip in ips:
-            differ_bit = -1
-            xor = int(dst_ip)^int(ip)
-            while xor != 0:
-                differ_bit += 1
-                xor = xor >> 1
-                
-            if differ_bit == -1:
-                log.info("No more longer prefixes that do not collide!\n")
-                return None
-            
-            else:
-                prefix_len = 32 - differ_bit
-                if prefix_len > max_prefix_len[1]:
-                    max_prefix_len = (ip, prefix_len)
-
-        # Log it
-        to_log = "New prefix len found: /%s to differenciate from other host %s\n"
-        log.info(to_log%(max_prefix_len[1], str(max_prefix_len[0])))
-        
-        if max_prefix_len[0] != None:
-            # Return the subnet that includes the ip of the new flow!
-            subnets = list(previous_dst_network.subnets(new_prefix=max_prefix_len[1]))
-            action = [subnet for subnet in subnets if dst_ip in subnet]
-            if len(action) == 1:
-                return action[0]
-            else:
-                log.info("No subnet could be found\n")
-                return None
-        else:
-            return None
-
-
-    def getNextLongerPrefix(self, interface_ip, network_object):
-        """Given an host interface ip, and the network_object that represents
-        the currently advertised network prefix, returns the next
-        longer network prefix that includes interface_ip.
-        
-        (The branch down the subprefixes tree that includes
-        interface_ip)
-
-        :param interface_ip: Expects either a string or a
-                             ipaddress.ip_interface object.
-
-        :param network_object: ipaddress.ip_network object
-        """
-        if isinstance(interface_ip, ipaddress.IPv4Interface):
-            iface_ip = interface_ip.ip
-        else:
-            iface_ip = ipaddress.ip_interface(interface_ip).ip
-            
-        subnets = list(network_object.subnets())
-        for subnet in subnets:
-            if iface_ip in subnet:
-                return subnet
-    
     def dealWithNewFlow(self, flow):
         """
         Implements the abstract method
@@ -195,7 +94,6 @@ class SimplePathLB(LBController):
             # allocate flow to a congestion-free path
             self.flowAllocationAlgorithm(dst_prefix, flow, currentPaths)
 
-            
     def flowAllocationAlgorithm(self, dst_prefix, flow, initial_paths):
         """
         """
@@ -375,6 +273,93 @@ class SimplePathLB(LBController):
         log.info("%s - flowAllocationAlgorithm(): Greedy Algorithm Finished\n"%t)
         log.info("\t* Elapsed time: %.3fs\n"%float(elapsed_time))
 
+    def getNextNonCollidingPrefix(self, dst_ip, previous_dst_network, new_path_list):
+        """Given an destination ip, its current subnet prefix and the paths
+        where it has to be fibbed, it computes a new subnet prefix
+        that includes the destination ip but isolates from all other
+        flows ongoing in these paths
+
+        :param dst_ip: Destination host ip
+
+        :param previous_dst_network: string representing the current
+                                     destination network matching
+                                     dst_ip so far.
+
+        :new_path_list: list of paths.
+        """
+        # get allocated flows for network_object prefix
+        dst_prefix = previous_dst_network.compressed
+        allocated_flows = self.getAllocatedFlows(dst_prefix)   
+
+        # Calculate which of them are colliding with our new path
+        edges_new_pl = set(self.getEdgesFromPathList(new_path_list))
+
+        # Acumulate flow destinations ips for which the flows collide
+        # with our path
+        ips = []
+        for (flow, fpl) in allocated_flows:
+            edges_flow = self.getEdgesFromPathList(fpl)
+            edges_flow = set(edges_flow)
+            edges_flow_r = getReversedEdgesSet(edges_flow)
+            if edges_flow.intersection(edges_new_pl) == set() and edges_flow_r.intersection(edges_new_pl) == set():
+                ips.append(flow['dst'].ip)
+            
+        # Find the shortest longer prefix that does not collide with flows
+        max_prefix_len = (None, 0)
+        for ip in ips:
+            differ_bit = -1
+            xor = int(dst_ip)^int(ip)
+            while xor != 0:
+                differ_bit += 1
+                xor = xor >> 1
+                
+            if differ_bit == -1:
+                log.info("No more longer prefixes that do not collide!\n")
+                return None
+            
+            else:
+                prefix_len = 32 - differ_bit
+                if prefix_len > max_prefix_len[1]:
+                    max_prefix_len = (ip, prefix_len)
+
+        # Log it
+        to_log = "New prefix len found: /%s to differenciate from other host %s\n"
+        log.info(to_log%(max_prefix_len[1], str(max_prefix_len[0])))
+        
+        if max_prefix_len[0] != None:
+            # Return the subnet that includes the ip of the new flow!
+            subnets = list(previous_dst_network.subnets(new_prefix=max_prefix_len[1]))
+            action = [subnet for subnet in subnets if dst_ip in subnet]
+            if len(action) == 1:
+                return action[0]
+            else:
+                log.info("No subnet could be found\n")
+                return None
+        else:
+            return None
+             
+    def getNextLongerPrefix(self, interface_ip, network_object):
+        """Given an host interface ip, and the network_object that represents
+        the currently advertised network prefix, returns the next
+        longer network prefix that includes interface_ip.
+        
+        (The branch down the subprefixes tree that includes
+        interface_ip)
+
+        :param interface_ip: Expects either a string or a
+                             ipaddress.ip_interface object.
+
+        :param network_object: ipaddress.ip_network object
+        """
+        if isinstance(interface_ip, ipaddress.IPv4Interface):
+            iface_ip = interface_ip.ip
+        else:
+            iface_ip = ipaddress.ip_interface(interface_ip).ip
+            
+        subnets = list(network_object.subnets())
+        for subnet in subnets:
+            if iface_ip in subnet:
+                return subnet
 
     def longerPrefixNeeded(self, dst_prefix, initial_paths, new_paths):
         """Given the initial paths and the new calculated path, checks if the
@@ -423,6 +408,20 @@ class SimplePathLB(LBController):
                             return True
             return False
 
+    def ecmpAlgorithm(self, prefix, flow):
+        """Calls the ecmp part of the complete load balancer. This method
+        should be subclassed by the ECMPLB"""
+        pass
+
+    @staticnethod
+    def getReversedEdgesSet(edges_set):
+        """Given a set of edges, it returns a set with the reversed edges."""
+        edges_set_copy = edges_set.copy()
+        reversed_set = set()
+        while edges_set_copy != set():
+            (u,v) = edges_set_copy.pop()
+            reversed_set.update({(v,u)})
+        return reversed_set
         
 if __name__ == '__main__':
     log.info("SIMPLE PATH LOAD BALANCER CONTROLLER\n")
