@@ -172,7 +172,6 @@ class LBController(object):
                 log.info("%s - run(): UNKNOWN Event\n"%t)
                 log.info("\t* Event: "%str(event))
 
-
     def dealWithNewFlow(self, flow):
         """Called when a new flow arrives. This method should be overwritten
         by each of the subclasses performing the various algorithms.
@@ -227,7 +226,6 @@ class LBController(object):
 
         # We just allocate the flow to the currentPaths
         self.addAllocationEntry(dst_prefix, flow, currentPaths)
-                
 
     def stop(self):
         """Stop the LBController correctly
@@ -235,15 +233,12 @@ class LBController(object):
         #Here we should deal with the handlers of the spawned threads
         #and subprocesses...
         self._stop.set()
-
-        
+   
     def isStopped(self):
         """Check if LBController is set to be stopped or not
         """
         return self._stop.isSet()
-
-
-    ## Functions (private) that populate the data structures of the load balancer ###################    
+  
     def _readBwDataFromDB(self):
         """Introduces BW data from /tmp/db.topo into the network DiGraph and
         sets the capacity to the link bandwidth.
@@ -295,7 +290,6 @@ class LBController(object):
         current_count = self._countWrittenBw()
         return current_count == n_router_links and current_count != 0
 
-
     def _fillInitialOSPFPrefixes(self):
         """
         Fills up the data structure
@@ -324,49 +318,7 @@ class LBController(object):
             if iface_ip in prefix and prefix_len > longest_match[1]:
                 longest_match = (prefix, prefix_len)
         return longest_match[0]
-    
-    ## Useful functions to query network nodes IP, hostnames, connected nodes, etc. #########################
-    def getSubnetFromHostName(self, hostname):
-        """Given a hostname, it returns the subnet in which this hostname
-        resides
-        """
-        subnets = [data['iface_router'] for name, data in
-                   self.db.hosts_to_ip.iteritems() if name == hostname]
-        if len(subnets) == 1:
-            return subnets[0]
-        else:
-            return None
-        
-    def getNodeName(self, ip):
-        """Returns the name of the host/or subnet of hosts, given the IP.
-        """
-        name = [name for name, values in
-                self.db.hosts_to_ip.iteritems() if ip in
-                values.values()][0]
-        return name
-    
-    def getEdgeBw(self, x, y):
-        """
-        Returns the total bandwidth of the network edge between x and y
-        """
-        return self.initial_graph.get_edge_data(x,y)['bw']
-   
-    def isRouter(self, x):
-        """
-        Returns true if x is an ip of a router in the network.
-        
-        :param x: string representing the IPv4 of a router.
-        """
-        return x in self.db.routers_to_ip.values()
 
-    def getEdgeCapacity(self, x, y):
-        """Returns the capacity of the network edge between x and y
-        """
-        return self.initial_graph.get_edge_data(x,y)['capacity']
-
-    #########################################################################################################
-
-    ## Functions related with DAGS ####################################################
     def getCurrentDag(self, dst):
         """
         Returns a copy of the current DAG towards destination
@@ -385,13 +337,11 @@ class LBController(object):
                 initialDag.get_edge_data(u,v)['active'] = True
         return initialDag
         
-    
     def setCurrentDag(self, dst, dag):
         """
         Sets the current DAG towards destination
         """
         self.dags[dst] = dag
-        
         
     def getActiveEdges(self, dag, node):
         activeEdges = []
@@ -410,7 +360,6 @@ class LBController(object):
                 fibbedEdges.append((node, n))
         return fibbedEdges
 
-    
     def getDefaultEdges(self, dag, node):
         """Returns the list of edges from node that are used by default in
         OSPF"""
@@ -546,7 +495,7 @@ class LBController(object):
                 for path in default_paths:
                     edge_list = zip(path[:-1], path[1:])
                     for (u,v) in edge_list:
-                        if self.isRouter(u) and self.isRouter(v):
+                        if self.network_graph.is_router(u) and self.network_graph.is_router(v):
                             dag.add_edge(u,v)
                             edge_data = dag.get_edge_data(u,v)
                             edge_data['active'] = True
@@ -555,8 +504,6 @@ class LBController(object):
 
             # Add DAG to prefix
             self.dags[subnet_prefix] = dag
-
-    ######################################################################################
     
     def getEdgesFromPathList(self, path_list):
         """Given a list of paths, returns a list of all the edges contained
@@ -567,7 +514,6 @@ class LBController(object):
             edge_list += zip(path[:-1], path[1:])
         return edge_list
                 
-                
     def isFibbed(self, dst_prefix):
         """Returns true if there exist fake LSA for that prefix in the
         network.
@@ -577,7 +523,6 @@ class LBController(object):
         """
         return (self.getLiesFromPrefix(dst_prefix) != None)
 
-    
     def isFibbedPath(self, dst_prefix, path):
         """Returns True if it finds a fibbed edge active along the path in
         dst_prefix DAG
@@ -589,7 +534,6 @@ class LBController(object):
                 # Fake edge found
                 return True
         return False
-
 
     def addAllocationEntry(self, prefix, flow, path_list):
         """Add entry in the flow_allocation table.
@@ -624,7 +568,7 @@ class LBController(object):
         # Iterate the paths
         for path in path_list:
             # Calculate paths with only routers
-            path_only_routers = [p for p in path if self.isRouter(p)]
+            path_only_routers = [p for p in path if self.network_graph.is_router(p)]
 
             # Extract the edges of the path
             edges = zip(path_only_routers[:-1], path_only_routers[1:])
@@ -657,9 +601,8 @@ class LBController(object):
         t.start()
         # Add handler to list and start thread
         self.thread_handlers[flow] = t
-
-        
-    def removeAllocationEntry(self, prefix, flow, path_list):        
+   
+    def removeAllocationEntry(self, prefix, flow, path_list):
         """
         Removes the flow from the allocation entry prefix and restores the corresponding.
         """
@@ -703,7 +646,7 @@ class LBController(object):
         # Iterate the path_list
         for path in path_list:
             # Get paths with only routers
-            path_only_routers = [p for p in path if self.isRouter(p)]
+            path_only_routers = [p for p in path if self.network_graph.is_router(p)]
 
             # Calculate edges of the path
             edges = zip(path_only_routers[:-1], path_only_routers[1:])
@@ -732,112 +675,7 @@ class LBController(object):
         
         # Remove the lies for the given prefix
         self.removePrefixLies(prefix, path_list)
-        
-        
-    def getDefaultDijkstraPath(self, network_graph, flow):
-        """Returns an list of network nodes representing the default Dijkstra
-        path given the flow and a network graph.
 
-        """        
-        # We assume here that Flow is well formed, and that the
-        # interface addresses of the hosts are given.
-        src_name = self.db.getNameFromIP(flow['src'].compressed)
-        src_router_name, src_router_id = self.db.getConnectedRouter(src_name)
-        dst_network = flow['dst'].network.compressed
-
-        # We take only routers in the route
-        route = nx.dijkstra_path(network_graph, src_router_id, dst_network, weight='metric')
-        return route
-
-
-    def getPathLength(self, path):
-        """Given a path as a list of traversed routers, it returns the sum of
-        the weights of the traversed links along the path.
-        """
-        routers = [n for n in path if self.initial_graph.is_router(n)]
-        edges = [self.initial_graph.get_edge_data(u,v)['metric'] for
-                 (u,v) in zip(path[:-1], path[1:])]
-        return sum(edges)
-        
-    def getDefaultDijkstraPathLength(self, network_graph, flow):
-        """Returns the length of the default Dijkstra path between the
-        flow.src and flow.dst nodes in network_graph.
-        """        
-        # We assume here that Flow is well formed, and that the
-        # interface addresses of the hosts are given.
-        src_name = self.db.getNameFromIP(flow['src'].compressed)
-        src_router_name, src_router_id = self.db.getConnectedRouter(src_name)
-        dst_network = flow['dst'].network.compressed
-
-        # We take only routers in the route
-        try:
-            default_length = nx.dijkstra_path_length(network_graph, src_router_id, dst_network, weight='metric')
-        except nx.NetworkXNoPath:
-            t = time.strftime("%H:%M:%S", time.gmtime())
-            to_print = "%s - getDefaultDijkstraPathLength(): ERROR: "
-            to_print += "No path exists between flow.src and flow.dst\n"
-            log.info(to_print%t)
-            log.info("\t* Flow: %s\n"%self.toLogFlowNames(flow))
-            raise nx.NetworkXNoPath
-        else:
-            return default_length
-
-
-    def canAllocateFlow(self, flow, path_list):
-        """Returns true if there is at least flow.size bandwidth available in
-        all links along the path (or multiple paths in case of ECMP)
-        from flow.src to src.dst,
-        """
-        for path in path_list:
-            if self.getMinCapacity(path) < flow.size:
-                return False
-        return True
-
-
-    def getMinCapacity(self, path):
-        """Returns the minimum capacity of the edges along the path.
-        
-        :param path: List of network nodes defining a path [A, B, C, D]"""
-        caps_in_path = []
-        for (u,v) in zip(path[:-1], path[1:]):
-            edge_data = self.initial_graph.get_edge_data(u, v)
-            cap = edge_data.get('capacity', None)
-            caps_in_path.append(cap)
-        try:
-            mini = min(caps_in_path)
-            return mini
-        
-        except ValueError:
-            t = time.strftime("%H:%M:%S", time.gmtime())
-            log.info("%s - getMinCapacity(): ERROR: min could not be calculated\n"%t)
-            log.info("\t* Path: %s\n"%path)            
-            raise ValueError
-
-
-    def getMinCapacityEdge(self, path):
-        """Returns the edge with the minimum capacity along the path.
-
-        :param path: List of network nodes defining a path [A, B, C,
-        D]
-        """
-        edges_in_path = [((path[i], path[i+1]),
-                          self.initial_graph.get_edge_data(path[i],
-                                                           path[i+1])['capacity']) for i in
-                         range(len(path)-1) if 'capacity' in
-                         self.initial_graph.get_edge_data(path[i],
-                                                          path[i+1]).keys()]
-        if edges_in_path:
-            minim_c = edges_in_path[0][1]
-            minim_edge = edges_in_path[0][0]
-            for ((x,y), c) in edges_in_path:
-                if c < minim_c:
-                    minim_c = c
-                    minim_edge = (x,y)
-            return minim_edge
-        else:
-            raise StandardError("%s has no edges!"%str(path))
-
-        
     def removePrefixLies(self, prefix, path_list):
         """Remove lies for a given prefix only if there are no more flows
         allocated for that prefix flowing through some edge of
@@ -980,8 +818,83 @@ class LBController(object):
                     log.info("\tLSAs: %s\n"%(str(lsa)))
 
         log.info(lineend)
+           
+    def getDefaultDijkstraPath(self, network_graph, flow):
+        """Returns an list of network nodes representing the default Dijkstra
+        path given the flow and a network graph.
 
-            
+        """        
+        # We assume here that Flow is well formed, and that the
+        # interface addresses of the hosts are given.
+        src_name = self.db.getNameFromIP(flow['src'].compressed)
+        src_router_name, src_router_id = self.db.getConnectedRouter(src_name)
+        dst_network = flow['dst'].network.compressed
+
+        # We take only routers in the route
+        route = nx.dijkstra_path(network_graph, src_router_id, dst_network, weight='metric')
+        return route
+
+    def getPathLength(self, path):
+        """Given a path as a list of traversed routers, it returns the sum of
+        the weights of the traversed links along the path.
+        """
+        routers = [n for n in path if self.initial_graph.is_router(n)]
+        edges = [self.initial_graph.get_edge_data(u,v)['metric'] for
+                 (u,v) in zip(path[:-1], path[1:])]
+        return sum(edges)
+
+    def canAllocateFlow(self, flow, path_list):
+        """Returns true if there is at least flow.size bandwidth available in
+        all links along the path (or multiple paths in case of ECMP)
+        from flow.src to src.dst,
+        """
+        for path in path_list:
+            if self.getMinCapacity(path) < flow.size:
+                return False
+        return True
+
+    def getMinCapacity(self, path):
+        """Returns the minimum capacity of the edges along the path.
+        
+        :param path: List of network nodes defining a path [A, B, C, D]"""
+        caps_in_path = []
+        for (u,v) in zip(path[:-1], path[1:]):
+            edge_data = self.initial_graph.get_edge_data(u, v)
+            cap = edge_data.get('capacity', None)
+            caps_in_path.append(cap)
+        try:
+            mini = min(caps_in_path)
+            return mini
+        
+        except ValueError:
+            t = time.strftime("%H:%M:%S", time.gmtime())
+            log.info("%s - getMinCapacity(): ERROR: min could not be calculated\n"%t)
+            log.info("\t* Path: %s\n"%path)            
+            raise ValueError
+
+    def getMinCapacityEdge(self, path):
+        """Returns the edge with the minimum capacity along the path.
+
+        :param path: List of network nodes defining a path [A, B, C,
+        D]
+        """
+        edges_in_path = [((path[i], path[i+1]),
+                          self.initial_graph.get_edge_data(path[i],
+                                                           path[i+1])['capacity']) for i in
+                         range(len(path)-1) if 'capacity' in
+                         self.initial_graph.get_edge_data(path[i],
+                                                          path[i+1]).keys()]
+        if edges_in_path:
+            minim_c = edges_in_path[0][1]
+            minim_edge = edges_in_path[0][0]
+            for ((x,y), c) in edges_in_path:
+                if c < minim_c:
+                    minim_c = c
+                    minim_edge = (x,y)
+            return minim_edge
+        else:
+            raise StandardError("%s has no edges!"%str(path))
+        
     def getAllocatedFlows(self, prefix):
         """
         Given a prefix, returns a list of tuples:
@@ -1003,7 +916,6 @@ class LBController(object):
         allocated_flows = self.getAllocatedFlows(prefix)
         sizes = [f['size'] for (f, p) in allocated_flows]
         return sum(a), len(a)
-
     
     def getLiesFromPrefix(self, prefix):
         """Retrieves the LSA of the associated prefix from the southbound
@@ -1017,22 +929,6 @@ class LBController(object):
             if prefix == dst:
                 return lsa
         return None
-
-    def getFullEdges(self, network_graph, min_size):
-        """
-        Returns a list of edges that can't allocate min_size bytes of bandwidth.
-
-        :param network_graph: IGPGraph
-
-        :param min_size: minimum bandwidth size in bytes
-
-        Returns: list of edges. E.g: [(A,B),(B,T),...]
-        """
-        full_edges = [(u,v) for (u,v,data) in
-                 network_graph.edges(data=True) if 'capacity' in
-                 data.keys() and data['capacity'] < min_size]
-
-        return full_edges
         
     def getNetworkWithoutFullEdges(self, network_graph, flow_size):
         """Returns a nx.DiGraph representing the network graph without the
@@ -1109,7 +1005,6 @@ class LBController(object):
             # Recursive call dies here
             pass
 
-
     def _getAllPathsLimDAG(self, dag, start, end, k, path=[]):
         """Recursive function that finds all paths from start node to end node
         with maximum length of k.
@@ -1152,7 +1047,6 @@ class LBController(object):
                         paths.append(newpath)
         return paths
 
-
     def _orderByLength(self, paths):
         """Given a list of arbitrary paths. It ranks them by lenght (or total
         edges weight).
@@ -1170,7 +1064,6 @@ class LBController(object):
         ordered_paths = sorted(ordered_paths, key=lambda x: x[1])
         return ordered_paths
 
-
     def toLogDagNames(self, dag):
         """
         """
@@ -1182,24 +1075,22 @@ class LBController(object):
             dag_to_print.add_edge(u_temp, v_temp, **data)
         return dag_to_print
     
-    
     def toLogRouterNames(self, path_list):
         """
         """
         total = []
         if isinstance(path_list[0], list):
             for path in path_list:
-                r = [self.db.getNameFromIP(p) for p in path if self.isRouter(p)] 
+                r = [self.db.getNameFromIP(p) for p in path if self.network_graph.is_router(p)] 
                 total.append(r)
             return total
         elif isinstance(path_list[0], tuple):
                 r = [(self.db.getNameFromIP(u),
                       self.db.getNameFromIP(v)) for (u,v) in path_list
-                     if self.isRouter(u) and self.isRouter(v)] 
+                     if self.network_graph.is_router(u) and self.network_graph.is_router(v)] 
                 return r
         else:
-            return [self.db.getNameFromIP(p) for p in path_list if self.isRouter(p)] 
-
+            return [self.db.getNameFromIP(p) for p in path_list if self.network_graph.is_router(p)] 
 
     def toLogFlowNames(self, flow):
         a = "(%s -> %s): %s, t_o: %s, duration: %s" 
@@ -1207,10 +1098,7 @@ class LBController(object):
                   self.db.getNameFromIP(flow.dst.compressed),
                   flow.setSizeToStr(flow.size),
                   flow.setTimeToStr(flow.start_time),
-                  flow.setTimeToStr(flow.duration))
-    
-
-    
+                  flow.setTimeToStr(flow.duration))  
 
 if __name__ == '__main__':
     log.info("NO-ALGORITHM LOAD BALANCER CONTROLLER\n")
