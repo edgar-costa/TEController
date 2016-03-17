@@ -13,7 +13,8 @@ uses the Fibbing controller, to which it gives a Direct Acyclic Graph
 
 The various strategies that have been explored in order to
 load-balance networks are summarized in the three different labs under
-the labs/ folder.
+the labs/ folder. There, more specific information about each stage of
+the main load-balancing algorihm can be found.
 
 The code is organized under the tecontroller/loadbalancer/ folder. The
 rest of the python scripts are tools that have been written for the
