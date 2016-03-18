@@ -15,6 +15,8 @@ the traffic towards an existing destination to an alternative path.
 
 5. The bandwidth of all links in the network is known.
 
+6. The "instantaneous" available capacity for the links of the network is known. To this effect, the linkmonitorer periodically checks the byte counters for all network interfaces in the network, and updates a data structure mantained in the TEController.
+
 ## The algorithm 
 
 ### Initialization
