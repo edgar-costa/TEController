@@ -298,7 +298,7 @@ class SimplePathLB(LBController):
         for (flow, fpl) in allocated_flows:
             edges_flow = self.getEdgesFromPathList(fpl)
             edges_flow = set(edges_flow)
-            edges_flow_r = getReversedEdgesSet(edges_flow)
+            edges_flow_r = self.getReversedEdgesSet(edges_flow)
             if edges_flow.intersection(edges_new_pl) == set() and edges_flow_r.intersection(edges_new_pl) == set():
                 ips.append(flow['dst'].ip)
             
@@ -411,7 +411,7 @@ class SimplePathLB(LBController):
         should be subclassed by the ECMPLB"""
         pass
 
-    @staticnethod
+    @staticmethod
     def getReversedEdgesSet(edges_set):
         """Given a set of edges, it returns a set with the reversed edges."""
         edges_set_copy = edges_set.copy()

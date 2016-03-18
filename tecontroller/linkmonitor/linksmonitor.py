@@ -105,7 +105,7 @@ class LinksMonitor(object):
         # Update the counters first
         start = time.time()
         self._updateCounters()
-        #log.info("%s\n"%str(self.links))
+        log.info("%s\n"%str(self.links))
         # Iterate the counters
         for name, data in self.counters.iteritems():
             # Get the counter object for each router

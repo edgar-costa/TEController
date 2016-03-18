@@ -112,16 +112,16 @@ class SimpleTopo(IPTopo):
         r1 = self.addRouter(R1, cls=MyCustomRouter)
         r2 = self.addRouter(R2, cls=MyCustomRouter)
         r3 = self.addRouter(R3, cls=MyCustomRouter)
-        self.addLink(r1, r3, cost = 4)
-        self.addLink(r3, r2, cost = 4)
-        self.addLink(r1, r2, cost = 7)
+        self.addLink(r1, r3, cost = 2)
+        self.addLink(r3, r2, cost = 2)
+        self.addLink(r1, r2, cost = 4)
 
         # Create sources
         s1 = self.addHost(S1)
         s2 = self.addHost(S2)
         self.addLink(s1, r1)
         self.addLink(s2, r1)
-
+        
         # Create destinations
         sw1 = self.addSwitch('sw1')
         self.addLink(sw1, self.addHost('d1'))
@@ -140,18 +140,18 @@ class SimpleTopo(IPTopo):
         self.addLink(c1, r1, cost = 1000)
 
         # Add Link Monitorer
-        #m1 = self.addHost(M1, isMonitorer=True)
-        #self.addLink(m1, r1)
+        m1 = self.addHost(M1, isMonitorer=True)
+        self.addLink(m1, r1)
 
         # Adding Traffic Generator Host
-        #c2 = self.addHost(TG, isTrafficGenerator=True)
-        #self.addLink(c2, r2)
+        c2 = self.addHost(TG, isTrafficGenerator=True)
+        self.addLink(c2, r2)
         
         # Adding Traffic Engineering Controller
-        c3 = self.addHost(LBC, isLBController=True, algorithm='SimplePath')
-        self.addLink(c3, r2) 
+        c3 = self.addHost(LBC, isLBController=True, algorithm='None')
+        self.addLink(c3, r2)         
 
-        
+
         
 class SIGTopo(IPTopo):
     def build(self, *args, **kwargs):
@@ -244,15 +244,14 @@ class SIGTopo(IPTopo):
 def launch_network():
     #signal.signal(signal.SIGINT, signal_handler)
     #signal.signal(signal.SIGTERM, signal_handler)
-    
-    net = IPNet(topo=SIGTopo(),
+    net = IPNet(topo=SimpleTopo(),
                 debug=_lib.DEBUG_FLAG,
                 intf=custom(TCIntf, bw=BW),
                 host=MyCustomHost)
     
     TopologyDB(net=net).save(dconf.DB_Path)
     net.start()
-    fcli = FibbingCLI(net)
+    FibbingCLI(net)
     net.stop()    
 
 def signal_handler(signal, frame):
@@ -271,10 +270,12 @@ def launch_controller():
     CFG.read(C1_cfg)
     db = TopologyDB(db='/tmp/db.topo')
     manager = SouthboundManager(optimizer=OSPFSimple())
-        
+
+    prefix = db.subnet('r2', 'sw1')
+    prefix_m = prefix.split('/')[0] + '/25'
+    manager.simple_path_requirement(prefix_m, [db.routerid(r) for r in (R1, R3, R2)])
     import ipdb; ipdb.set_trace()
-    manager.simple_path_requirement(db.subnet(R3, D1), [db.routerid(r)
-                                                        for r in (R1, R2, R3)])
+
     try:
         manager.run()
     except KeyboardInterrupt:

@@ -59,7 +59,6 @@ class MyCustomHost(_node.Host):
                              stdin=None, stdout=lbcl, stderr=lbcl)
             lbcl.close()
             
-
         elif 'isMonitorer' in kwargs.keys() and kwargs.get('isMonitorer') == True:
             log.info("\nStarting Links-Monitor host\n")
             lml = open(lm_logfile, 'w')
