@@ -20,7 +20,7 @@ the traffic towards an existing destination to an alternative path.
 ## The algorithm 
 
 ### Initialization
-- Upon starting, the algorithm reads the current network topology from the fibbing controller as an IGPGraph.
+- Upon starting, the algorithm reads the current network topology from the fibbing controller as an [IGPGraph](https://github.com/Fibbing/FibbingNode/blob/master/fibbingnode/misc/igp_graph.py).
 
 - For each destination prefix advertized by the routers, it computes the corresponding DAG that specifies the paths taken by the traffic coming from all other possible routers in the network. This step is also aware of ECMP between any two routers. To compute the DAGs, we make use of assumption 2. 
 
