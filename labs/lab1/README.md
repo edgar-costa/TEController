@@ -19,6 +19,10 @@ the traffic towards an existing destination to an alternative path.
 
 ## The algorithm 
 
+### Diagram
+
+![alt tag](https://github.com/lferran/TEController/blob/master/labs/lab1/lab1-algorithm.png)
+
 ### Initialization
 - Upon starting, the algorithm reads the current network topology from the fibbing controller as an [IGPGraph](https://github.com/Fibbing/FibbingNode/blob/master/fibbingnode/misc/igp_graph.py).
 
