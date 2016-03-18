@@ -38,11 +38,13 @@ the traffic towards an existing destination to an alternative path.
 
 5. Note down the flow-to-path allocation for the given destination and finish.
 
-6. Look for the next shortest path that can allocate flow without congestion from src to dst. Does it exist? If so, go to stage 7. Otherwise, continue to stage X.
+6. Look for the next shortest path that can allocate flow without congestion from src to dst. Does it exist? If so, go to stage 7. Otherwise, continue to stage 9.
 
-7
+7. Check if already existing flows to the same destination that will be moved can be allocated. Since we will enforce a new path in the destination DAG, it is possible that some previously allocated flows will be moved. Therefore, we need to take into account this, and see if the whole traffic demand towards destination running through the new path can be allocated. If so, continue to stage 8. Otherwise, jump back to stage 6.
 
-X.
+8. Fib the chosen path. Note down the flow-to-path allocation for the given destination and finish.
+
+9. Choose the path that creates the least global congestion. By least congestion we mean, e.g: that 2 links congested 1% is prefearrable to 1 link congested 5%. Then jump to stage 8.
 
 Y. Otherwise, if ECMP is enabled, we jump to stage  can compute the probability of this flow to create congestion in the network.
 
