@@ -20,15 +20,15 @@ the traffic towards an existing destination to an alternative path.
 ## The algorithm 
 
 ### Initialization
-* Upon starting, the algorithm reads the current network topology from the fibbing controller as an IGPGraph.
+- Upon starting, the algorithm reads the current network topology from the fibbing controller as an IGPGraph.
 
-* For each destination prefix advertized by the routers, it computes the corresponding DAG that specifies the paths taken by the traffic coming from all other possible routers in the network. This step is also aware of ECMP between any two routers. To compute the DAGs, we make use of assumption 2. 
+- For each destination prefix advertized by the routers, it computes the corresponding DAG that specifies the paths taken by the traffic coming from all other possible routers in the network. This step is also aware of ECMP between any two routers. To compute the DAGs, we make use of assumption 2. 
 
-* Such per-prefix destination DAGs will be updated whenever some path is fibbed for a given prefix.
+- Such per-prefix destination DAGs will be updated whenever some path is fibbed for a given prefix.
 
 ### Explanation
 
-1. The input is a new flow nF from nF.src to nF.dst ips of size nF.s with a duration of nF.d.
+1. The input is a new flow *f* from *f.src* to *f.dst* ips of size *f.size* with a duration of *f.duration*.
 
 2. On the first stage, we compute the longest prefix matching the nF.dst address. This way, we can obtain the corresponding current DAG for that prefix, and calculate the default path that the flow will take. In case ECMP is activated in one of the routers on the way from the ingress router to the egress router, the computed default path will be a list of paths.
 
