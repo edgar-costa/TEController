@@ -8,7 +8,7 @@ the traffic towards an existing destination to an alternative path.
 
 2. We know the routing protocol of the network and, therefore, we can compute the default paths taken by flows. For the case of this semester project, OSPF is used. (However, when at least one router between the ingress and egress routers for that flow have ECMP activated, we are not sure anymore which exact path this flow is going to take.)
 
-3. We only fib existing destination prefixes.
+3. We only fib existing destination prefixes, and only sinlge-paths are enforced (no ECMP is used in algorithm yet).
 
 4. When trying to allocate flow A matching destination prefix P, we do not move flows to other destinations != P that have already been allocated.
 (This means that, upon finding a new path to force to the DAG for a given destination, we must take into account already ongoing flows from all routers in the new path towards the same destination as also part of the "load demand".)
@@ -32,7 +32,7 @@ the traffic towards an existing destination to an alternative path.
 
 2. On the first stage, we compute the longest prefix matching the nF.dst address. This way, we can obtain the corresponding current DAG for that prefix, and calculate the default path that the flow will take. In case ECMP is activated in one of the routers on the way from the ingress router to the egress router, the computed default path will be a list of paths.
 
-3. If ECMP is not enabled, and there is a single path towards the destination prefix, continue to stage 4. Otherwise, jump to stage Y.
+3. If ECMP is not enabled, and there is a single path towards the destination prefix, continue to stage 4. Otherwise, jump to stage 10.
 
 4. We check if the flow can be allocated in the default path. To do so, we retrieve the link utilization data from all links of the path thanks to the data structure mantained by the SNMP link monitor. If the link with the lowest available capacity can support the new flow, go to stage 5. Otherwise, continue to stage 6.
 
@@ -46,7 +46,6 @@ the traffic towards an existing destination to an alternative path.
 
 9. Choose the path that creates the least global congestion. By least congestion we mean, e.g: that 2 links congested 1% is prefearrable to 1 link congested 5%. Then jump to stage 8.
 
-Y. Otherwise, if ECMP is enabled, we jump to stage  can compute the probability of this flow to create congestion in the network.
+10. Calculate the probability for this flow to create congestion. Given the flow size, and the two ECMP paths with their respective minimum available capacities, the congestion probability can be calculated. 
 
-
-
+Otherwise, if ECMP is enabled, we jump to stage  can compute the probability of this flow to create congestion in the network.
