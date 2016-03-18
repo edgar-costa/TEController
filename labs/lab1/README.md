@@ -46,6 +46,6 @@ the traffic towards an existing destination to an alternative path.
 
 9. Choose the path that creates the least global congestion. By least congestion we mean, e.g: that 2 links congested 1% is prefearrable to 1 link congested 5%. Then jump to stage 8.
 
-10. Calculate the probability for this flow to create congestion. Given the flow size, and the two ECMP paths with their respective minimum available capacities, the congestion probability can be calculated. 
+10. Calculate the probability for this flow to create congestion. Given the flow size, and the two ECMP paths with their respective minimum available capacities, the congestion probability can easily be calculated. With the probabilities, we can then jump to stage 11.
 
-Otherwise, if ECMP is enabled, we jump to stage  can compute the probability of this flow to create congestion in the network.
+11. Apply a decision function weather to allocate the flow in the default ECMP paths or find an alternative one. This function takes into account the congestion probability, the number of ECMP paths available, etc. If the output of the function is 1, means we should find another path, thus we jump to stage 6. Otherwise, we finish in stage 5.
