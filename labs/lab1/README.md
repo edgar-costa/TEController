@@ -32,17 +32,19 @@ the traffic towards an existing destination to an alternative path.
 
 2. On the first stage, we compute the longest prefix matching the nF.dst address. This way, we can obtain the corresponding current DAG for that prefix, and calculate the default path that the flow will take. In case ECMP is activated in one of the routers on the way from the ingress router to the egress router, the computed default path will be a list of paths.
 
-3. If ECMP is not enabled, and there is a single path towards the destination prefix, continue to stage 4.
+3. If ECMP is not enabled, and there is a single path towards the destination prefix, continue to stage 4. Otherwise, jump to stage Y.
 
-4. We check if the flow can be allocated in the default path. To do so, we retrieve the link utilization data from the SNMP link monitor of all links along the default path. It the link with the lowest available capacity can support the new flow, go to stage 5. Otherwise, continue to stage 6.
+4. We check if the flow can be allocated in the default path. To do so, we retrieve the link utilization data from all links of the path thanks to the data structure mantained by the SNMP link monitor. If the link with the lowest available capacity can support the new flow, go to stage 5. Otherwise, continue to stage 6.
 
 5. Note down the flow-to-path allocation for the given destination and finish.
 
-6. Look for the next shortest congestion-free path from src to dst.
+6. Look for the next shortest path that can allocate flow without congestion from src to dst. Does it exist? If so, go to stage 7. Otherwise, continue to stage X.
 
-To this
+7
 
-20. Otherwise, if ECMP is enabled, we jump to stage  can compute the probability of this flow to create congestion in the network.
+X.
+
+Y. Otherwise, if ECMP is enabled, we jump to stage  can compute the probability of this flow to create congestion in the network.
 
 
 
