@@ -180,7 +180,7 @@ class SnmpCounters(Base):
 
         if time_info:
             log.info("snmplib.py: updateCounters32() took: %d seconds\n"%(time.time()-start))
-
+zz
 
     def fromLastLecture(self):
         return time.time() - self.lastUpdated
