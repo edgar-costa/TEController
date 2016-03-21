@@ -39,8 +39,9 @@ class TEControllerLab1(SimplePathLB):
 
             elif event['type'] == 'newCapacitiesUpdate':
              	# Update the capacities graph
-             	new_capacities_graph = event['data']
-             	self.updateCapacities(new_capacities_graph)
+             	new_links_capacities = event['data']
+             	self.updateCapacities(new_links_capacities)
+             	
    	            t = time.strftime("%H:%M:%S", time.gmtime())
                 log.info("%s - run(): network available capacities updated\n"%t)
 
@@ -49,9 +50,29 @@ class TEControllerLab1(SimplePathLB):
                 log.info("%s - run(): UNKNOWN Event\n"%t)
                 log.info("\t* Event: "%str(event))
 
-    def updateCapacities(self, new_apacities_graph):
+    def updateCapacities(self, new_links_capacities):
     	# update self.cg wrt new_capacities_graph
-    	pass
+    	for (x,y), edge_data in new_links_capacities.iteritems():
+    		window = self.cg[x][y]['window']
+    		cap = self.cg[x][y]['cap']
+    		if len(window) == 3: #median filter window size = 3
+    			# Remove last element
+	   			window.pop()
+
+    		# Add new capacity readout to filter window
+    		window = [edge_data['cap']] + window
+
+    		# Perform the median filtering
+    		# Sort them by magnitude
+    		window_ordered = window[:]
+    		window_ordered.sort()
+
+    		# Take the median element
+    		chosen_cap = window_ordered[len(window_ordered)/2] 
+
+    		# Update edge data
+    		self.cg[x][y]['window'] = window
+    		self.cg[x][y]['cap'] = chosen_cap
 
 	def dealWithNewFlow(self, flow):
 		"""
@@ -121,7 +142,25 @@ class TEControllerLab1(SimplePathLB):
 	        	# allocate flow to a congestion-free path
             	self.flowAllocationAlgorithm(dst_prefix, flow, currentPath)
 
-
+    def getMinCapacity(self, path):
+     	"""
+     	We overwrite the method so that capacities are now checked from the
+     	SNMP couters data updated by the link monitor thread.
+     	"""
+		caps_in_path = []
+        for (u,v) in zip(path[:-1], path[1:]):
+            edge_data = self.cg.get_edge_data(u, v)
+            cap = edge_data.get('cap', None)
+            caps_in_path.append(cap)
+        try:
+            mini = min(caps_in_path)
+            return mini
+        
+        except ValueError:
+            t = time.strftime("%H:%M:%S", time.gmtime())
+            log.info("%s - getMinCapacity(): ERROR: min could not be calculated\n"%t)
+            log.info("\t* Path: %s\n"%path)            
+            raise ValueError
 
     def _createCapacitiesGraph(self):
 		# Get copy of the network graph
@@ -131,4 +170,12 @@ class TEControllerLab1(SimplePathLB):
 		for node in ng_copy.nodes_iter():
 			if not ng_copy.is_router(node):
 				cg.remove_node(node)
+
+		for (x, y, edge_data) in cg.edges(data=True).iteritems():
+			edge_data['window'] = []
+			edge_data['cap'] = 0
+
 		return cg
+
+
+
