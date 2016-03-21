@@ -197,7 +197,7 @@ class DatabaseHandler(TopologyDB):
                     if isinstance(ndata, dict):
                         edges[(node, neighbor)] = {
                             'bw': ndata['bw']*1e6,
-                            'cap' ndata['bw']*1e6,
+                            'capacity': ndata['bw']*1e6,
                             'interface': ndata['name']
                             }
         return edges

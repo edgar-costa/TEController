@@ -55,6 +55,14 @@ def getAllPathsLimDAG(dag, start, end, k, path=[]):
                     paths.append(newpath)
     return paths
 
+def getMinCapacity(dag, path):
+    """
+    Iterate dag through edges of the path and return the 
+    minimum observed available capacity
+    """
+    caps = [dag[u][v]['capacity'] for u, v in zip(path[:-1], path[1:])]
+    return min(caps)
+
 def flowCongestionProbability(dag, ingress_router, egress_router, flow_size):
     """We assume DAG edges incorporate the available capacities:
     dag[x][y] is a dictionary with a 'capacity' key.
@@ -64,5 +72,4 @@ def flowCongestionProbability(dag, ingress_router, egress_router, flow_size):
     congestion_probability = 0
     for path in paths_congestion:
         congestion_probability += getPathProbability(dag, path)
-
     return congestion_probability
