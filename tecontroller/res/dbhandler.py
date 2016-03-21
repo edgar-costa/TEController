@@ -184,3 +184,21 @@ class DatabaseHandler(TopologyDB):
                                            'load': 0,
                                            'interface': edgeData['name']} 
         return edges
+
+    def getAllRouterEdges(self):
+        """
+        Returns all information about router to router edges.
+        It is used in the LinksMonitorThread.
+        """
+        edges = {}
+        for node, data in self.network.iteritems():
+            if data['type'] == 'router':
+                for neighbor, ndata in data.iteritems():
+                    if isinstance(ndata, dict):
+                        edges[(node, neighbor)] = {
+                            'bw': ndata['bw']*1e6,
+                            'cap' ndata['bw']*1e6,
+                            'interface': ndata['name']
+                            }
+        return edges
+
