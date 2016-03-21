@@ -27,9 +27,14 @@ lm_logfile =  dconf.Hosts_LogFolder + "LM.log"
 
 log = get_logger()
 
-algo_to_file = {'None': 'lbcontroller.py',
-                'SimplePath': 'simplepathlb.py', 
-                'ECMP': 'ecmplb.py'}
+dconf.LBC_Path
+
+algo_to_file = {'lab1': dconf.Lab1_Path + 'tecontroller_lab1.py',
+                'lab2': dconf.Lab2_Path + 'tecontroller_lab2.py',
+                'lab3': dconf.Lab3_Path + 'tecontroller_lab3.py',
+                'None': dconf.LBC_Path + 'lbcontroller.py',
+                'SimplePath': dconf.LBC_Path + 'simplepathlb.py', 
+                'ECMP': dconf.LBC_Path + 'ecmplb.py'}
 
 class MyCustomHost(_node.Host):
     """This class essentially extends the Host class in mininet so that

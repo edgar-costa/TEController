@@ -30,6 +30,12 @@ LBC_Path = PPATH + 'tecontroller/loadbalancer/'
 # Path to Link Monitorer package
 LM_Path = PPATH + 'tecontroller/linkmonitor/'
 
+# Path to Labs
+Labs_Path = PPATH + 'labs/'
+Lab1_Path = Labs_Path + 'lab1/'
+Lab2_Path = Labs_Path + 'lab2/'
+Lab3_Path = Labs_Path + 'lab3/'
+
 # Default port for the json-daemons for the hosts in the network
 Hosts_JsonPort = "5000"
 
