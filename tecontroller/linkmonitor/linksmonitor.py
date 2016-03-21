@@ -73,6 +73,47 @@ class LinksMonitor(object):
         s += '\n'
         return s    
 
+    def log(self):
+        """This function logs the state of the links. f is supposed to be an
+        open python file with write access
+
+        """
+        f = open(self.logfile, 'a')
+        s = "%s"%time.time()
+        taken = []
+        for link, data in self.links.iteritems():
+            (x, y) = data['edge']
+            if (x,y) in taken or (y,x) in taken:
+                continue
+            taken.append((x,y))
+            load = data['load']
+            s += ",(%s %.3f%%)"%(link, load)
+        s += '\n'
+        f.write(s)    
+        f.close()
+
+    def run(self):
+        """
+        """
+        log.info("Going inside the run() loop...\n")
+        # Write edges info to log file (first line)
+        f = open(self.logfile, 'a')
+        f.write(self.printLinkToEdgesLine())
+        f.close()
+
+        while True:
+            # Update links with fresh data from the counters
+            self.updateLinks()
+            #log.info("Links updated...\n")
+
+            # Log new values to logfile
+            #log.info("Logging...\n")
+            self.log()
+            
+            # Go to sleep for some interval time
+            #log.info("Going to sleep...\n")
+            time.sleep(self.interval/2)
+
     def _startCounters(self):
         start = time.time()
         routers = self.db.getRouters()
@@ -119,8 +160,8 @@ class LinksMonitor(object):
 
             bandwidths = []
             for ifacename in iface_names:
-                bw_tmp= [data['bw'] for link, data in
-                         self.links.iteritems() if data['interface']
+                bw_tmp= [d['bw'] for link, d in
+                         self.links.iteritems() if d['interface']
                          == ifacename]
                 if bw_tmp != []:
                     bandwidths.append(bw_tmp[0])
@@ -139,48 +180,6 @@ class LinksMonitor(object):
         if time_info:
             log.info("linksmonitor.py: updateLinks() took %d seconds\n"%(time.time()-start))
 
-
-    def log(self):
-        """This function logs the state of the links. f is supposed to be an
-        open python file with write access
-
-        """
-        f = open(self.logfile, 'a')
-        s = "%s"%time.time()
-        taken = []
-        for link, data in self.links.iteritems():
-            (x, y) = data['edge']
-            if (x,y) in taken or (y,x) in taken:
-                continue
-            taken.append((x,y))
-            load = data['load']
-            s += ",(%s %.3f%%)"%(link, load)
-        s += '\n'
-        f.write(s)    
-        f.close()
-
-        
-    def run(self):
-        """
-        """
-        log.info("Going inside the run() loop...\n")
-        # Write edges info to log file (first line)
-        f = open(self.logfile, 'a')
-        f.write(self.printLinkToEdgesLine())
-        f.close()
-
-        while True:
-            # Update links with fresh data from the counters
-            self.updateLinks()
-            #log.info("Links updated...\n")
-
-            # Log new values to logfile
-            #log.info("Logging...\n")
-            self.log()
-            
-            # Go to sleep for some interval time
-            #log.info("Going to sleep...\n")
-            time.sleep(self.interval/2)
                 
 if __name__ == '__main__':
     #Waiting for the IP's to be assigned...

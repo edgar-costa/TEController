@@ -37,17 +37,70 @@ class LinksMonitorThread(threading.Thread):
     def run(self):
     	while True:
     		# Read capacities from SNMP
-    		new_cg = self.readCapacities()
+    		self.updateLinksCapacities()
 
     		# Push them to the eventQueue
-    		newCapacitiesUpdateEvent = {'type': 'newCapacitiesUpdate', 'data': new_cg}
+    		newCapacitiesUpdateEvent = {'type': 'newCapacitiesUpdate', 
+    									'data': self.links.copy()}
     		self.eventQueue.put(newCapacitiesUpdateEvent)
   		    self.eventQueue.task_done()
     	
     		# Go to sleep interval time
     		time.sleep(self.interval/2)
 
-    def _startCounters(self):
+    def updateLinksCapacities(self):
+    	"""
+    	"""
+    	# Update counters first
+    	self._updateCounters()
+    	for router, counter in self.counters.iteritems():
+    		# Get router interfaces names
+       		iface_names = [data['name'] for data in counter.interfaces]
+
+       		# Get current loads for router interfaces 
+       		# (difference from last read-out)
+       		loads = counter.getLoads()
+       		# Get the time that has elapsed since last read-out
+       		elapsed_time = counter.timeDiff
+			currentThroughputs = loads/float(elapsed_time)
+       		
+       		# Retrieve the bandwidths for router-connected links
+       		bandwidths = []
+       		for ifacename in iface_names:
+       			# Get bandwidth for link in that interface
+       			bw_tmp = [edge_data['bw'] for edge, edge_data in
+                         self.links.iteritems() if edge_data['interface']
+                         == ifacename]
+
+                if bw_tmp != []:
+                    bandwidths.append(bw_tmp[0])
+            bandwidths = np.asarray(bandwidths)
+
+            # Calculate available capacities
+            avialableCaps = bandwidths - currentThroughputs
+
+			# Set link available capacities by interface name
+            for i, iface_name in enumerate(iface_names):
+                iface_availableCap = avialableCaps[i]
+	            self._setLinkCap(iface_name, iface_availableCap)
+
+	def _updateCounters(self):
+        """Updates all interface counters of the routers in the network.
+        Blocks until the counters have been updated.
+        """
+        for r, counter in self.counters.iteritems():
+            while (counter.fromLastLecture() < self.interval):
+                pass
+            counter.updateCounters32() 
+
+	def _setLinkCap(self, iface_name, capacity):
+        edge = [edge for edge, data in self.links.iteritems() if
+                data['interface'] == iface_name]
+        if edge != []:
+            (x,y) = edge[0]
+        self.links[x][y]['cap'] = capacity
+
+	def _startCounters(self):
 	   	"""This function iterates the routers in the network and creates
 	   	a dictionary mapping each router to a SnmpCounter object.
 
@@ -64,16 +117,4 @@ class LinksMonitorThread(threading.Thread):
     	Only router-to-router links are of interest (since we can't modify
     	routes inside subnetworks).
     	"""
-    	all_edges = self.db.getAllRouterEdges()
-
-    	pass
-
-	def _updateCounters(self):
-        """Updates all interface counters of the routers in the network.
-        Blocks until the counters have been updated.
-        """
-        for r, counter in self.counters.iteritems():
-            while (counter.fromLastLecture() < self.interval):
-                pass
-            counter.updateCounters32()
-       
+ 		return self.db.getAllRouterEdges()
