@@ -132,7 +132,7 @@ class SnmpCounters(Base):
         #log.info("snmplib.py: getInterfaces: ifaces_dict: %s\n"%str(ifaces_dict))
 
         # removing sit0 interface
-        remove_sit0_action = [ifaces_dict.remove(iface) for iface in ifaces_dict if iface['name'] == 'sit0']
+        #remove_sit0_action = [ifaces_dict.remove(iface) for iface in ifaces_dict if iface['name'] == 'sit0']
         return ifaces_dict
 
     
