@@ -71,11 +71,11 @@ class Lab1Topo(IPTopo):
         r3 = self.addRouter(R3, cls=MyCustomRouter)
         r4 = self.addRouter(R4, cls=MyCustomRouter)
 
-        self.addLink(r1, r2, cost=10)
+        self.addLink(r1, r2)#, cost=10)
         self.addLink(r1, r4)
         self.addLink(r2, r3)
         self.addLink(r3, r4)
-        self.addLink(r1, r3)
+        #self.addLink(r1, r3)
 
         # Create broadcast domains
         self.addLink(r3, self.addHost('d1'))    
@@ -92,11 +92,12 @@ class Lab1Topo(IPTopo):
         self.addLink(c1, r4, cost=1000)
 
         # Adding Traffic Generator Host
-        c2 = self.addHost(TG, isTrafficGenerator=True) 
-        self.addLink(c2, r4)
+        #c2 = self.addHost(TG, isTrafficGenerator=True) 
+        #self.addLink(c2, r4)
 
         # Adding Traffic Engineering Controller
-        c3 = self.addHost(LBC, isLBController=True, algorithm='lab1')
+        #c3 = self.addHost(LBC, isLBController=True, algorithm='lab1')
+        c3 = self.addHost(LBC)
         self.addLink(c3, r4)
 
 def launch_network():
@@ -109,3 +110,36 @@ def launch_network():
     net.start()
     FibbingCLI(net)
     net.stop()    
+
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument('-c', '--controller',
+                       help='Start the controller',
+                       action='store_true',
+                       default=False)
+    group.add_argument('-n', '--net',
+                       help='Start the Mininet topology',
+                       action='store_true',
+                       default=True)
+    parser.add_argument('-d', '--debug',
+                        help='Set log levels to debug',
+                        action='store_true',
+                        default=False)
+    args = parser.parse_args()
+    
+    if args.debug:
+        _lib.DEBUG_FLAG = True
+        from mininet.log import lg
+        from fibbingnode import log
+        import logging
+        log.setLevel(logging.DEBUG)
+        lg.setLogLevel('debug')
+    if args.controller:
+        launch_controller()
+        
+    elif args.net:
+        launch_network()
+            

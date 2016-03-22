@@ -60,7 +60,7 @@ class MyCustomHost(_node.Host):
             # Fetch which algorithm is running
             algorithm = kwargs.get('algorithm', 'None')
             lbcl = open(lbc_logfile, 'w')
-            tec = self.popen(dconf.LBC_Path+algo_to_file[algorithm],
+            tec = self.popen(algo_to_file[algorithm],
                              stdin=None, stdout=lbcl, stderr=lbcl)
             lbcl.close()
             

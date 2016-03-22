@@ -106,7 +106,9 @@ class LBController(object):
 
         # Mantains the list of the network prefixes advertised by the OSPF routers
         self.ospf_prefixes = self._fillInitialOSPFPrefixes()
-       
+        t = time.strftime("%H:%M:%S", time.gmtime())
+        log.info("%s - Initial OSPF prefixes read\n"%t)
+        
         # Include BW data inside the initial graph.
         n_router_links = self._countRouter2RouterEdges()
         self._readBwDataFromDB()
@@ -128,6 +130,7 @@ class LBController(object):
         log.info("\tHostname\tip\tsubnet\n")
         for name, data in self.db.hosts_to_ip.iteritems():
             log.info("\t%s\t%s\t%s\n"%(name, data['iface_host'], data['iface_router']))
+
         log.info("\tRouter name\tip\t\n")
         for name, ip in self.db.routers_to_ip.iteritems():
             log.info("\t%s\t%s\n"%(name, ip))
@@ -252,8 +255,8 @@ class LBController(object):
                     data['bw'] = int(bw*1e6)
                     data['capacity'] = int(bw*1e6)
             else:
-                #t = time.strftime("%H:%M:%S", time.gmtime())
-                #log.info("%s - _readBwDataFromDB(): ERROR: did not find %s (%s) and %s (%s)\n"%(t, x,xname, y,yname))
+                t = time.strftime("%H:%M:%S", time.gmtime())
+                log.info("%s - _readBwDataFromDB(): ERROR: did not find %s (%s) and %s (%s)\n"%(t, x,xname, y,yname))
                 pass
                 
     def _countRouter2RouterEdges(self):

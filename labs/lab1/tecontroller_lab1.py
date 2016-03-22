@@ -1,84 +1,61 @@
+#!/usr/bin/python
 from tecontroller.loadbalancer.simplepathlb import SimplePathLB
+from tecontroller.linkmonitor.linksmonitor_thread import LinksMonitorThread
 from fibbingnode.misc.mininetlib import get_logger
+from tecontroller.res import defaultconf as dconf
 from tecontroller.res.problib import *
-
+import threading
+import time
 import Queue
 
 log = get_logger()
+lineend = "-"*100+'\n'
 
 class TEControllerLab1(SimplePathLB):
     def __init__(self):
         # Call init method from LBController
         super(TEControllerLab1, self).__init__()
-                
-        # Start the links monitorer thread linked to the event queue
-        lmt = LinksMonitorerThread(queue = self.eventQueue,
-                                   network_graph = self.network_graph)
-		lmt.start()
-                
-		# Graph that will hold the link available capacities
-		self.cg = self._createCapacitiesGraph()
 
+        # Create lock for synchronization on accessing self.cg
+        capacityGraphLock = threading.Lock()
+
+        # Graph that will hold the link available capacities
+        with capacityGraphLock:
+            self.cg = self._createCapacitiesGraph()
+
+        # Start the links monitorer thread linked to the event queue
+        lmt = LinksMonitorThread(capacity_graph=self.cg, lock=capacityGraphLock)
+        lmt.start()
+
+        
     def run(self):
         """Main loop that deals with new incoming events
         """
         while not self.isStopped():
             # Get event from the queue (blocking)
             event = self.eventQueue.get()
-            log.info(lineend)
-            t = time.strftime("%H:%M:%S", time.gmtime())
-            log.info("%s - run(): NEW event in the queue\n"%t)
-            log.info("\t* Type: %s\n"%event['type'])
                         
             if event['type'] == 'newFlowStarted':
-                # Fetch flow from queue
+                # Log it
+                log.info(lineend)
+                t = time.strftime("%H:%M:%S", time.gmtime())
+                log.info("%s - run(): %s retrieved from eventQueue\n"%(t, event['type']))
                 flow = event['data']
                 log.info("\t* Flow: %s\n"%self.toLogFlowNames(flow))
                 
                 # Deal with new flow
                 self.dealWithNewFlow(flow)
-
-            elif event['type'] == 'newCapacitiesUpdate':
-                # Update the capacities graph
-                new_links_capacities = event['data']
-                self.updateCapacities(new_links_capacities)
-             	
-                t = time.strftime("%H:%M:%S", time.gmtime())
-                log.info("%s - run(): network available capacities updated\n"%t)
-
+                
             else:
                 t = time.strftime("%H:%M:%S", time.gmtime())
                 log.info("%s - run(): UNKNOWN Event\n"%t)
                 log.info("\t* Event: "%str(event))
-                                
-    def updateCapacities(self, new_links_capacities):
-        # update self.cg wrt new_capacities_graph
-        for (x,y), edge_data in new_links_capacities.iteritems():
-            window = self.cg[x][y]['window']
-            cap = self.cg[x][y]['capacity']
-            if len(window) == 3: #median filter window size = 3
-                # Remove last element
-	   			window.pop()
 
-            # Add new capacity readout to filter window
-            window = [edge_data['capacity']] + window
 
-            # Perform the median filtering
-            # Sort them by magnitude
-            window_ordered = window[:]
-            window_ordered.sort()
-
-            # Take the median element
-            chosen_cap = window_ordered[len(window_ordered)/2] 
-
-            # Update edge data
-            self.cg[x][y]['window'] = window
-            self.cg[x][y]['capacity'] = chosen_cap
-                        
     def dealWithNewFlow(self, flow):
         """
-		Re-writes the parent class method.
-		"""
+        Re-writes the parent class method.
+        """
         # Get the communicating interfaces
         src_iface = flow['src']
         dst_iface = flow['dst']
@@ -172,7 +149,7 @@ class TEControllerLab1(SimplePathLB):
         We overwrite the method so that capacities are now checked from the
         SNMP couters data updated by the link monitor thread.
         """
-		caps_in_path = []
+        caps_in_path = []
         for (u,v) in zip(path[:-1], path[1:]):
             edge_data = self.cg.get_edge_data(u, v)
             cap = edge_data.get('capacity', None)
@@ -189,17 +166,24 @@ class TEControllerLab1(SimplePathLB):
 
     def _createCapacitiesGraph(self):
         # Get copy of the network graph
-		ng_copy = self.network_graph.copy()
-		cg = self.network_graph.copy()
-		
-		for node in ng_copy.nodes_iter():
-			if not ng_copy.is_router(node):
-				cg.remove_node(node)
-
-        for (x, y, edge_data) in cg.edges(data=True).iteritems():
+        ng_copy = self.network_graph.copy()
+        cg = self.network_graph.copy()
+        
+        for node in ng_copy.nodes_iter():
+            if not ng_copy.is_router(node):
+                cg.remove_node(node)
+                
+        for (x, y, edge_data) in cg.edges(data=True):
             edge_data['window'] = []
-			edge_data['capacity'] = 0
-		return cg
+            edge_data['capacity'] = 0
+        return cg
 
 
-
+if __name__ == '__main__':
+    log.info("LOAD BALANCER CONTROLLER - Lab 1 - Enforcing simple paths only\n")
+    log.info("-"*60+"\n")
+    time.sleep(dconf.LBC_InitialWaitingTime)
+    
+    tec = TEControllerLab1()
+    tec.run()
+                                

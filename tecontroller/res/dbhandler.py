@@ -194,8 +194,10 @@ class DatabaseHandler(TopologyDB):
         for node, data in self.network.iteritems():
             if data['type'] == 'router':
                 for neighbor, ndata in data.iteritems():
-                    if isinstance(ndata, dict):
-                        edges[(node, neighbor)] = {
+                    if isinstance(ndata, dict) and self.network[neighbor].get('type', None) == 'router':
+                        x = self.routerid(node)
+                        y = self.routerid(neighbor)
+                        edges[(x, y)] = {
                             'bw': ndata['bw']*1e6,
                             'capacity': ndata['bw']*1e6,
                             'interface': ndata['name']
