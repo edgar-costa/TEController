@@ -117,15 +117,33 @@ class TEControllerLab1(SimplePathLB):
 
         if ecmp_active:
             # Calculate congestion probability
+
             # Get active dag for current destination
             adag = self.getActiveDag(dst_prefix)
-            # I WAS HEREEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE!
+            
             # Insert current available capacities in dag
             for (u,v,data) in adag.edges(data=True).iteritems():
+                cap = self.cg[u][v]['capacity']
+                data['capacity'] = cap
 
+            # Get ingress and egress router
+            ingress_router = currentPaths[0][0]
+            egress_router = currentPaths[0][-1]
+
+            # compute congestion probability
+            congProb = flowCongestionProbability(adag, ingress_router,
+                                                 egress_router, flow.size)
             # Apply decision function
             # Act accordingly
-            pass
+            # Log it
+            to_print = "\t* Flow will be allocated "
+            to_print += "with a congestion probability of %f\n"
+            log.info(to_print%congProb)
+            to_print = "\t* Paths: %s\n"
+            log.info(to_print%str([self.toLogRouterNames(path) for path in currentPaths]))
+
+            # Allocate flow to current paths
+            self.addAllocationEntry(dst_prefix, flow, currentPaths)
 
         else:
             # currentPath is still a list of a single list: [[A,B,C]]
