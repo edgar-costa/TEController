@@ -484,7 +484,7 @@ class LBController(object):
                     # ECMP is happening
                     ecmp = True
                     to_print = "\t\tECMP is ACTIVE between %s and %s\n"
-                    log.info(to_print%(self.getNameFromIP(cr), self.getNameFromIP(cr)))
+                    log.info(to_print%(self.db.getNameFromIP(cr), self.db.getNameFromIP(cr)))
                     
                 elif len(default_paths) == 1:
                     ecmp = False
