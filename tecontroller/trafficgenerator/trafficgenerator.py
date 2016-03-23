@@ -128,8 +128,8 @@ class TrafficGenerator(Base):
 
         t = time.strftime("%H:%M:%S", time.gmtime())
         log.info('%s - Starting Flow\n'%t) 
-        log.info('\t Sending request to host\n')
-        log.info('\t   * Flow: %s\n'%str(flow))
+        log.info('\t Sending request to host %s\n'%str(flow['src']))
+        log.info('\t   * Flow: %s\n'%self.toLogFlowNames(flow))
         log.info('\t   * Url: %s\n'%url)
 
         # Send request to host to start new iperf client session
