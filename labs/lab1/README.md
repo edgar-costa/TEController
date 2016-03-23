@@ -53,3 +53,10 @@ the traffic towards an existing destination to an alternative path.
 10. Calculate the probability for this flow to create congestion. Given the flow size, and the two ECMP paths with their respective minimum available capacities, the congestion probability can easily be calculated. With the probabilities, we can then jump to stage 11.
 
 11. Apply a decision function weather to allocate the flow in the default ECMP paths or find an alternative one. This function takes into account the congestion probability, the number of ECMP paths available, etc. If the output of the function is 1, means we should find another path, thus we jump to stage 6. Otherwise, we finish in stage 5.
+
+
+### Limitations
+
+1. At the moment, the data structure that holds the instantaneous link available capacities is just a thread that periodically sends SNMP queries to all routers in the network to ask for their interface counters. The interface counters, though, are only updated every second, and this is a clear limitation of our algorithm. For instance, if two flows start in the second elapsed between two successive counter updates, the second flow will not take into account the capacity consumption created by the first one.
+
+This could be overcomed by using the flow-allocations instead to determine the available capacity of a link. SNMP/sFlow measurements could be used only as a feedback loop when there is ECMP and we are not sure where the flows are actually being allocated in reality. However, this has the drawback that there is some traffic going through the links that is not orchestrated by the traffic generator (such as the SNMP queries/responses, for instance) and this could represent a not negligible part of the total bandwidth for small links (~100K of uncontrolled traffic).
