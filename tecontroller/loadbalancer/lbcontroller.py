@@ -469,6 +469,7 @@ class LBController(object):
             subnet_prefix = prefix
             
             other_routers = [rn for rn in self.network_graph.routers if rn != cr]
+
             for r in other_routers:
                 # Get the shortest path
                 dpath = apdp[r][cr]
@@ -483,8 +484,8 @@ class LBController(object):
                 if len(default_paths) > 1:
                     # ECMP is happening
                     ecmp = True
-                    to_print = "\t\tECMP is ACTIVE between %s and %s\n"
-                    log.info(to_print%(self.db.getNameFromIP(cr), self.db.getNameFromIP(cr)))
+                    to_print = "\tECMP is ACTIVE between %s and %s\n"
+                    log.info(to_print%(self.db.getNameFromIP(cr), self.db.getNameFromIP(r)))
                     
                 elif len(default_paths) == 1:
                     ecmp = False
