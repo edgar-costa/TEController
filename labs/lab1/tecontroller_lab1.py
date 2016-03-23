@@ -106,14 +106,14 @@ class TEControllerLab1(SimplePathLB):
             ingress_router = currentPaths[0][0]
             egress_router = currentPaths[0][-1]
 
-            #import ipdb; ipdb.set_trace()
             # compute congestion probability
-            log.info("\t Computing flow congestion probability\n")
+            t = time.strftime("%H:%M:%S", time.gmtime())
+            log.info("%s - Computing flow congestion probability\n"%t)
             #log.info("\t * DAG: %s\n"%(self.toLogDagNames(adag).edges(data=True)))
             #log.info("\t * Ingress router: %s\n"%ingress_router)
             #log.info("\t * Engress router: %s\n"%egress_router)
-            log.info("\t * Flow size: %d\n"%flow.size)
-            log.info("\t * EQ Paths: %s\n"%self.toLogRouterNames(currentPaths))
+            log.info("\t* Flow size: %d\n"%flow.size)
+            log.info("\t* EQ Paths: %s\n"%self.toLogRouterNames(currentPaths))
                     
             congProb = flowCongestionProbability(adag, ingress_router,
                                                  egress_router, flow.size)
@@ -127,13 +127,13 @@ class TEControllerLab1(SimplePathLB):
             log.info(to_print%str([self.toLogRouterNames(path) for path in currentPaths]))
 
             if self.shouldDeactivateECMP(dag, currentPaths, congProb):
-                # Here we have to think what to do.
+                # Here we have to think what to do when probability of
+                # congestion is too high.
                 pass
-            
+
             else:
                 # Allocate flow to current paths
                 self.addAllocationEntry(dst_prefix, flow, currentPaths)
-
         else:
             # currentPath is still a list of a single list: [[A,B,C]]
             # but makes it more understandable
@@ -147,6 +147,7 @@ class TEControllerLab1(SimplePathLB):
 
                 # We just allocate the flow to the currentPath
                 self.addAllocationEntry(dst_prefix, flow, currentPath)
+
             else:
                 # Congestion created. 
                 t = time.strftime("%H:%M:%S", time.gmtime())
