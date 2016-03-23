@@ -454,8 +454,10 @@ class LBController(object):
         """Populates the self.dags attribute by creating a complete DAG for
         each destination.
         """
+        # Log it
         t = time.strftime("%H:%M:%S", time.gmtime())
         log.info("%s - Creating initial DAGs\n"%t)
+        pairs_already_logged = []
                            
         apdp = nx.all_pairs_dijkstra_path(self.initial_graph, weight='metric')
 
@@ -484,8 +486,10 @@ class LBController(object):
                 if len(default_paths) > 1:
                     # ECMP is happening
                     ecmp = True
-                    to_print = "\tECMP is ACTIVE between %s and %s\n"
-                    log.info(to_print%(self.db.getNameFromIP(cr), self.db.getNameFromIP(r)))
+                    if (cr, r) not in pairs_already_logged and (r, cr) not in pairs_already_logged:
+                        to_print = "\tECMP is ACTIVE between %s and %s. There are %d paths with equal cost of %d\n"
+                        log.info(to_print%(self.db.getNameFromIP(cr), self.db.getNameFromIP(r), len(default_paths), dlength))
+                        pairs_already_logged.append((cr, r))
                     
                 elif len(default_paths) == 1:
                     ecmp = False
@@ -494,7 +498,7 @@ class LBController(object):
                 else:
                     t = time.strftime("%H:%M:%S", time.gmtime())
                     log.info("%s - _createInitialDags(): ERROR. At least there should be a path\n"%t)
-
+                    
                 # Iterate through paths and add edges to DAG
                 for path in default_paths:
                     edge_list = zip(path[:-1], path[1:])
