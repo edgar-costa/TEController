@@ -560,8 +560,7 @@ class LBController(object):
             
         # Loggin a bit...
         t = time.strftime("%H:%M:%S", time.gmtime())
-        to_print = "%s - addAllocationEntry(): "
-        to_print += "flow ALLOCATED to Paths\n"
+        to_print = "%s - flow ALLOCATED to Paths\n"
         log.info(to_print%t)
         log.info("\t* Dest_prefix: %s\n"%prefix)
         log.info("\t* Paths (%s): %s\n"%(len(path_list), str([self.toLogRouterNames(path) for path in path_list])))
@@ -589,9 +588,9 @@ class LBController(object):
                 data = self.initial_graph.get_edge_data(u, v)
                 capacity = data.get('capacity', None)
                 if capacity:
-                    # Substract portion of flow size
-                    data['capacity'] -= (flow.size/float(ecmp_paths))
-
+                    # Substract full flow size in edges of both paths 
+                    data['capacity'] -= (flow.size)
+                    
                     # Modify also the capacity data of the reverse edge
                     data_i = self.initial_graph.get_edge_data(v, u)
                     data_i['capacity'] = data['capacity']
@@ -632,7 +631,7 @@ class LBController(object):
                 raise KeyError("%s is not alloacated in this prefix %s"%str(repr(flow)))
 
         t = time.strftime("%H:%M:%S", time.gmtime())
-        log.info("%s - removeAllocationEntry(): Flow REMOVED from Paths\n"%t)
+        log.info("%s - Flow REMOVED from Paths\n"%t)
         log.info("\t* Dest_prefix: %s\n"%prefix)
         log.info("\t* Paths (%s): %s\n"%(len(path_list), str([self.toLogRouterNames(path) for path in path_list])))
         log.info("\t* Flow: %s\n"%self.toLogFlowNames(flow))
@@ -670,7 +669,10 @@ class LBController(object):
                 data = self.initial_graph.get_edge_data(u, v)
                 capacity = data.get('capacity', None)
                 if capacity:
-                    data['capacity'] += (flow.size/float(ecmp_paths))
+                    # Add back the full capacity taken by the flow
+                    # that just finished
+                    data['capacity'] += (flow.size)
+
                     # Set also the reverse edge
                     data_i = self.initial_graph.get_edge_data(v, u)
                     data_i['capacity'] = data['capacity']
@@ -684,6 +686,7 @@ class LBController(object):
         # Remove the lies for the given prefix
         self.removePrefixLies(prefix, path_list)
 
+        
     def removePrefixLies(self, prefix, path_list):
         """Remove lies for a given prefix only if there are no more flows
         allocated for that prefix flowing through some edge of
@@ -694,6 +697,9 @@ class LBController(object):
         :param path_list: List of paths from source to
                           destination. E.g: [[A,B,C],[A,D,C]]
         """
+        # log a bit
+        t = time.strftime("%H:%M:%S", time.gmtime())
+        log.info("%s - Removing existing lies..."%t)
 
         # Get the current DAG for that prefix
         current_dag = self.getCurrentDag(prefix)
@@ -705,15 +711,14 @@ class LBController(object):
 
         if not thereIsFibbedPath:
             # Paths for this flow are not fibbed
-            t = time.strftime("%H:%M:%S", time.gmtime())
-            to_print = "%s - removePrefixLies(): no fibbed edges found in paths %s for prefix: %s\n"
-            log.info(to_print%(t, str(self.toLogRouterNames(path_list)), prefix))
+            to_print = "\t* No fibbed edges found in paths %s for prefix: %s\n"
+            log.info(to_print%(str(self.toLogRouterNames(path_list)), prefix))
 
         else:
             # Get the lies for prefix
             lsa = self.getLiesFromPrefix(prefix)
 
-            log.info("Found fibbed edges in paths: %s\n"%str(self.toLogRouterNames(path_list)))
+            log.info("\t* Found fibbed edges in paths: %s\n"%str(self.toLogRouterNames(path_list)))
 
             # Fibbed prefix
             # Let's check if there are other flows for prefix fist
@@ -723,7 +728,7 @@ class LBController(object):
             # path in path_list. If not, we can delete the
             # lies. Otherwise, we must wait.
             if allocated_flows == []:
-                log.info("No allocated flows remain for prefix\n")
+                log.info("\t* No allocated flows remain for prefix\n")
                 # Obviously, if no flows are found, we can already
                 # remove the lies.
 
@@ -754,12 +759,11 @@ class LBController(object):
                 self.sbmanager.add_dag_requirement(prefix, activeDag.copy())
 
                 # Log it
-                t = time.strftime("%H:%M:%S", time.gmtime())
-                log.info("%s - removePrefixLies(): removed lies for prefix: %s\n"%(t, prefix))
+                log.info("\t* Removed lies for prefix: %s\n"%prefix)
                 log.info("\t* LSAs: %s\n"%(str(lsa)))
                 
             else:
-                log.info("Some flows for prefix still remain\n")
+                log.info("\t* Some flows for prefix still remain ongoing\n")
                 canRemoveLSA = True
 
                 # Collect first the edges of the paths to remove
@@ -787,12 +791,10 @@ class LBController(object):
                 if canRemoveLSA == False:
                     # Just log it
                     flows = [f for (f, p) in allocated_flows]
-                    t = time.strftime("%H:%M:%S", time.gmtime())
-                    to_print = "%s - removePrefixLies(): "
-                    to_print += "lies for prefix %s not removed. Flows yet ongoing:\n"
-                    log.info(to_print%(t, prefix))
+                    to_print = "\t* Lies for prefix %s not removed. Flows yet ongoing:\n"
+                    log.info(to_print%prefix)
                     for f in flows:
-                        log.info("\t%s\n"%(self.toLogFlowNames(f)))
+                        log.info("\t\t%s\n"%(self.toLogFlowNames(f)))
                 else:
                     # Set the DAG for the prefix destination to its
                     # original version
@@ -820,10 +822,8 @@ class LBController(object):
                     self.sbmanager.add_dag_requirement(prefix, activeDag.copy())
                 
                     # Log it
-                    t = time.strftime("%H:%M:%S", time.gmtime())
-                    to_print = "%s - removePrefixLies(): removed lies for prefix: %s\n"
-                    log.info(to_print%(t, prefix))
-                    log.info("\tLSAs: %s\n"%(str(lsa)))
+                    log.info("\t* Removed lies for prefix: %s\n"%prefix)
+                    log.info("\t* LSAs: %s\n"%(str(lsa)))
 
         log.info(lineend)
            
