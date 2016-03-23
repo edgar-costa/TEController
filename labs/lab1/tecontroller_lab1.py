@@ -106,20 +106,33 @@ class TEControllerLab1(SimplePathLB):
             ingress_router = currentPaths[0][0]
             egress_router = currentPaths[0][-1]
 
+            #import ipdb; ipdb.set_trace()
             # compute congestion probability
+            log.info("\t Computing flow congestion probability\n")
+            #log.info("\t * DAG: %s\n"%(self.toLogDagNames(adag).edges(data=True)))
+            #log.info("\t * Ingress router: %s\n"%ingress_router)
+            #log.info("\t * Engress router: %s\n"%egress_router)
+            log.info("\t * Flow size: %d\n"%flow.size)
+            log.info("\t * EQ Paths: %s\n"%self.toLogRouterNames(currentPaths))
+                    
             congProb = flowCongestionProbability(adag, ingress_router,
                                                  egress_router, flow.size)
             # Apply decision function
             # Act accordingly
             # Log it
             to_print = "\t* Flow will be allocated "
-            to_print += "with a congestion probability of %f\n"
+            to_print += "with a congestion probability of %.2f\n"
             log.info(to_print%congProb)
             to_print = "\t* Paths: %s\n"
             log.info(to_print%str([self.toLogRouterNames(path) for path in currentPaths]))
 
-            # Allocate flow to current paths
-            self.addAllocationEntry(dst_prefix, flow, currentPaths)
+            if self.shouldDeactivateECMP(dag, currentPaths, congProb):
+                # Here we have to think what to do.
+                pass
+            
+            else:
+                # Allocate flow to current paths
+                self.addAllocationEntry(dst_prefix, flow, currentPaths)
 
         else:
             # currentPath is still a list of a single list: [[A,B,C]]
@@ -130,19 +143,19 @@ class TEControllerLab1(SimplePathLB):
             if self.canAllocateFlow(flow, currentPath):
                 # No congestion. Do nothing
                 t = time.strftime("%H:%M:%S", time.gmtime())
-                log.info("%s - dealWithNewFlow(): Flow can be ALLOCATED\n"%t)
+                log.info("%s - Flow can be ALLOCATED\n"%t)
 
                 # We just allocate the flow to the currentPath
                 self.addAllocationEntry(dst_prefix, flow, currentPath)
             else:
                 # Congestion created. 
                 t = time.strftime("%H:%M:%S", time.gmtime())
-                log.info("%s - dealWithNewFlow(): Flow will cause CONGESTION\n"%t)
+                log.info("%s - Flow will cause CONGESTION\n"%t)
                 
                 # Call the subclassed method to properly 
                 # allocate flow to a congestion-free path
                 self.flowAllocationAlgorithm(dst_prefix, flow, currentPath)
-
+                
     def getMinCapacity(self, path):
         """
         We overwrite the method so that capacities are now checked from the
@@ -177,6 +190,15 @@ class TEControllerLab1(SimplePathLB):
             edge_data['capacity'] = 0
         return cg
 
+    def shouldDeactivateECMP(dag, currentPaths, congProb):
+        """This function returns a boolean output that decides wheather we
+        should deactivate ECMP.
+
+        TODO
+        """
+        return False
+
+    
 if __name__ == '__main__':
     log.info("LOAD BALANCER CONTROLLER - Lab 1 - Enforcing simple paths only\n")
     log.info("-"*70+"\n")
