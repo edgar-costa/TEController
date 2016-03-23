@@ -43,5 +43,5 @@ if __name__ == '__main__':
                 'start_time':0,
                 'duration':base.setTimeToInt(args.duration)}
 
-        url = "http://%s:%s/startflow"%(MyOwnIp, dconf.LBC_JsonPort)
+        url = "http://%s:%s/startflow"%(MyOwnIp, dconf.TG_JsonPort)
         requests.post(url, json = flow)
