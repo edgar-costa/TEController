@@ -218,7 +218,6 @@ class TEControllerLab1(SimplePathLB):
                 ng_temp.remove_edge(x, y) 
         return ng_temp
 
-
     def getIngressRouter(self, flow):
         """
         """
@@ -235,7 +234,6 @@ class TEControllerLab1(SimplePathLB):
                 return r
         return None
 
-
     def _orderByCapacityLeft(self, paths):
         """Given a list of arbitrary paths. It ranks them by capacity left (or
         total edges weight).
@@ -250,7 +248,6 @@ class TEControllerLab1(SimplePathLB):
         # Now rank them from more to less capacity available
         ordered_paths = sorted(ordered_paths, key=lambda x: x[1], reverse=True)
         return ordered_paths
-    
     
     def flowAllocationAlgorithm(self, dst_prefix, flow, initial_paths):
         """
@@ -308,67 +305,128 @@ class TEControllerLab1(SimplePathLB):
             # destination prefix ranked by capacity left
             all_congested_paths = self.getAllPathsRanked(tmp_nw, src_cr, dst_initial_prefix, ranked_by='capacity')
 
+            # Set common variable to iterate
             paths_to_iterate = all_congested_paths
+
+            path_congestion_pairs = []
+            # Try out all paths, and force the one that will create less congestion.
+            # Intermediate results are saved in path_congestion_pairs
+            for path in paths_to_iterate:
+                # Remove the destination subnet hop node from the path
+                path = path[:-1]
+                    
+                # Initialize accumulated required capacity
+                accumulated_required_capacity = required_capacity
+                accumulated_congestion = 0
+                    
+                # Accumulate flows that will be moved
+                total_moved_flows = []
+                    
+                #
+                for index, node in enumerate(path[:-1]):
+                    # Get flows that will be moved to path
+                    moved_flows = [f for (f, pl) in ongoing_flow_allocations for p in pl if node in p]
+                        
+                    # Accumulate the sizes of the flows that are moved to path
+                    accumulated_required_capacity += sum([f.size for f in moved_flows])
+
+                    # Add moved flows to total_moved_flows
+                    total_moved_flows.append(moved_flows)
+                        
+                    # Calculate edge required capacity
+                    edge = (node, path[i+1])
+                    congestion = accumulated_required_capacity - self.cg[edge[0]][edge[1]]['capacity']
+
+                    # Only add if it's positive, since negative
+                    # congestion is not used anyway.
+                    if congestion > 0:
+                        accumulated_congestion += congestion 
+
+                # Choosing this path, would create such amount of accumulated congestion
+                # Append it in variable
+                path_congestion_pairs.append(path[:-1], accumulated_congestion, total_moved_flows)
+
+            # Let's choose the one with the least congestion
+            least_congestion = min(path_congestion_pairs, key=lambda x: x[1])
+                
+            chosen_path = least_congestion[0]
+            chosen_path_congestion = least_congestion[1]
+            chosen_path_moved_flows = least_congestion[2]
+                
+            to_log = "\t* Found path that will create less congestion: %s, congestion %d\n"
+            log.info(to_log%(self.toLogRouterNames(chosen_path), chosen_path_congestion))
+                        
         else:
             # Yes. There is a path
             path_found = True
-
             paths_to_iterate = congestion_free_paths
-            
-        # Try all paths, and force the least-congested one.
-        # Intermediate results are saved in path_congestion_pairs
-        path_congestion_pairs = []
-            
-        for path in paths_to_iterate:
-            # Remove the destination subnet hop node from the path
-            lcpath = path[:-1]
-                
-            # Modify destination DAG
-            dag = self.getCurrentDag(dst_prefix)
-                
-            # Initialize accumulated required capacity
-            accumulated_required_capacity = required_capacity
-            accumulated_congestion = 0
-                
-            # Accumulate flows that will be moved
-            total_moved_flows = []
-                
-            for index, node in enumerate(path[:-1]):
-                # Get flows that will be moved to lcpath
-                moved_flows = [f for (f, pl) in ongoing_flow_allocations for p in pl if node in p]
+
+            t = time.strftime("%H:%M:%S", time.gmtime())
+            log.info("%s - Found path/s that can allocate flow\n"%t)
+
+            path_congestion_pairs = []
+            for path in paths_to_iterate:
+                # Remove the destination subnet hop node from the path
+                path = path[:-1]
                     
-                # Accumulate the sizes of the flows that are moved to path
-                accumulated_required_capacity += sum([f.size for f in moved_flows])
-
-                # Add moved flows to total_moved_flows
-                total_moved_flows.append(moved_flows)
+                # Initialize accumulated required capacity
+                accumulated_required_capacity = required_capacity
+                accumulated_congestion = 0
                     
-                # Calculate edge required capacity
-                edge = (node, path[i+1])
-                congestion = accumulated_required_capacity - self.cg[edge[0]][edge[1]]['capacity']
+                # Accumulate flows that will be moved
+                total_moved_flows = []
+                    
+                for index, node in enumerate(path[:-1]):
+                    # Get flows that will be moved to path
+                    moved_flows = [f for (f, pl) in ongoing_flow_allocations for p in pl if node in p]
+                        
+                    # Accumulate the sizes of the flows that are moved to path
+                    accumulated_required_capacity += sum([f.size for f in moved_flows])
 
-                # Only add if it's positive, since negative
-                # congestion is not used anyway.
-                if congestion > 0:
-                    accumulated_congestion += congestion 
+                    # Add moved flows to total_moved_flows
+                    total_moved_flows.append(moved_flows)
+                        
+                    # Calculate edge required capacity
+                    edge = (node, path[i+1])
+                    congestion = accumulated_required_capacity - self.cg[edge[0]][edge[1]]['capacity']
 
-            # Choosing this path, would create such amount of accumulated congestion
-            # Append it in variable
-            path_congestion_pairs.append(path[:-1], accumulated_congestion, total_moved_flows)
+                    if congestion > 0:
+                            accumulated_congestion += congestion 
 
-        # Let's choose the one with the least congestion
-        least_congestion = min(path_congestion_pairs, key=lambda x: x[1])
-            
-        chosen_path = least_congestion[0]
-        chosen_path_congestion = least_congestion[1]
-        chosen_path_moved_flows = least_congestion[2]
-            
-        to_log = "\t* Found path that will create less congestion: %s, congestion %d\n"
-        log.info(to_log%(self.toLogRouterNames(chosen_path), chosen_path_congestion))
-            
+                # Choosing this path, would create such amount of accumulated congestion
+                # Append it in variable
+                path_congestion_pairs.append(path[:-1], accumulated_congestion, total_moved_flows)
+                
+            # Sort them from less to more congestion created
+            path_congestion_pairs_sorted = sorted(path_congestion_pairs, key=lambda x:x[1])
+
+            if path_congestion_pairs_sorted[0][1] != 0:
+                log.info("\t* But all of them create congestion when moving other flows\n")
+                log.info("\t* Choosing the one that creates less congestion...\n")
+                # There is no path that in the end does not create congestion...
+                
+                # Choose the one with the least congestion
+                chosen_path = path_congestion_pairs_sorted[0][0]
+                chosen_path_congestion = path_congestion_pairs_sorted[0][1]
+                chosen_path_moved_flows = path_congestion_pairs_sorted[0][2]
+                log.info("\t* Path (readable): %s\n"%chosen_path)
+                log.info("\t* Path (readable): %s\n"%str(self.toLogRouterNames(chosen_path)))
+                log.info("\t* Congestion created: %d\n"%chosen_path_congestion)
+
+            else:
+                log.info("\t* There are paths that do not create congestion\n")
+                paths_without_congestion = [(p, c, f) for (p, c, f) in path_congestion_pairs if c == 0]
+                chosen_path = paths_without_congestion[0][0]
+                chosen_path_moved_flows 
+                log.info("\t* Path (readable): %s\n"%chosen_path)
+                log.info("\t* Path (readable): %s\n"%str(self.toLogRouterNames(chosen_path)))
+
+        # From here and below is common code regardless if 
+        # congestion_free paths are found or not
+        
         # Get edges of new found path
         chosen_path_edges = set(zip(chosen_path[:-1], chosen_path[1:]))
-            
+                
         # Deactivate old edges from initial path nodes (won't be
         # used anymore)
         for node in chosen_path:
@@ -378,7 +436,7 @@ class TEControllerLab1(SimplePathLB):
                 if a_e not in chosen_path_edges:
                     dag = self.switchDagEdgesData(dag, [(a_e)], active = False)
                     dag = self.switchDagEdgesData(dag, [(a_e)], ongoing_flows = False)
-                    
+                        
         # Update the flow_allocation
         for f in chosen_path_moved_flows:
             # Get path list of flow
@@ -397,13 +455,13 @@ class TEControllerLab1(SimplePathLB):
 
         # Update allocation entry
         self.flow_allocation[f] = final_pl
-        
+            
         # Add new edges from new computed path
         dag = self.switchDagEdgesData(dag, [chosen_path], active=True)
-        
+            
         # This complete DAG goes to the prefix-dag data attribute
         self.setCurrentDag(dst_prefix, dag)
-        
+            
         # Retrieve only the active edges to force fibbing
         final_dag = self.getActiveDag(dst_prefix)
 
@@ -411,10 +469,10 @@ class TEControllerLab1(SimplePathLB):
         dtp = self.toLogDagNames(final_dag)
         log.info("\t* Final modified dag for prefix: the one with which we fib the prefix\n")
         log.info("\t  %s\n"%str(dtp.edges()))
-        
+            
         # Force DAG for dst_prefix
         self.sbmanager.add_dag_requirement(dst_prefix, final_dag)
-        
+            
         # Allocate flow to Path. It HAS TO BE DONE after changing the DAG...
         self.addAllocationEntry(dst_prefix, flow, [chosen_path])
 
@@ -423,121 +481,7 @@ class TEControllerLab1(SimplePathLB):
         to_print = "%s - flowAllocationAlgorithm(): "
         to_print += "Forced forwarding DAG in Southbound Manager\n"
         log.info(to_print%t)
-            
         
-            if path_found:
-                t = time.strftime("%H:%M:%S", time.gmtime())
-                log.info("%s - flowAllocationAlgorithm(): Found path that can allocate flow\n"%t)
-                log.info("\t* Path (readable): %s\n"%str(self.toLogRouterNames(shortest_congestion_free_path)))
-                log.info("\t* Path (ips): %s\n"%str(shortest_congestion_free_path))
-                # Rename
-                scfp = shortest_congestion_free_path
-            else:
-                t = time.strftime("%H:%M:%S", time.gmtime())
-                log.info("%s - flowAllocationAlgorithm(): Allocating flow in least congested path...\n"%t)
-                log.info("\t* Path (readable): %s\n"%str(self.toLogRouterNames(least_congested_path)))
-                log.info("\t* Path (ips): %s\n"%str(least_congested_path))
-                # Rename
-                scfp = least_congested_path
-
-            # Will be overwritten if longer prefix is needed
-            new_dst_prefix = dst_prefix
-
-            # Check if longer prefix needed
-            if self.longerPrefixNeeded(dst_prefix, initial_paths, [scfp]):
-                
-                # Log it first
-                t = time.strftime("%H:%M:%S", time.gmtime())
-                to_print = "%s - flowAllocationAlgorithm(): longer prefix fibbing needed\n"
-                log.info(to_print%t)
-
-                # Get destination host ip
-                dst_ip = flow['dst'].ip
-                # Create network object from dst_prefix
-                dst_network = ipaddress.ip_network(dst_prefix)
-                
-                # Get next non-colliding (with ongoing flows) prefix
-                new_dst_network = self.getNextNonCollidingPrefix(dst_ip, dst_network, [scfp])
-            
-                if new_dst_network == None:
-                    # If there are no more specific prefixes... we are
-                    # fucked! ECMP part of the algorithm must be
-                    # activated
-                    raise(KeyError("We must deal with that"))
-
-                # Extract the prefix string
-                new_dst_prefix = new_dst_network.compressed
-        
-                # Log it
-                log.info("\t* New longer prefix found: %s\n"%new_dst_prefix)
-            
-                # Get initial DAG from previously existing parent-prefix
-                new_dst_dag = self.getInitialDag(dst_prefix)
-
-                # Log it
-                dtp = self.toLogDagNames(new_dst_dag)
-                log.info("\t* Initial dag for new prefix:\n")
-                log.info("\n\t%s\n"%str(dtp.edges(data=True)))
-                
-                # Set it to the new found prefix
-                self.setCurrentDag(new_dst_prefix, new_dst_dag)
-
-            else:
-                # Log it first
-                t = time.strftime("%H:%M:%S", time.gmtime())
-                to_print = "%s - flowAllocationAlgorithm(): longer prefix NOT needed\n"
-                log.info(to_print%t)
-                
-            # Modify destination DAG
-            dag = self.getCurrentDag(new_dst_prefix)
-                
-            # Get edges of new found path
-            new_path_edges = set(zip(scfp[:-1], scfp[1:]))
-                
-            # Deactivate old edges from initial path nodes (won't
-            # be used anymore)
-            for node in scfp:
-                # Get active edges of node
-                active_edges = self.getActiveEdges(dag, node)
-                for a_e in active_edges:
-                    if a_e not in new_path_edges:
-                        dag = self.switchDagEdgesData(dag, [(a_e)], active=False)
-                    
-            # Add new edges from new computed path
-            dag = self.switchDagEdgesData(dag, [scfp], active=True)
-        
-            # This complete DAG goes to the prefix-dag data attribute
-            self.setCurrentDag(new_dst_prefix, dag)
-        
-            # Retrieve only the active edges to force fibbing
-            final_dag = self.getActiveDag(new_dst_prefix)
-
-            # Log it
-            dtp = self.toLogDagNames(final_dag)
-            log.info("\t* Final modified dag for new prefix: the one with which we fib the prefix\n")
-            log.info("\t  %s\n"%str(dtp.edges()))
-        
-            # Force DAG for dst_prefix
-            self.sbmanager.add_dag_requirement(new_dst_prefix, final_dag)
-        
-            # Allocate flow to Path. It HAS TO BE DONE after changing the DAG...
-            self.addAllocationEntry(new_dst_prefix, flow, [scfp])
-
-            # Log 
-            t = time.strftime("%H:%M:%S", time.gmtime())
-            to_print = "%s - flowAllocationAlgorithm(): "
-            to_print += "Forced forwarding DAG in Southbound Manager\n"
-            log.info(to_print%t)
-
-            
-        # Do this allways
-        elapsed_time = time.time() - start_time
-        t = time.strftime("%H:%M:%S", time.gmtime())
-        log.info("%s - flowAllocationAlgorithm(): Greedy Algorithm Finished\n"%t)
-        log.info("\t* Elapsed time: %.3fs\n"%float(elapsed_time))
-
-    
-    
 if __name__ == '__main__':
     log.info("LOAD BALANCER CONTROLLER - Lab 1 - Enforcing simple paths only\n")
     log.info("-"*70+"\n")
