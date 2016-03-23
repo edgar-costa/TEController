@@ -50,8 +50,10 @@ class MyCustomHost(_node.Host):
 
         if 'isTrafficGenerator' in kwargs.keys() and kwargs.get('isTrafficGenerator') == True:
             log.info("\nStarting Traffic Generator\n")
+            # Get the flow file to be read
+            flowfile = kwargs.get('flowfile', 'None')
             tgl = open(tg_logfile, 'w')
-            tg = self.popen(dconf.TG_Path+'trafficgenerator.py',
+            tg = self.popen([dconf.TG_Path+'trafficgenerator.py', '-f', flowfile],
                                            stdin=None, stdout=tgl, stderr=tgl)
             tgl.close()
             
