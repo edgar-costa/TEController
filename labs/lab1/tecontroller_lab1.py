@@ -98,7 +98,7 @@ class TEControllerLab1(SimplePathLB):
             
             # Insert current available capacities in dag
             with self.capacityGraphLock:
-                for (u, v, data) in adag.edges(data=True).iteritems():
+                for (u, v, data) in adag.edges(data=True):
                     cap = self.cg[u][v]['capacity']
                     data['capacity'] = cap
 
