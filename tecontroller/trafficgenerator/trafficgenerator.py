@@ -22,6 +22,7 @@ from fibbingnode.misc.mininetlib import get_logger
 
 from tecontroller.res.flow import Flow, Base
 from tecontroller.res import defaultconf as dconf
+from tecontroller.res.dbhandler import DatabaseHandler
 
 from threading import Thread 
 import time
@@ -31,6 +32,7 @@ import json
 import copy
 import signal, sys, traceback
 import ipaddress
+import sys
 
 import flask
 app = flask.Flask(__name__)
@@ -45,17 +47,15 @@ class TrafficGenerator(Base):
         super(TrafficGenerator, self).__init__(*args, **kwargs)
         
         self.scheduler = sched.scheduler(time.time, time.sleep)
-        self.db = TopologyDB(db=dconf.DB_Path)
+        self.db = DatabaseHandler()
         self.thread_handlers = []
-        
-        
+                
         #IP of the Load Balancer Controller host.
         try:
-            self._lbc_ip = ipaddress.ip_interface(self.getHostIPByName(dconf.LBC_Hostname)).ip.compressed
+            self._lbc_ip = ipaddress.ip_interface(self.db.getIpFromHostName(dconf.LBC_Hostname)).ip.compressed
         except:
             log.info("WARNING: Load balancer controller could not be found in the network\n")
             self._lbc_ip = None
-
 
     def _signal_handler(self, signal, frame):
         """
@@ -72,26 +72,14 @@ class TrafficGenerator(Base):
         sys.exit(0)
         
             
-    def getHostIPByName(self, hostname):
-        """Searches in the topology database for the hostname's ip address.
-        """
-        if hostname not in self.db.network.keys():
-            return None
-        else:
-            ip = [v['ip'] for k, v in self.db.network[hostname].iteritems() if isinstance(v, dict)][0]
-            return ip
-
-        
     def informLBController(self, flow):
         """Part of the code that deals with the JSON interface to inform to
         LBController a new flow created in the network.
         """
         url = "http://%s:%s/newflowstarted" %(self._lbc_ip, dconf.LBC_JsonPort)
-        t = time.strftime("%H:%M:%S", time.gmtime())
-        log.info('%s - Informing LBController...\n'%t)
+        log.info('\t Informing LBController\n')
         log.info('\t   * Flow: %s\n'%self.toLogFlowNames(flow))
-        log.info('\t   * URL: %s\n'%url)
-
+        log.info('\t   * Url: %s\n'%url)
         try:
             requests.post(url, json = flow.toJSON())
         except Exception:
@@ -103,38 +91,11 @@ class TrafficGenerator(Base):
 
     def toLogFlowNames(self, flow):
         a = "(%s -> %s): %s, t_o: %s, duration: %s" 
-        return a%(self.getNameFromIP(flow.src.compressed),
-                  self.getNameFromIP(flow.dst.compressed),
+        return a%(self.db.getNameFromIP(flow.src.compressed),
+                  self.db.getNameFromIP(flow.dst.compressed),
                   flow.setSizeToStr(flow.size),
                   flow.setTimeToStr(flow.start_time),
                   flow.setTimeToStr(flow.duration))
-
-    def getNameFromIP(self, x):
-        """Returns the name of the host or the router given the ip of the
-        router or the ip of the router's interface towards that
-        subnet.
-        """
-        if x.find('/') == -1: # it means x is a router id
-            ip_router = ipaddress.ip_address(x)
-            name = [name for name, values in
-                    self.db.network.iteritems() if values['type'] ==
-                    'router' and
-                    ipaddress.ip_address(values['routerid']) ==
-                    ip_router][0]
-            return name
-        
-        elif 'C' not in x: # it means x is an interface ip and not the
-                           # weird C_0
-            ip_iface = ipaddress.ip_interface(x)
-            for name, values in self.db.network.iteritems():
-                if values['type'] != 'router' and values['type'] != 'switch':
-                    for key, val in values.iteritems():    
-                        if isinstance(val, dict):
-                            ip_iface2 = ipaddress.ip_interface(val['ip'])
-                            if ip_iface.ip == ip_iface2.ip:
-                                return name
-                else:
-                    return None
 
     def createFlow(self, flow):
         """Calls _createFlow in a different Thread (for efficiency)
@@ -166,9 +127,10 @@ class TrafficGenerator(Base):
         url = "http://%s:%s/startflow" %(flow2['src'], dconf.Hosts_JsonPort)
 
         t = time.strftime("%H:%M:%S", time.gmtime())
-        log.info('%s - _createFlow(): starting Flow - Sending request to host\n'%t)
-        log.info('\t   * FLOW (sent to Host): %s\n'%str(flow))
-        log.info('\t   * URL: %s\n'%url)
+        log.info('%s - Starting Flow\n'%t) 
+        log.info('\t Sending request to host\n')
+        log.info('\t   * Flow: %s\n'%str(flow))
+        log.info('\t   * Url: %s\n'%url)
 
         # Send request to host to start new iperf client session
         try:
@@ -208,8 +170,9 @@ class TrafficGenerator(Base):
                     try:
                         [s, d, sp, dp, size, s_t, dur] = flowline.strip('\n').split(',')
                         # Get hosts IPs
-                        src_iface = self.getHostIPByName(s)
-                        dst_iface = self.getHostIPByName(d)
+                        src_iface = self.db.getIpFromHostName(s)
+                        dst_iface = self.db.getIpFromHostName(d)
+
                     except Exception:
                         log.info("EP, SOMETHING HAPPENS HERE\n")
                         src_iface = None
@@ -231,7 +194,7 @@ class TrafficGenerator(Base):
             # Make the scheduler run after file has been parsed
             self.scheduler.run()
         else:
-            log.info("No flows to schedule in file\n")                
+            log.info("\t No flows to schedule in file\n")                
 
                             
 def create_app(appl, traffic_generator):
@@ -254,8 +217,8 @@ def trafficGeneratorCommandListener():
 
     # Create flow from json data.
     # Beware that hosts in flowfile are given by hostnames: s1,d2, etc.
-    src = tg.getHostIPByName(flow_tmp['src'])
-    dst = tg.getHostIPByName(flow_tmp['dst'])
+    src = tg.db.getIpFromHostName(flow_tmp['src'])
+    dst = tg.db.getIpFromHostName(flow_tmp['dst'])
     
     flow = Flow(src, dst, flow_tmp['sport'], flow_tmp['dport'],
                 flow_tmp['size'], flow_tmp['start_time'], flow_tmp['duration'])
@@ -268,6 +231,7 @@ def trafficGeneratorCommandListener():
         log.info(traceback.format_exc())
         
 if __name__ == '__main__':
+
     # Wait for the network to be created correcly: IP's assigned, etc.
     time.sleep(dconf.TG_InitialWaitingTime)
 
@@ -279,26 +243,29 @@ if __name__ == '__main__':
     signal.signal(signal.SIGINT, tg._signal_handler)
     
     # Get Traffic Generator hosts's IP.
-    MyOwnIp = tg.getHostIPByName(dconf.TG_Hostname).split('/')[0]
+    MyOwnIp = tg.db.getIpFromHostName(dconf.TG_Hostname).split('/')[0]
     t = time.strftime("%H:%M:%S", time.gmtime())
     log.info("%s - TRAFFIC GENERATOR - HOST %s\n"%(t, MyOwnIp))
     log.info("-"*60+"\n")
 
     # Schedule flows from file
-    flowfile = dconf.FlowFile
+    # Parse command line
+    flowfile = sys.argv[2]
+    if flowfile == 'None':
+        flowfile = dconf.defaultFlowFile
 
     t = time.strftime("%H:%M:%S", time.gmtime())
     st = time.time()
-    log.info("%s - main(): Scheduling flow file: %s ...\n"%(t, flowfile))
+    log.info("%s - Scheduling flow file: %s ...\n"%(t, flowfile))
 
     tg.scheduleFileFlows(flowfile)
     
     t2 = time.strftime("%H:%M:%S", time.gmtime())
-    log.info("%s - main(): Scheduled flow file after %.3f seconds\n"%(t2, time.time()-st))
+    log.info("%s - Scheduled flow file after %.3f seconds\n"%(t2, time.time()-st))
 
     # Go start the JSON API server and listen for commands
     app = create_app(app, tg)
-    app.run(host=MyOwnIp)
+    app.run(host=MyOwnIp, port=dconf.TG_JsonPort)
 
     
 
