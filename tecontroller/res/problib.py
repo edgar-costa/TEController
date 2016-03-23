@@ -8,9 +8,9 @@ def getPathProbability(dag, path):
     in that path.
     """
     probability = 1
-    for node in path:
+    for node in path[:-1]:
         children = len(dag[node])
-        probability *= 1/children
+        probability *= 1/float(children)
     return probability
 
 def getAllPathsLimDAG(dag, start, end, k, path=[]):
@@ -67,9 +67,17 @@ def flowCongestionProbability(dag, ingress_router, egress_router, flow_size):
     """We assume DAG edges incorporate the available capacities:
     dag[x][y] is a dictionary with a 'capacity' key.
     """
+    # Calculate all possible paths
     all_paths = getAllPathsLimDAG(dag, ingress_router, egress_router, 0)
+
+    # Get those who own links that create congestion
     paths_congestion = [path for path in all_paths if getMinCapacity(dag, path) < flow_size]
+
     congestion_probability = 0
+    # Iterate those paths
     for path in paths_congestion:
+        # Compute the probability of each of these paths to happen
+        # Add it to the total congestion probability (union)
         congestion_probability += getPathProbability(dag, path)
+        
     return congestion_probability
