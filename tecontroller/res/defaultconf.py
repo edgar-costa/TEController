@@ -13,6 +13,9 @@ TG_Hostname = 'c2'
 #Port on which the JSON-aware thread of the LBC is listening
 LBC_JsonPort = "5500"
 
+# Port on which TG listens for json-flask commands
+TG_JsonPort = '5000'
+
 # Place where the topology information is being stored inside the vm
 # (and the hosts)
 DB_Path = '/tmp/db.topo'
@@ -41,7 +44,7 @@ Hosts_JsonPort = "5000"
 
 # Path to the file where the flows definition for the Traffic
 # Generator are stored
-FlowFile = TG_Path + 'flowfile.csv'
+defaultFlowFile = TG_Path + 'flowfile.csv'
 
 # Waiting time (in seconds) for hosts to check their IP
 Hosts_InitialWaitingTime = 10
