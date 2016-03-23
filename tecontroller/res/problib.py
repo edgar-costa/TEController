@@ -46,11 +46,11 @@ def getAllPathsLimDAG(dag, start, end, k, path=[]):
         if node not in path: # Ommiting loops here
             if k == 0:
                 # If we do not want any length limit
-                newpaths = self._getAllPathsLimDAG(dag, node, end, k, path=path)
+                newpaths = getAllPathsLimDAG(dag, node, end, k, path=path)
                 for newpath in newpaths:
                     paths.append(newpath)
             elif len(path) < k+1:
-                newpaths = self._getAllPathsLimDAG(dag, node, end, k, path=path)
+                newpaths = getAllPathsLimDAG(dag, node, end, k, path=path)
                 for newpath in newpaths:
                     paths.append(newpath)
     return paths
