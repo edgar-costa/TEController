@@ -35,8 +35,8 @@ class JsonListener(threading.Thread):
         #Start the flesk app under public ip and default json port
         log.info('LBC JSON LISTENER - HOST %s - IFACE %s\n'%(MyOwnIp, MyETH0Iface))
         log.info("-"*60+"\n")
-        self.app.run(host=MyOwnIp, port=dconf.LBC_JsonPort)    
-
+        self.app.run(host=MyOwnIp, port=int(dconf.LBC_JsonPort))#, debug=True)
+        
     def newFlowStarted(self):
         req = flask.request.json
         flow = Flow(req['src'], req['dst'], req['sport'], req['dport'],

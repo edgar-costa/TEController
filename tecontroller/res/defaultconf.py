@@ -11,7 +11,7 @@ LBC_Hostname = 'c3'
 TG_Hostname = 'c2'
 
 #Port on which the JSON-aware thread of the LBC is listening
-LBC_JsonPort = "5000"
+LBC_JsonPort = "5500"
 
 # Place where the topology information is being stored inside the vm
 # (and the hosts)
