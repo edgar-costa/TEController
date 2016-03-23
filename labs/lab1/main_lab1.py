@@ -92,6 +92,62 @@ class Lab1Topo(IPTopo):
         self.addLink(c1, r4, cost=1000)
 
         # Adding Traffic Generator Host
+        c2 = self.addHost(TG, isTrafficGenerator=True, flowfile=dconf.Lab1_Path+'flowdemand_lab1.csv') 
+        self.addLink(c2, r4)
+
+        # Adding Traffic Engineering Controller
+        c3 = self.addHost(LBC, isLBController=True, algorithm='lab1')
+        self.addLink(c3, r4)
+
+
+
+
+class Lab1Topo2(IPTopo):
+    def build(self, *args, **kwargs):
+
+        topo = """
+            r2-------r5
+           /  \     /  \
+          /    \  _/    \
+        r1      r4       r7
+          \    /  \_    /
+           \  /     \_ /
+            r3--------r6
+        """
+        # Add routers and router-router links
+        r1 = self.addRouter(R1, cls=MyCustomRouter)
+        r2 = self.addRouter(R2, cls=MyCustomRouter)
+        r3 = self.addRouter(R3, cls=MyCustomRouter)
+        r4 = self.addRouter(R4, cls=MyCustomRouter)
+        r5 = self.addRouter('r5', cls=MyCustomRouter)
+        r6 = self.addRouter('r6', cls=MyCustomRouter)
+        r7 = self.addRouter('r7', cls=MyCustomRouter)
+
+        self.addLink(r1, r2)
+        self.addLink(r1, r3)
+        self.addLink(r2, r4)
+        self.addLink(r2, r5)
+        self.addLink(r3, r4)
+        self.addLink(r3, r6)
+        self.addLink(r4, r5)
+        self.addLink(r4, r6)
+        self.addLink(r5, r7)
+        self.addLink(r6, r7)
+
+        # Create broadcast domains
+     	self.addLink(r1, self.addHost(S1))  
+        self.addLink(r2, self.addHost(S2))  
+        self.addLink(r3, self.addHost(S3))
+        self.addLink(r4, self.addHost(S4))
+        self.addLink(r5, self.addHost('d1'))    
+        self.addLink(r6, self.addHost('t1'))
+        self.addLink(r7, self.addHost('x1'))
+
+        # Adding Fibbing Controller
+        c1 = self.addController(C1, cfg_path=C1_cfg)
+        self.addLink(c1, r4, cost=1000)
+
+        # Adding Traffic Generator Host
         #c2 = self.addHost(TG, isTrafficGenerator=True) 
         #self.addLink(c2, r4)
 
@@ -99,6 +155,7 @@ class Lab1Topo(IPTopo):
         c3 = self.addHost(LBC, isLBController=True, algorithm='lab1')
         self.addLink(c3, r4)
 
+        
 def launch_network():
     net = IPNet(topo = Lab1Topo(),
                 debug =_lib.DEBUG_FLAG,
@@ -108,9 +165,7 @@ def launch_network():
     TopologyDB(net = net).save(dconf.DB_Path)
     net.start()
     FibbingCLI(net)
-    net.stop()    
-
-
+    net.stop()
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
