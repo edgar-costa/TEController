@@ -30,10 +30,9 @@ class SimplePathLB(LBController):
     If the flow can't be allocated in any path from source to
     destination, the algorithm falls back to the original dijsktra
     path and does not fib the network."""
-    
     def __init__(self, *args, **kwargs):
         super(SimplePathLB, self).__init__(*args, **kwargs)
-
+        
     def dealWithNewFlow(self, flow):
         """
         Implements the abstract method
@@ -96,7 +95,7 @@ class SimplePathLB(LBController):
         """
         """
         t = time.strftime("%H:%M:%S", time.gmtime())
-        log.info("%s - flowAllocationAlgorithm(): Greedy Algorithm started\n"%t)
+        log.info("%s - Greedy path allocation algorithm started\n"%t)
         start_time = time.time()
         
         # Remove edges that can't allocate flow from graph

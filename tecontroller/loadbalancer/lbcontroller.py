@@ -954,7 +954,7 @@ class LBController(object):
                 ng_temp.remove_edge(x, y) 
         return ng_temp
     
-    def getAllPathsRanked(self, igp_graph, start, end):
+    def getAllPathsRanked(self, igp_graph, start, end, ranked_by='length'):
         """Recursive function that returns an ordered list representing all
         paths between node x and y in network_graph. Paths are ordered
         in increasing length.
@@ -966,7 +966,10 @@ class LBController(object):
         :param end: compressed subnet address of the destination
                     prefix."""
         paths = self._getAllPathsLim(igp_graph, start, end, 0)
-        ordered_paths = self._orderByLength(paths)
+        if ranked_by == 'length':
+            ordered_paths = self._orderByLength(paths)
+        elif ranked_by == 'capacity':
+            ordered_paths = self._orderByCapacityLeft(paths)
         return ordered_paths
     
     def _getAllPathsLim(self, igp_graph, start, end, k, path=[], len_path=0, die=False):
@@ -1068,9 +1071,20 @@ class LBController(object):
                 if self.network_graph.is_router(v):
                     pathlen += self.network_graph.get_edge_data(u,v)['metric']
             ordered_paths.append((path, pathlen))
+
         # Now rank them
         ordered_paths = sorted(ordered_paths, key=lambda x: x[1])
         return ordered_paths
+
+    
+    def _orderByCapacityLeft(self, paths):
+        """Given a list of arbitrary paths. It ranks them by capacity left (or
+        total edges weight).
+
+        Function is implemented in TEControllerLab1
+        """
+        pass
+    
 
     def toLogDagNames(self, dag):
         """

@@ -61,10 +61,10 @@ class MyCustomHost(_node.Host):
             log.info("\nStarting LoadBalancing Controller\n")
             # Fetch which algorithm is running
             algorithm = kwargs.get('algorithm', 'None')
-            lbcl = open(lbc_logfile, 'w')
-            tec = self.popen(algo_to_file[algorithm],
-                             stdin=None, stdout=lbcl, stderr=lbcl)
-            lbcl.close()
+            #lbcl = open(lbc_logfile, 'w')
+            #tec = self.popen(algo_to_file[algorithm],
+            #                 stdin=None, stdout=lbcl, stderr=lbcl)
+            #lbcl.close()
             
         elif 'isMonitorer' in kwargs.keys() and kwargs.get('isMonitorer') == True:
             log.info("\nStarting Links-Monitor host\n")
