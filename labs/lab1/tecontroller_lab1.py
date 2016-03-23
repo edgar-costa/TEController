@@ -17,16 +17,15 @@ class TEControllerLab1(SimplePathLB):
         super(TEControllerLab1, self).__init__()
 
         # Create lock for synchronization on accessing self.cg
-        capacityGraphLock = threading.Lock()
+        self.capacityGraphLock = threading.Lock()
 
         # Graph that will hold the link available capacities
-        with capacityGraphLock:
+        with self.capacityGraphLock:
             self.cg = self._createCapacitiesGraph()
 
         # Start the links monitorer thread linked to the event queue
-        lmt = LinksMonitorThread(capacity_graph=self.cg, lock=capacityGraphLock)
+        lmt = LinksMonitorThread(capacity_graph=self.cg, lock=self.capacityGraphLock)
         lmt.start()
-
         
     def run(self):
         """Main loop that deals with new incoming events
@@ -50,7 +49,6 @@ class TEControllerLab1(SimplePathLB):
                 t = time.strftime("%H:%M:%S", time.gmtime())
                 log.info("%s - run(): UNKNOWN Event\n"%t)
                 log.info("\t* Event: "%str(event))
-
 
     def dealWithNewFlow(self, flow):
         """
@@ -99,9 +97,10 @@ class TEControllerLab1(SimplePathLB):
             adag = self.getActiveDag(dst_prefix)
             
             # Insert current available capacities in dag
-            for (u,v,data) in adag.edges(data=True).iteritems():
-                cap = self.cg[u][v]['capacity']
-                data['capacity'] = cap
+            with self.capacityGraphLock:
+                for (u, v, data) in adag.edges(data=True).iteritems():
+                    cap = self.cg[u][v]['capacity']
+                    data['capacity'] = cap
 
             # Get ingress and egress router
             ingress_router = currentPaths[0][0]
@@ -150,14 +149,14 @@ class TEControllerLab1(SimplePathLB):
         SNMP couters data updated by the link monitor thread.
         """
         caps_in_path = []
-        for (u,v) in zip(path[:-1], path[1:]):
-            edge_data = self.cg.get_edge_data(u, v)
-            cap = edge_data.get('capacity', None)
-            caps_in_path.append(cap)
+        with self.capacityGraphLock:
+            for (u,v) in zip(path[:-1], path[1:]):
+                edge_data = self.cg.get_edge_data(u, v)
+                cap = edge_data.get('capacity', None)
+                caps_in_path.append(cap)
         try:
             mini = min(caps_in_path)
             return mini
-        
         except ValueError:
             t = time.strftime("%H:%M:%S", time.gmtime())
             log.info("%s - getMinCapacity(): ERROR: min could not be calculated\n"%t)
@@ -178,10 +177,9 @@ class TEControllerLab1(SimplePathLB):
             edge_data['capacity'] = 0
         return cg
 
-
 if __name__ == '__main__':
     log.info("LOAD BALANCER CONTROLLER - Lab 1 - Enforcing simple paths only\n")
-    log.info("-"*60+"\n")
+    log.info("-"*70+"\n")
     time.sleep(dconf.LBC_InitialWaitingTime)
     
     tec = TEControllerLab1()
