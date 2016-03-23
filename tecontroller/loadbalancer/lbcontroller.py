@@ -454,6 +454,9 @@ class LBController(object):
         """Populates the self.dags attribute by creating a complete DAG for
         each destination.
         """
+        t = time.strftime("%H:%M:%S", time.gmtime())
+        log.info("%s - Creating initial DAGs\n"%t)
+                           
         apdp = nx.all_pairs_dijkstra_path(self.initial_graph, weight='metric')
 
         for prefix in self.network_graph.prefixes:
@@ -480,12 +483,13 @@ class LBController(object):
                 if len(default_paths) > 1:
                     # ECMP is happening
                     ecmp = True
-                    t = time.strftime("%H:%M:%S", time.gmtime())
-                    to_print = "%s - _createInitialDags(): ECMP is ACTIVE between %s and %s (%s)\n"
-                    log.info(to_print%(t, self.db.getNameFromIP(r), self.db.getNameFromIP(subnet_prefix), subnet_prefix))  
+                    to_print = "\t\tECMP is ACTIVE between %s and %s\n"
+                    log.info(to_print%(self.getNameFromIP(cr), self.getNameFromIP(cr)))
+                    
                 elif len(default_paths) == 1:
                     ecmp = False
                     default_paths = [dpath]
+
                 else:
                     t = time.strftime("%H:%M:%S", time.gmtime())
                     log.info("%s - _createInitialDags(): ERROR. At least there should be a path\n"%t)
@@ -512,7 +516,7 @@ class LBController(object):
         for path in path_list:
             edge_list += zip(path[:-1], path[1:])
         return edge_list
-                
+
     def isFibbed(self, dst_prefix):
         """Returns true if there exist fake LSA for that prefix in the
         network.
