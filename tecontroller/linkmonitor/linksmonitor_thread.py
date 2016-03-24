@@ -1,6 +1,8 @@
 from fibbingnode.misc.mininetlib import get_logger
 from tecontroller.res.snmplib import SnmpCounters
 from tecontroller.res.dbhandler import DatabaseHandler
+from tecontroller.res import defaultconf as dconf
+
 import threading
 import time
 import numpy as np
@@ -15,14 +17,14 @@ class LinksMonitorThread(threading.Thread):
     It is passed a capacity graph and a lock from its parent, and it
     modifies it periodically.
     """
-    def __init__(self, capacity_graph, lock, interval=1.05):
+    def __init__(self, capacity_graph, lock, logfile, interval=1.05):
         super(LinksMonitorThread, self).__init__()
         # Read network database
         self.db = DatabaseHandler()
 
         # Lock object to access capacity graph
         self.lock = lock
-        
+
         # Counters read interval
         self.interval = interval
 
@@ -34,7 +36,32 @@ class LinksMonitorThread(threading.Thread):
         
         # Start router-to-router links
         self.links = self._startLinks()
-        
+
+        # Used internally for the logs
+        self.link_to_edge_bindings = self._createLinkToEdgeBindings()
+
+        # Set log file
+        if logfile:
+            self.logfile = logfile
+            # Write first line with links
+            with open(self.logfile, 'w') as f:
+                f.write(self.printLinkToEdgesLine(self.cg))
+        else:
+            self.logfile = None
+
+    def _createLinkToEdgeBindings(self):
+        bindings = {}
+        taken = []
+        i = 0
+        for (u, v) in self.cg.edges():
+            if (u, v) in taken or (v, u) in taken:
+                continue
+            else:
+                taken.append((u,v))
+                bindings[i] = (u, v)
+                i = i + 1
+        return bindings
+            
     def run(self):
         while True:
             # Go to sleep interval time
@@ -42,6 +69,10 @@ class LinksMonitorThread(threading.Thread):
 
             # Read capacities from SNMP
             self.updateLinksCapacities()
+
+            # Log them in the log file too
+            if self.logfile:
+                self.logLinksLoads()
             
     def updateLinksCapacities(self):
         """
@@ -86,7 +117,26 @@ class LinksMonitorThread(threading.Thread):
             for i, iface_name in enumerate(iface_names):
                 iface_availableCap = availableCaps[i]
                 self.updateLinkCapacity(iface_name, iface_availableCap)
-                    
+
+    def logLinksLoads(self):
+        # Make a copy of the self.cg and release the lock
+        with self.lock:
+            cg_copy = self.cg.copy()
+            
+        with open(self.logfile, 'a') as f:
+            s = "%s"%time.time()
+            to_iterate = sorted(self.link_to_edge_bindings.keys())
+            for index in to_iterate:
+                (x,y) = self.link_to_edge_bindings[index]
+                link_index = index
+                availableCapactiy = cg_copy[x][y]['capacity']
+                bandwidth = cg_copy[x][y]['bw']
+                usedCapacity = bandwidth - availableCapactiy
+                load = (usedCapacity/float(bandwidth))*100.0
+                s += ",(L%d %.3f%%)"%(link_index, load)
+            s += '\n'
+            f.write(s)
+           
     def _updateCounters(self):
         """Updates all interface counters of the routers in the network.
         Blocks until the counters have been updated.
@@ -126,8 +176,7 @@ class LinksMonitorThread(threading.Thread):
 
             # Update edge data
             self.cg[x][y]['window'] = window
-            self.cg[x][y]['capacity'] = chosen_cap
-        
+            self.cg[x][y]['capacity'] = chosen_cap        
 
     def updateCapacities(self, new_links_capacities):
         # update self.cg wrt new_capacities_graph
@@ -135,11 +184,17 @@ class LinksMonitorThread(threading.Thread):
             x_ip = self.db.routerid(x)
             y_ip = self.db.routerid(y)
         
-
-
-
-
-
+    def printLinkToEdgesLine(self, capacity_graph):
+        s = ""
+        to_iterate = sorted(self.link_to_edge_bindings.keys())
+        for index in to_iterate:
+            (x,y) = self.link_to_edge_bindings[index]
+            link_number = index
+            x_name = self.db.getNameFromIP(x)
+            y_name = self.db.getNameFromIP(y)
+            s += ("L%d"%link_number)+'->(%s %s),'%(x_name, y_name)
+        s += '\n'
+        return s
             
     def _startCounters(self):
         """This function iterates the routers in the network and creates

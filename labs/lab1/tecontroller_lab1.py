@@ -24,7 +24,9 @@ class TEControllerLab1(SimplePathLB):
             self.cg = self._createCapacitiesGraph()
 
         # Start the links monitorer thread linked to the event queue
-        lmt = LinksMonitorThread(capacity_graph=self.cg, lock=self.capacityGraphLock)
+        lmt = LinksMonitorThread(capacity_graph = self.cg,
+                                 lock = self.capacityGraphLock,
+                                 logfile = dconf.LinksMonitor_LogFile)
         lmt.start()
         
     def run(self):
@@ -130,7 +132,7 @@ class TEControllerLab1(SimplePathLB):
                 to_print = "\t* Paths: %s\n"
                 log.info(to_print%str([self.toLogRouterNames(path) for path in currentPaths]))
 
-                if self.shouldDeactivateECMP(dag, currentPaths, congProb):
+                if self.shouldDeactivateECMP(adag, currentPaths, congProb):
                     # Here we have to think what to do when probability of
                     # congestion is too high.
                     pass
@@ -155,7 +157,7 @@ class TEControllerLab1(SimplePathLB):
                 else:
                     # Congestion created. 
                     t = time.strftime("%H:%M:%S", time.gmtime())
-                    log.info("%s - Flow will cause CONGESTION\n"%t)
+                    log.info("%s - Flow will cause CONGESTION in current path: %s\n"%(t, self.toLogRouterNames(currentPath)))
                 
                     # Call the subclassed method to properly 
                     # allocate flow to a congestion-free path
@@ -194,7 +196,7 @@ class TEControllerLab1(SimplePathLB):
             edge_data['capacity'] = 0
         return cg
 
-    def shouldDeactivateECMP(dag, currentPaths, congProb):
+    def shouldDeactivateECMP(self, dag, currentPaths, congProb):
         """This function returns a boolean output that decides wheather we
         should deactivate ECMP.
 
@@ -264,17 +266,20 @@ class TEControllerLab1(SimplePathLB):
 
         # Get destination network prefix
         dst_iface = flow['dst']
-        dst_initial_prefix = dst_iface.network.compressed
+        dst_prefix = dst_iface.network.compressed
 
+        # Get current DAG for destination prefix
+        dag = self.getActiveDag(dst_prefix)
+        
         # Get required capacity
         required_capacity = flow['size']
         
         # Calculate all possible paths for flow
-        all_paths = self.getAllPathsRanked(tmp_nw, src_cr, dst_initial_prefix, ranked_by='length')
+        all_paths = self.getAllPathsRanked(self.initial_graph, src_cr, dst_prefix, ranked_by='length')
 
         # Filter only those that are able to allocate flow without congestion
-        congestion_free_paths = [path for path in all_paths if self.getMinCapacity(path) <= required_capacity]
-
+        congestion_free_paths = [path for (path, plen) in all_paths if self.getMinCapacity(path[:-1]) > required_capacity]
+                    
         # Get already ongoing flows for that prefix
         ongoing_flow_allocations = self.getAllocatedFlows(dst_prefix)
         
@@ -292,18 +297,9 @@ class TEControllerLab1(SimplePathLB):
             # will just allocate it in the path that creates less
             # congestion.
 
-            # Get source connected router (src_cr)
-            src_iface = flow['src']
-            src_prefix = src_iface.network.compressed
-            src_cr = [r for r in self.network_graph.routers if self.network_graph.has_successor(r, src_prefix)][0]
-
-            # Get destination network prefix
-            dst_iface = flow['dst']
-            dst_initial_prefix = dst_iface.network.compressed
-            
             # Get all possible paths from source connected router to
             # destination prefix ranked by capacity left
-            all_congested_paths = self.getAllPathsRanked(tmp_nw, src_cr, dst_initial_prefix, ranked_by='capacity')
+            all_congested_paths = self.getAllPathsRanked(self.initial_graph, src_cr, dst_prefix, ranked_by='capacity')
 
             # Set common variable to iterate
             paths_to_iterate = all_congested_paths
@@ -331,7 +327,7 @@ class TEControllerLab1(SimplePathLB):
                     accumulated_required_capacity += sum([f.size for f in moved_flows])
 
                     # Add moved flows to total_moved_flows
-                    total_moved_flows.append(moved_flows)
+                    total_moved_flows += moved_flows
                         
                     # Calculate edge required capacity
                     edge = (node, path[i+1])
@@ -344,7 +340,7 @@ class TEControllerLab1(SimplePathLB):
 
                 # Choosing this path, would create such amount of accumulated congestion
                 # Append it in variable
-                path_congestion_pairs.append(path[:-1], accumulated_congestion, total_moved_flows)
+                path_congestion_pairs.append((path, accumulated_congestion, total_moved_flows))
 
             # Let's choose the one with the least congestion
             least_congestion = min(path_congestion_pairs, key=lambda x: x[1])
@@ -384,10 +380,10 @@ class TEControllerLab1(SimplePathLB):
                     accumulated_required_capacity += sum([f.size for f in moved_flows])
 
                     # Add moved flows to total_moved_flows
-                    total_moved_flows.append(moved_flows)
+                    total_moved_flows += moved_flows
                         
                     # Calculate edge required capacity
-                    edge = (node, path[i+1])
+                    edge = (node, path[index+1])
                     congestion = accumulated_required_capacity - self.cg[edge[0]][edge[1]]['capacity']
 
                     if congestion > 0:
@@ -395,7 +391,7 @@ class TEControllerLab1(SimplePathLB):
 
                 # Choosing this path, would create such amount of accumulated congestion
                 # Append it in variable
-                path_congestion_pairs.append(path[:-1], accumulated_congestion, total_moved_flows)
+                path_congestion_pairs.append((path, accumulated_congestion, total_moved_flows))
                 
             # Sort them from less to more congestion created
             path_congestion_pairs_sorted = sorted(path_congestion_pairs, key=lambda x:x[1])
@@ -415,9 +411,10 @@ class TEControllerLab1(SimplePathLB):
 
             else:
                 log.info("\t* There are paths that do not create congestion\n")
+                #import ipdb; ipdb.set_trace()
                 paths_without_congestion = [(p, c, f) for (p, c, f) in path_congestion_pairs if c == 0]
                 chosen_path = paths_without_congestion[0][0]
-                chosen_path_moved_flows 
+                chosen_path_moved_flows = paths_without_congestion[0][2] 
                 log.info("\t* Path (readable): %s\n"%chosen_path)
                 log.info("\t* Path (readable): %s\n"%str(self.toLogRouterNames(chosen_path)))
 
@@ -436,11 +433,12 @@ class TEControllerLab1(SimplePathLB):
                 if a_e not in chosen_path_edges:
                     dag = self.switchDagEdgesData(dag, [(a_e)], active = False)
                     dag = self.switchDagEdgesData(dag, [(a_e)], ongoing_flows = False)
-                        
+                    
         # Update the flow_allocation
         for f in chosen_path_moved_flows:
             # Get path list of flow
-            pl = self.flow_allocation[f].pop()
+            pl = self.flow_allocation[dst_prefix].get(f)
+            
             final_pl = []
             # Iterate previous paths (pp) in path list
             for pp in pl:
@@ -452,10 +450,10 @@ class TEControllerLab1(SimplePathLB):
                     index_pp = min(indexes)
                     index_cp = chosen_path.index(pp[index_pp])
                     final_pl.append(pp[:index_pp] + chosen_path[index_cp:])
+                
+            # Update allocation entry
+            self.flow_allocation[dst_prefix][f] = final_pl
 
-        # Update allocation entry
-        self.flow_allocation[f] = final_pl
-            
         # Add new edges from new computed path
         dag = self.switchDagEdgesData(dag, [chosen_path], active=True)
             

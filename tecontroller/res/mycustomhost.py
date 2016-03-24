@@ -29,6 +29,8 @@ log = get_logger()
 
 dconf.LBC_Path
 
+commented = True #False
+
 algo_to_file = {'lab1': dconf.Lab1_Path + 'tecontroller_lab1.py',
                 'lab2': dconf.Lab2_Path + 'tecontroller_lab2.py',
                 'lab3': dconf.Lab3_Path + 'tecontroller_lab3.py',
@@ -61,10 +63,11 @@ class MyCustomHost(_node.Host):
             log.info("\nStarting LoadBalancing Controller\n")
             # Fetch which algorithm is running
             algorithm = kwargs.get('algorithm', 'None')
-            #lbcl = open(lbc_logfile, 'w')
-            #tec = self.popen(algo_to_file[algorithm],
-            #                 stdin=None, stdout=lbcl, stderr=lbcl)
-            #lbcl.close()
+            if not commented:
+                lbcl = open(lbc_logfile, 'w')
+                tec = self.popen(algo_to_file[algorithm],
+                                 stdin=None, stdout=lbcl, stderr=lbcl)
+                lbcl.close()
             
         elif 'isMonitorer' in kwargs.keys() and kwargs.get('isMonitorer') == True:
             log.info("\nStarting Links-Monitor host\n")

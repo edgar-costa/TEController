@@ -641,7 +641,11 @@ class LBController(object):
 
         # Current dag for destination
         current_dag = self.getCurrentDag(prefix)
-
+        
+        # Get the active Dag
+        activeDag = self.getActiveDag(prefix)
+        log.info("\t* removeAllocationEntry: initial DAG\n\t  %s\n"%str(self.toLogDagNames(activeDag).edges()))
+        
         # Get current remaining allocated flows for destination
         remaining_flows = self.getAllocatedFlows(prefix)
 
@@ -659,7 +663,7 @@ class LBController(object):
             edges = zip(path_only_routers[:-1], path_only_routers[1:])
 
             # Calculate which of these edges can be set to ongoing_flows = False
-            edges_without_flows = [(u,v) for (u,v) in edges if (u,v) not in ongoing_edge_list]
+            edges_without_flows = [(u, v) for (u, v) in edges if (u, v) not in ongoing_edge_list]
 
             # Set them
             current_dag = self.switchDagEdgesData(current_dag, edges_without_flows, ongoing_flows=False)
@@ -699,10 +703,15 @@ class LBController(object):
         """
         # log a bit
         t = time.strftime("%H:%M:%S", time.gmtime())
-        log.info("%s - Removing existing lies..."%t)
+        log.info("%s - Removing existing lies...\n"%t)
 
         # Get the current DAG for that prefix
         current_dag = self.getCurrentDag(prefix)
+
+        # Get the active Dag
+        activeDag = self.getActiveDag(prefix)
+        
+        log.info("\t* removePrefixLies: initial DAG\n\t  %s\n"%str(self.toLogDagNames(activeDag).edges()))
 
         # Check if fibbed edge in paths
         thereIsFibbedPath = False
@@ -751,6 +760,11 @@ class LBController(object):
 
                 # Set current Dag
                 self.setCurrentDag(prefix, current_dag)
+
+                # Get the active Dag
+                activeDag = self.getActiveDag(prefix)
+                
+                log.info("\t* removePrefixLies: final DAG\n\t  %s\n"%str(self.toLogDagNames(activeDag).edges()))
                 
                 # Get the active Dag
                 activeDag = self.getActiveDag(prefix)

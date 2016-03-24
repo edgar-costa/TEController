@@ -1,4 +1,4 @@
 #src,dst,sport,dport,size,start_time,duration
 
-s3,x1,5021,5001,700K,5s,20s
-s1,d1,5021,5001,500K,10s,10s
+#s3,x1,5021,5001,1200K,1s,10s
+#s1,d1,5021,5001,200K,5s,10s

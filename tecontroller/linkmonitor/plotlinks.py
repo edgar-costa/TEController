@@ -42,7 +42,7 @@ def main(args):
     loads = []
     for line in data:
         values = []
-        for i,v in enumerate(line):
+        for i, v in enumerate(line):
             values.append(float(v.split(' ')[1].strip('%)')))
         loads.append(values)
     loads = np.asarray(loads)
@@ -55,9 +55,8 @@ def main(args):
         col = loads[:,i]
         col = signal.medfilt(col)
         loads2 = np.insert(loads2, i+1, col, axis=1)
-
     loads2 = loads2[:,1:]
-
+    
     # PLOTS ###################################
     fig = plt.figure(1)
     fig.subplots_adjust(bottom=0.04, left=0.04, right=0.98, top=0.96, wspace=0.2, hspace=0.24)
