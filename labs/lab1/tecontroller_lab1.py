@@ -78,9 +78,14 @@ class TEControllerLab1(SimplePathLB):
             src_prefix = src_network.compressed
             dst_prefix = dst_network.compressed
                 
+            # Get current Active DAG for prefix
+            adag = self.getActiveDag(dst_prefix)
+            log.info("\t* Active DAG for %s: %s\n"%(dst_prefix, self.toLogDagNames(adag).edges()))
+
             # Get the current path from source to destination
             currentPaths = self.getActivePaths(src_iface, dst_iface, dst_prefix)
-                
+            log.info("\t* Current paths: %s\n"%str(self.toLogRouterNames(currentPaths)))
+            
             # ECMP active?
             if len(currentPaths) > 1:
                 # ECMP is happening
@@ -406,7 +411,7 @@ class TEControllerLab1(SimplePathLB):
                 chosen_path = path_congestion_pairs_sorted[0][0]
                 chosen_path_congestion = path_congestion_pairs_sorted[0][1]
                 chosen_path_moved_flows = path_congestion_pairs_sorted[0][2]
-                log.info("\t* Path (readable): %s\n"%chosen_path)
+                log.info("\t* Path (ips): %s\n"%chosen_path)
                 log.info("\t* Path (readable): %s\n"%str(self.toLogRouterNames(chosen_path)))
                 log.info("\t* Congestion created: %d\n"%chosen_path_congestion)
 
@@ -416,7 +421,7 @@ class TEControllerLab1(SimplePathLB):
                 paths_without_congestion = [(p, c, f) for (p, c, f) in path_congestion_pairs if c == 0]
                 chosen_path = paths_without_congestion[0][0]
                 chosen_path_moved_flows = paths_without_congestion[0][2] 
-                log.info("\t* Path (readable): %s\n"%chosen_path)
+                log.info("\t* Path (ips): %s\n"%chosen_path)
                 log.info("\t* Path (readable): %s\n"%str(self.toLogRouterNames(chosen_path)))
 
         # From here and below is common code regardless if 
