@@ -434,12 +434,18 @@ class LBController(object):
         routers = list(self.network_graph.routers)
         src_rid = None
         dst_rid = None
+
         for r in routers:
             if self.network_graph.has_successor(r, src_iface.network.compressed):
-                src_rid = r
+                d = src_iface.network.compressed
+                if self.network_graph[r][d]['fake'] == False:
+                    src_rid = r
+
             if self.network_graph.has_successor(r, dst_iface.network.compressed):
-                dst_rid = r
-                
+                d = dst_iface.network.compressed
+                if self.network_graph[r][d]['fake'] == False:
+                    dst_rid = r
+                    
         if src_rid and dst_rid:
             # Calculate path and return it
             active_paths = self._getAllPathsLimDAG(active_dag, src_rid, dst_rid, 0)
