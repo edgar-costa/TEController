@@ -158,7 +158,7 @@ class LinksMonitorThread(threading.Thread):
             (x, y) = edge[0]
         else:
             return
-
+        
         with self.lock:
             if self.median_filter == True:
                 # Perform median filter of window size = 3
@@ -186,7 +186,7 @@ class LinksMonitorThread(threading.Thread):
         
             else:
                 # No median filter
-                self.cg[x][y] = new_capacity
+                self.cg[x][y]['capacity'] = new_capacity
 
                 
     def updateCapacities(self, new_links_capacities):
