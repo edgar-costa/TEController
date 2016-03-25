@@ -177,8 +177,9 @@ class TEControllerLab1(SimplePathLB):
         caps_in_path = []
         for (u,v) in zip(path[:-1], path[1:]):
             edge_data = self.cg.get_edge_data(u, v)
-            cap = edge_data.get('capacity', None)
-            caps_in_path.append(cap)
+            if edge_data:
+                cap = edge_data.get('capacity', None)
+                caps_in_path.append(cap)
         try:
             mini = min(caps_in_path)
             return mini
@@ -268,7 +269,8 @@ class TEControllerLab1(SimplePathLB):
         src_iface = flow['src']
         src_prefix = src_iface.network.compressed
         src_cr = [r for r in self.network_graph.routers if
-                  self.network_graph.has_successor(r, src_prefix)][0]
+                  self.network_graph.has_successor(r, src_prefix) and
+                  self.network_graph[r][src_prefix]['fake'] == False][0]
 
         # Get destination network prefix
         dst_iface = flow['dst']
@@ -292,6 +294,7 @@ class TEControllerLab1(SimplePathLB):
         # Check if congestion free paths exist
         if len(congestion_free_paths) == 0:
             path_found = False
+
             # No. So allocate it in the least congested path.
             t = time.strftime("%H:%M:%S", time.gmtime())
             log.info("%s - Flow can't be allocated in the network\n"%t)
@@ -308,8 +311,8 @@ class TEControllerLab1(SimplePathLB):
             all_congested_paths = self.getAllPathsRanked(self.initial_graph, src_cr, dst_prefix, ranked_by='capacity')
 
             # Set common variable to iterate
-            paths_to_iterate = all_congested_paths
-
+            paths_to_iterate = [path for (path, pcap) in all_congested_paths]
+            
             path_congestion_pairs = []
             # Try out all paths, and force the one that will create less congestion.
             # Intermediate results are saved in path_congestion_pairs
@@ -324,7 +327,6 @@ class TEControllerLab1(SimplePathLB):
                 # Accumulate flows that will be moved
                 total_moved_flows = []
                     
-                #
                 for index, node in enumerate(path[:-1]):
                     # Get flows that will be moved to path
                     moved_flows = [f for (f, pl) in ongoing_flow_allocations for p in pl if node in p]
