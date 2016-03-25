@@ -26,7 +26,8 @@ class TEControllerLab1(SimplePathLB):
         # Start the links monitorer thread linked to the event queue
         lmt = LinksMonitorThread(capacity_graph = self.cg,
                                  lock = self.capacityGraphLock,
-                                 logfile = dconf.LinksMonitor_LogFile)
+                                 logfile = dconf.LinksMonitor_LogFile,
+                                 median_filter=False)
         lmt.start()
         
     def run(self):
