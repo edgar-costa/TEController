@@ -529,7 +529,7 @@ class LBController(object):
         TODO: probably must be changed...
         
         """
-        return (self.getLiesFromPrefix(dst_prefix) != None)
+        return (self.getLiesFromPrefix(dst_prefix) != [])
 
     def isFibbedPath(self, dst_prefix, path):
         """Returns True if it finds a fibbed edge active along the path in
@@ -945,12 +945,13 @@ class LBController(object):
 
         """
         lsa_set = self.sbmanager.advertized_lsa.copy()
+        lsa_list = []
         while lsa_set != set():
             lsa = lsa_set.pop()
             dst = lsa.dest
             if prefix == dst:
-                return lsa
-        return None
+                lsa_list.append(lsa)
+        return lsa_list
         
     def getNetworkWithoutFullEdges(self, network_graph, flow_size):
         """Returns a nx.DiGraph representing the network graph without the
