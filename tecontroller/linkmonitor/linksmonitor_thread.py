@@ -9,6 +9,7 @@ import numpy as np
 
 log = get_logger()
 
+
 class LinksMonitorThread(threading.Thread):
     """This class defines a thread that will be spawned by the TEController 
     algorithm in order to periodically update the available capacities
@@ -17,7 +18,7 @@ class LinksMonitorThread(threading.Thread):
     It is passed a capacity graph and a lock from its parent, and it
     modifies it periodically.
     """
-    def __init__(self, capacity_graph, lock, logfile, interval=1.05):
+    def __init__(self, capacity_graph, lock, logfile, median_filter=False, interval=1.05):
         super(LinksMonitorThread, self).__init__()
         # Read network database
         self.db = DatabaseHandler()
@@ -33,6 +34,9 @@ class LinksMonitorThread(threading.Thread):
         
         # Start router counters
         self.counters = self._startCounters()
+
+        # Perform median filter or not?
+        self.median_filter = median_filter
         
         # Start router-to-router links
         self.links = self._startLinks()
@@ -156,28 +160,35 @@ class LinksMonitorThread(threading.Thread):
             return
 
         with self.lock:
-            window = self.cg[x][y]['window']
-            cap = self.cg[x][y]['capacity']
+            if self.median_filter == True:
+                # Perform median filter of window size = 3
+                window = self.cg[x][y]['window']
+                cap = self.cg[x][y]['capacity']
+                
+                if len(window) == 3: #median filter window size = 3
+                    # Remove last element
+                    window.pop()
+
+                # Add new capacity readout to filter window
+                window = [new_capacity] + window
+
+                # Perform the median filtering
+                # Sort them by magnitude
+                window_ordered = window[:]
+                window_ordered.sort()
+
+                # Take the median element
+                chosen_cap = window_ordered[len(window_ordered)/2] 
+
+                # Update edge data
+                self.cg[x][y]['window'] = window
+                self.cg[x][y]['capacity'] = chosen_cap
         
-            if len(window) == 3: #median filter window size = 3
-                # Remove last element
-                window.pop()
+            else:
+                # No median filter
+                self.cg[x][y] = new_capacity
 
-            # Add new capacity readout to filter window
-            window = [new_capacity] + window
-
-            # Perform the median filtering
-            # Sort them by magnitude
-            window_ordered = window[:]
-            window_ordered.sort()
-
-            # Take the median element
-            chosen_cap = window_ordered[len(window_ordered)/2] 
-
-            # Update edge data
-            self.cg[x][y]['window'] = window
-            self.cg[x][y]['capacity'] = chosen_cap        
-
+                
     def updateCapacities(self, new_links_capacities):
         # update self.cg wrt new_capacities_graph
         for (x,y), edge_data in new_links_capacities.iteritems():
