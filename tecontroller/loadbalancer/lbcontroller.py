@@ -66,6 +66,9 @@ class LBController(object):
         self.flow_allocation = {} 
         # {prefixA: {flow1 : [path_list], flow2 : [path_list]},
         #  prefixB: {flow4 : [path_list], flow3 : [path_list]}}
+
+        # Lock to make flow_allocation thread-safe
+        self.flowAllocationLock = threading.Lock()
         
         # From where to read events 
         self.eventQueue = eventQueue
@@ -557,11 +560,13 @@ class LBController(object):
         :param path_list: List of paths for which this flow will be
                           multi-pathed towards destination prefix:
                           [[A, B, C], [A, D, C]]"""
-        if prefix not in self.flow_allocation.keys():
-            # prefix not in table
-            self.flow_allocation[prefix] = {flow : path_list}
-        else:
-            self.flow_allocation[prefix][flow] = path_list
+
+        with self.flowAllocationLock:
+            if prefix not in self.flow_allocation.keys():
+                # prefix not in table
+                self.flow_allocation[prefix] = {flow : path_list}
+            else:
+                self.flow_allocation[prefix][flow] = path_list
             
         # Loggin a bit...
         t = time.strftime("%H:%M:%S", time.gmtime())
@@ -622,15 +627,16 @@ class LBController(object):
         time.sleep(flow['duration']) 
 
         log.info(lineend)
-        
-        if prefix not in self.flow_allocation.keys():
-            # prefix not in table
-            raise KeyError("The is no such prefix allocated: %s"%str(prefix))
-        else:
-            if flow in self.flow_allocation[prefix].keys():
-                path_list = self.flow_allocation[prefix].pop(flow, None)
+
+        with self.flowAllocationLock:
+            if prefix not in self.flow_allocation.keys():
+                # prefix not in table
+                raise KeyError("The is no such prefix allocated: %s"%str(prefix))
             else:
-                raise KeyError("%s is not alloacated in this prefix %s"%str(repr(flow)))
+                if flow in self.flow_allocation[prefix].keys():
+                    path_list = self.flow_allocation[prefix].pop(flow, None)
+                else:
+                    raise KeyError("%s is not alloacated in this prefix %s"%str(repr(flow)))
 
         t = time.strftime("%H:%M:%S", time.gmtime())
         log.info("%s - Flow REMOVED from Paths\n"%t)
@@ -924,14 +930,15 @@ class LBController(object):
         Given a prefix, returns a list of tuples:
         [(flow, path), (flow, path), ...]
         """
-        if prefix in self.flow_allocation.keys():
-            return [(f, p) for f, p in self.flow_allocation[prefix].iteritems()]
-        else:
-            t = time.strftime("%H:%M:%S", time.gmtime())
-            to_print = "%s - getAllocatedFlows(): WARNING: "
-            to_print += "prefix %s not yet in flow_allocation table\n"
-            log.info(to_print%(t, prefix))
-            return []
+        with self.flowAllocationLock:
+            if prefix in self.flow_allocation.keys():
+                return [(f, p) for f, p in self.flow_allocation[prefix].iteritems()]
+            else:
+                t = time.strftime("%H:%M:%S", time.gmtime())
+                to_print = "%s - getAllocatedFlows(): WARNING: "
+                to_print += "prefix %s not yet in flow_allocation table\n"
+                log.info(to_print%(t, prefix))
+                return []
         
     def getFlowSizes(self, prefix):
         """Returns the sum of flows with destination prefix, and how many
