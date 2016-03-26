@@ -73,11 +73,12 @@ class TEControllerLab1(SimplePathLB):
             # Get their correspoding networks
             src_network = src_iface.network
             dst_network = self.getCurrentOSPFPrefix(dst_iface.compressed)
-                
+    
             # Get the string-type prefixes
             src_prefix = src_network.compressed
             dst_prefix = dst_network.compressed
-                
+            log.info("\t* Flow matches the following OSPF advertized prefix: %s\n"%str(dst_prefix))                
+            
             # Get current Active DAG for prefix
             adag = self.getActiveDag(dst_prefix)
             log.info("\t* Active DAG for %s: %s\n"%(dst_prefix, self.toLogDagNames(adag).edges()))
@@ -90,13 +91,11 @@ class TEControllerLab1(SimplePathLB):
             if len(currentPaths) > 1:
                 # ECMP is happening
                 ecmp_active = True
-                t = time.strftime("%H:%M:%S", time.gmtime())
-                log.info("%s - dealWithNewFlow(): ECMP is ACTIVE\n"%t)
+                log.info("\t* ECMP is ACTIVE in some routers in path\n")
             elif len(currentPaths) == 1:
                 # ECMP not active
                 ecmp_active = False
-                t = time.strftime("%H:%M:%S", time.gmtime())
-                log.info("%s - dealWithNewFlow(): ECMP is NOT active\n"%t)
+                log.info("\t* ECMP is NOT active\n")
             else:
                 t = time.strftime("%H:%M:%S", time.gmtime())
                 to_log = "%s - dealWithNewFlow(): ERROR. No path between src and dst\n"
@@ -105,11 +104,8 @@ class TEControllerLab1(SimplePathLB):
 
             if ecmp_active:
                 # Calculate congestion probability
-                
-                # Get active dag for current destination
-                adag = self.getActiveDag(dst_prefix)
             
-                # Insert current available capacities in dag
+                # Insert current available capacities in DAG
                 for (u, v, data) in adag.edges(data=True):
                     cap = self.cg[u][v]['capacity']
                     data['capacity'] = cap
@@ -125,7 +121,7 @@ class TEControllerLab1(SimplePathLB):
                 #log.info("\t * Ingress router: %s\n"%ingress_router)
                 #log.info("\t * Engress router: %s\n"%egress_router)
                 log.info("\t* Flow size: %d\n"%flow.size)
-                log.info("\t* EQ Paths: %s\n"%self.toLogRouterNames(currentPaths))
+                log.info("\t* Equal Cost Paths: %s\n"%self.toLogRouterNames(currentPaths))
                     
                 congProb = flowCongestionProbability(adag, ingress_router,
                                                      egress_router, flow.size)
@@ -133,17 +129,24 @@ class TEControllerLab1(SimplePathLB):
                 # Act accordingly
                 # Log it
                 to_print = "\t* Flow will be allocated "
-                to_print += "with a congestion probability of %.2f\n"
-                log.info(to_print%congProb)
+                to_print += "with a congestion probability of %.2f%%\n"
+                log.info(to_print%(congProb*100.0))
                 to_print = "\t* Paths: %s\n"
                 log.info(to_print%str([self.toLogRouterNames(path) for path in currentPaths]))
+
+
+                t = time.strftime("%H:%M:%S", time.gmtime())
+                log.info("%s - Applying decision function...\n"%t)
 
                 if self.shouldDeactivateECMP(adag, currentPaths, congProb):
                     # Here we have to think what to do when probability of
                     # congestion is too high.
+                    log.info("\t* ECMP Should be de-activated!\n")
                     pass
 
                 else:
+                    log.info("\t* For the moment, returning always False...\n")
+
                     # Allocate flow to current paths
                     self.addAllocationEntry(dst_prefix, flow, currentPaths)
             else:
@@ -263,7 +266,6 @@ class TEControllerLab1(SimplePathLB):
         """
         t = time.strftime("%H:%M:%S", time.gmtime())
         log.info("%s - Greedy path allocation algorithm started\n"%t)
-        start_time = time.time()
 
         # Get source connected router (src_cr)
         src_iface = flow['src']
@@ -272,9 +274,8 @@ class TEControllerLab1(SimplePathLB):
                   self.network_graph.has_successor(r, src_prefix) and
                   self.network_graph[r][src_prefix]['fake'] == False][0]
 
-        # Get destination network prefix
-        dst_iface = flow['dst']
-        dst_prefix = dst_iface.network.compressed
+        # Get current matching destination prefix
+        dst_prefix = dst_prefix
 
         # Get current DAG for destination prefix
         dag = self.getActiveDag(dst_prefix)
@@ -311,12 +312,12 @@ class TEControllerLab1(SimplePathLB):
             all_congested_paths = self.getAllPathsRanked(self.initial_graph, src_cr, dst_prefix, ranked_by='capacity')
 
             # Set common variable to iterate
-            paths_to_iterate = [path for (path, pcap) in all_congested_paths]
+            congested_paths = [path for (path, path_capacity) in all_congested_paths]
             
             path_congestion_pairs = []
             # Try out all paths, and force the one that will create less congestion.
             # Intermediate results are saved in path_congestion_pairs
-            for path in paths_to_iterate:
+            for path in congested_paths:
                 # Remove the destination subnet hop node from the path
                 path = path[:-1]
                     
@@ -363,13 +364,12 @@ class TEControllerLab1(SimplePathLB):
         else:
             # Yes. There is a path
             path_found = True
-            paths_to_iterate = congestion_free_paths
 
             t = time.strftime("%H:%M:%S", time.gmtime())
             log.info("%s - Found path/s that can allocate flow\n"%t)
 
             path_congestion_pairs = []
-            for path in paths_to_iterate:
+            for path in congestion_free_paths:
                 # Remove the destination subnet hop node from the path
                 path = path[:-1]
                     
@@ -472,9 +472,8 @@ class TEControllerLab1(SimplePathLB):
         final_dag = self.getActiveDag(dst_prefix)
 
         # Log it
-        dtp = self.toLogDagNames(final_dag)
         log.info("\t* Final modified dag for prefix: the one with which we fib the prefix\n")
-        log.info("\t  %s\n"%str(dtp.edges()))
+        log.info("\t  %s\n"%str(self.toLogDagNames(final_dag).edges()))
             
         # Force DAG for dst_prefix
         self.sbmanager.add_dag_requirement(dst_prefix, final_dag)
@@ -484,8 +483,7 @@ class TEControllerLab1(SimplePathLB):
 
         # Log 
         t = time.strftime("%H:%M:%S", time.gmtime())
-        to_print = "%s - flowAllocationAlgorithm(): "
-        to_print += "Forced forwarding DAG in Southbound Manager\n"
+        to_print = "%s - Forced forwarding DAG in Southbound Manager\n"
         log.info(to_print%t)
         
 if __name__ == '__main__':

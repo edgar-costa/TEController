@@ -932,7 +932,7 @@ class LBController(object):
             return [(f, p) for f, p in self.flow_allocation[prefix].iteritems()]
         else:
             t = time.strftime("%H:%M:%S", time.gmtime())
-            to_print = "%s - getAllocatedFlows(): "
+            to_print = "%s - getAllocatedFlows(): WARNING: "
             to_print += "prefix %s not yet in flow_allocation table\n"
             log.info(to_print%(t, prefix))
             return []
