@@ -6,7 +6,6 @@ network in terms of forwarding DAGs between source-destination pairs.
 
 Receives flow demands from the custom built Traffic Generator, through
 a Json-Rest interface.
-
 """
 from fibbingnode.algorithms.southbound_interface import SouthboundManager
 from fibbingnode.misc.mininetlib import get_logger
@@ -609,22 +608,19 @@ class LBController(object):
         self.setCurrentDag(prefix, current_dag)
         
         # Define the removeAllocatoinEntry thread
-        t = threading.Thread(target=self.removeAllocationEntry, args=(prefix, flow, path_list))
+        t = threading.Thread(target=self.removeAllocationEntry, args=(prefix, flow))
         # Start the thread
         t.start()
         # Add handler to list and start thread
         self.thread_handlers[flow] = t
    
-    def removeAllocationEntry(self, prefix, flow, path_list):
+    def removeAllocationEntry(self, prefix, flow):
         """
         Removes the flow from the allocation entry prefix and restores the corresponding.
         """
         # Wait until flow finishes
         time.sleep(flow['duration']) 
 
-        if not isinstance(path_list, list):
-            raise TypeError("path_list should be a list")
-        
         log.info(lineend)
         
         if prefix not in self.flow_allocation.keys():
@@ -632,7 +628,7 @@ class LBController(object):
             raise KeyError("The is no such prefix allocated: %s"%str(prefix))
         else:
             if flow in self.flow_allocation[prefix].keys():
-                self.flow_allocation[prefix].pop(flow, None)
+                path_list = self.flow_allocation[prefix].pop(flow, None)
             else:
                 raise KeyError("%s is not alloacated in this prefix %s"%str(repr(flow)))
 
