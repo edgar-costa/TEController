@@ -29,7 +29,6 @@ log = get_logger()
 class TrafficGeneratorSlave(Base):
     def __init__(self, *args, **kwargs):
         super(TrafficGeneratorSlave, self).__init__(*args, **kwargs)
-
         # Dictionary of open iperf client sessions
         self.iperf_sessions = {}
 
@@ -63,9 +62,15 @@ def stopFlow():
     log.info("\t  - duration: %s\n"%str(flow['duration']))
 
     # Kill ongoing flow
-    if flow in tgslave.iperf_sessions.keys():
-        p = tgslave.iperf_sessions[flow]
+    flow_already_there = [(p, f) for (p, f) in tgslave.iperf_sessions.iteritems() if f == flow]
+    if flow_already_there != []:
+        # Get process handler
+        p = flow_already_there[0][0]
+        # Terminate it
         p.terminate()
+        # Remove from dictionary
+        tgslave.iperf_sessions.pop(p)
+
     else:
         log.info("\t* Error: non-existing flow\n")
 
@@ -77,42 +82,53 @@ def startFlow():
     subprocess for each corresponding iperf client sessions to other
     hosts.
     """
-    # Retrieve Traffic Generator Slave object
-    tgslave = app.config['TGS']
+    try:
+        # Retrieve Traffic Generator Slave object
+        tgslave = app.config['TGS']
 
-    t = time.strftime("%H:%M:%S", time.gmtime())
-    log.info("%s - StartFlow command from Traffic Generator arrived\n"%t)
+        t = time.strftime("%H:%M:%S", time.gmtime())
+        log.info("%s - StartFlow command from Traffic Generator arrived\n"%t)
     
-    # Get flow information
-    flow = flask.request.json
-    aux = Base()
-    size = aux.setSizeToStr(flow['size'])
+        # Get flow information
+        flow = flask.request.json
+        aux = Base()
+        size = aux.setSizeToStr(flow['size'])
 
-    # Log it
-    log.info("\t* Starting iperf client command...\n")
-    log.info("\t  - src: %s:%s\n"%(flow['src'], flow['sport']))                
-    log.info("\t  - dst: %s:%s\n"%(flow['dst'], flow['dport']))
-    log.info("\t  - size: %s\n"%size)
-    log.info("\t  - duration: %s\n"%str(flow['duration']))
+        # Log it
+        log.info("\t* Starting iperf client command...\n")
+        log.info("\t  - src: %s:%s\n"%(flow['src'], flow['sport']))                
+        log.info("\t  - dst: %s:%s\n"%(flow['dst'], flow['dport']))
+        log.info("\t  - size: %s\n"%size)
+        log.info("\t  - duration: %s\n"%str(flow['duration']))
+    
+        # Add process handler to dictionary
+        flow_already_there = [(p, f) for (p, f) in tgslave.iperf_sessions.iteritems() if f == flow]
+        if flow_already_there != []:
+            # If same flow exists already, restart it
+            previous_p = flow_already_there[0][0]
+            previous_p.terminate()
+            tgslave.iperf_sessions.pop(p)
 
-    # Add process handler to dictionary
-    if flow in tgslave.iperf_sessions.keys():
-        # If same flow exists already, restart it
-        previous_p = tgslave.iperf_sessions[flow]
-        previous_p.terminate()
+        # Start iperf client session
+        p = Popen(["iperf", "-c", flow['dst'], "-u", "-b", size, "-t",
+                   str(flow['duration']), "-p", str(flow['dport'])])
+        
+        tgslave.iperf_sessions[p] = flow
+    except:
+        log.info("ERROR:\n")
+        log.info("LOG: Exception in user code:\n")
+        log.info('-'*60+'\n')
+        log.info(traceback.print_exc())
+        log.info('-'*60+'\n')            
 
-    # Start iperf client session
-    p = Popen(["iperf", "-c", flow['dst'], "-u",
-           "-b", size,
-           "-t", str(flow['duration']),
-           "-p", str(flow['dport'])])
-
-    tgslave.iperf_sessions[flow] = p
         
 if __name__ == "__main__":
     #Waiting for the IP's to be assigned...
     time.sleep(dconf.Hosts_InitialWaitingTime)
-    
+
+    # Creating Traffic Generator Slave Object
+    tgslave = TrafficGeneratorSlave()
+
     #Searching for host's own interfaces
     proc = Popen(['netstat', '-i'], stdout=PIPE)
     ip_output = proc.stdout.readlines()
@@ -131,4 +147,5 @@ if __name__ == "__main__":
     MyOwnIp = ni.ifaddresses(MyETH0Iface)[2][0]['addr']
     log.info("CUSTOM DAEMON - HOST %s - IFACE %s\n"%(MyOwnIp, MyETH0Iface))
     log.info("-"*60+"\n")
+    app = create_app(app, tgslave)
     app.run(host=MyOwnIp, port=dconf.Hosts_JsonPort)

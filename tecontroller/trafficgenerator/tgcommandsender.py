@@ -29,30 +29,32 @@ if __name__ == '__main__':
     parser.add_argument('-a', '--action', help="Action: start|stop flow")
     parser.add_argument('-s', '--source', help="Source hostname")
     parser.add_argument('-d', '--destination', help="destination hostname")
+    parser.add_argument('--sport', help="source port")
     parser.add_argument('--size', help="size (in bytes)")
     parser.add_argument('--duration', help="flow duration")
 
-    args = parser.parse_args()
-    if not args.action:
+    arguments = parser.parse_args()
+
+    if not arguments.action:
         action = 'start'
-    elif args.action in ['start', 'stop']:
-        action = args.action
+    elif arguments.action in ['start', 'stop']:
+        action = arguments.action
     else:
         action = 'start'
-
-    if args.source and args.destination and args.size and args.duration:
-
+        
+    if arguments.source and arguments.destination and arguments.size and arguments.duration and arguments.sport:
         base = Base()
-        flow = {'src':args.source,
-                'dst':args.destination,
-                'sport':random.randint(1025, 65000),
+        flow = {'src':arguments.source,
+                'dst':arguments.destination,
+                'sport':arguments.sport,
                 'dport':5001,
-                'size':base.setSizeToInt(args.size),
+                'size':base.setSizeToInt(arguments.size),
                 'start_time':0,
-                'duration':base.setTimeToInt(args.duration)}
+                'duration':base.setTimeToInt(arguments.duration)}
 
         if action == 'start':
             url = "http://%s:%s/startflow"%(MyOwnIp, dconf.TG_JsonPort)
         elif action == 'stop':
             url = "http://%s:%s/stopflow"%(MyOwnIp, dconf.TG_JsonPort)
+
         requests.post(url, json = flow)

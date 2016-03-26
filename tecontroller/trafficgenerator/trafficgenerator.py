@@ -145,7 +145,34 @@ class TrafficGenerator(Base):
         # Call to informLBController if it is active
         if self._lbc_ip:
             self.informLBController(flow)
+
+    def stopFlow(self, flow):
+        """Instructs host to stop iperf client session (flow).
+
+        """
+        flow2 = Flow(src = flow['src'].ip.compressed,
+                     dst = flow['dst'].ip.compressed,
+                     sport = flow['sport'],
+                     dport = flow['dport'],
+                     size = flow['size'],
+                     start_time = flow['start_time'],
+                     duration = flow['duration'])
         
+        url = "http://%s:%s/stopflow" %(flow2['src'], dconf.Hosts_JsonPort)
+
+        t = time.strftime("%H:%M:%S", time.gmtime())
+        log.info('%s - Stopping Flow\n'%t) 
+        log.info('\t Sending request to host to stop flow %s\n'%str(flow['src']))
+        log.info('\t   * Flow: %s\n'%self.toLogFlowNames(flow))
+        log.info('\t   * Url: %s\n'%url)
+
+        # Send request to host to start new iperf client session
+        try:
+            requests.post(url, json = flow2.toJSON())
+        except Exception:
+            log.info("ERROR: Stop flow request could not be sent to Host!\n")
+            
+            
     def createRandomFlow(self):
         """Creates a random flow in the network
         """
@@ -201,7 +228,7 @@ def create_app(appl, traffic_generator):
     return appl
 
 @app.route("/startflow", methods = ['POST'])
-def trafficGeneratorCommandListener():
+def OrchestrateStartFlow():
     """This function will be running in each of the hosts in our
     network. It essentially waits for commands from the
     TrafficGenerator in the Json-Rest interface and creates a
@@ -228,6 +255,36 @@ def trafficGeneratorCommandListener():
         log.info("ERROR: could not create flow:\n")
         log.info(" * %s\n"%flow)
         log.info(traceback.format_exc())
+
+
+@app.route("/stopflow", methods = ['POST'])
+def OrchestrateStopFlow():
+    """This function will be running in each of the hosts in our
+    network. It essentially waits for commands from the
+    TrafficGenerator in the Json-Rest interface and creates a
+    subprocess for each corresponding iperf client sessions to other
+    hosts.
+    """
+    # Fetch json data
+    flow_tmp = flask.request.json
+    
+    # Fetch the TG Object
+    tg = app.config['TG']
+
+    # Create flow from json data.
+    # Beware that hosts in flowfile are given by hostnames: s1,d2, etc.
+    src = tg.db.getIpFromHostName(flow_tmp['src'])
+    dst = tg.db.getIpFromHostName(flow_tmp['dst'])
+    
+    flow = Flow(src, dst, flow_tmp['sport'], flow_tmp['dport'],
+                flow_tmp['size'], flow_tmp['start_time'], flow_tmp['duration'])
+
+    try:
+        tg.stopFlow(flow)
+    except Exception, err:
+        log.info("ERROR: could not stop flow:\n")
+        log.info(" * %s\n"%flow)
+
         
 if __name__ == '__main__':
 
@@ -265,11 +322,3 @@ if __name__ == '__main__':
     # Go start the JSON API server and listen for commands
     app = create_app(app, tg)
     app.run(host=MyOwnIp, port=dconf.TG_JsonPort)
-
-    
-
-
-
-
-
-    
