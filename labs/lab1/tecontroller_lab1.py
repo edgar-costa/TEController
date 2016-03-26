@@ -338,7 +338,7 @@ class TEControllerLab1(SimplePathLB):
                     total_moved_flows += moved_flows
                         
                     # Calculate edge required capacity
-                    edge = (node, path[i+1])
+                    edge = (node, path[index+1])
                     congestion = accumulated_required_capacity - self.cg[edge[0]][edge[1]]['capacity']
 
                     # Only add if it's positive, since negative
