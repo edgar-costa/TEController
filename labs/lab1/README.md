@@ -15,7 +15,7 @@ the traffic towards an existing destination to an alternative path.
 
 5. The bandwidth of all links in the network is known.
 
-6. The "instantaneous" available capacity for the links of the network is known. To this effect, the [link monitor](https://github.com/lferran/TEController/blob/master/tecontroller/linkmonitor/linksmonitor.py) periodically checks the byte counters for all network interfaces in the network, and updates a data structure mantained in the TEController.
+6. The "instantaneous" available capacity for the links of the network is known. To this effect, the [link monitor](https://github.com/lferran/TEController/blob/master/tecontroller/linkmonitor/linksmonitor.py) and [link monitor thread](https://github.com/lferran/TEController/blob/master/tecontroller/linkmonitor/linksmonitor_thread.py) periodically checks the byte counters for all network interfaces in the network, and updates a data structure mantained in the TEController.
 
 ## The algorithm 
 
@@ -38,17 +38,17 @@ the traffic towards an existing destination to an alternative path.
 
 3. If ECMP is not enabled, and there is a single path towards the destination prefix, continue to stage 4. Otherwise, jump to stage 10.
 
-4. We check if the flow can be allocated in the default path. To do so, we retrieve the link utilization data from all links of the path thanks to the data structure mantained by the SNMP link monitor. If the link with the lowest available capacity can support the new flow, go to stage 5. Otherwise, continue to stage 6.
+4. We check if the flow can be allocated in the default path. To do so, we retrieve the link utilization data from all links of the path thanks to the data structure mantained by the SNMP link monitor. If the link with the lowest available capacity can support the new flow, go to stage 5. Otherwise, the flowAllocationAlgorithm is called, continuing in stage 6.
 
 5. Note down the flow-to-path allocation for the given destination and finish.
 
-6. Look for the next shortest path that can allocate flow without congestion from src to dst. Does it exist? If so, go to stage 7. Otherwise, continue to stage 9.
+6. Initially, the flowAllocationAlgorithm computes all possible different paths from source to destination. It filters out those that already can't allocate the new flow without congestoin because they contain at least a link with available capacity smaller that the flow size. If it finds at least. If it can find at least one path that can allocate the new flow, jump to stage 7. Otherwise, continue to stage 9.
 
-7. Check if already existing flows to the same destination that will be moved can be allocated. Since we will enforce a new path in the destination DAG, it is possible that some previously allocated flows will be moved. Therefore, we need to take into account this, and see if the whole traffic demand towards destination running through the new path can be allocated. If so, continue to stage 8. Otherwise, jump back to stage 6.
+7. Check if already existing flows to the same destination that will be moved can be allocated. Since we will enforce a new path in the destination DAG, it is possible that some previously allocated flows for the same destination will be moved when applying the new DAG. Therefore, we need to take into account this, and see if the whole traffic demand towards destination running through the new path can be allocated. If so, continue to stage 8. Otherwise, jump back to stage 6 by checking the next existent shortest-path.
 
 8. Fib the chosen path. Note down the flow-to-path allocation for the given destination and finish.
 
-9. Choose the path that creates the least global congestion. By least congestion we mean, e.g: that 2 links congested 1% is prefearrable to 1 link congested 5%. Then jump to stage 8.
+9. Choose the path that creates the least global congestion. By least congestion we mean, e.g: that 2 links congested 1% is prefearrable to 1 link congested 5%. What is done in practice is: We order all existing different paths by decreasing minimum available capacity. For each of them, we compute how much congestion is eventually created when allocating the new flow and moving the already ongoing flows. Finally, we choose the one that creates the minimum congestion. Finally, we jump to stage 8.
 
 10. Calculate the probability for this flow to create congestion. Given the flow size, and the two ECMP paths with their respective minimum available capacities, the congestion probability can easily be calculated. With the probabilities, we can then jump to stage 11.
 
@@ -57,9 +57,10 @@ the traffic towards an existing destination to an alternative path.
 
 ### Limitations
 
-1. At the moment, the data structure that holds the instantaneous link available capacities is just a thread that periodically sends SNMP queries to all routers in the network to ask for their interface counters. The interface counters, though, are only updated every second, and this is a clear limitation of our algorithm. For instance, if two flows start in the second elapsed between two successive counter updates, the second flow will not take into account the capacity consumption created by the first one. (Actually, it's even worse, since we are using a 3-sample window median filter on the capacity read-outs -> new flows spaced less than 3 seconds will not be allocated correctly...  
+	1. At the moment, the data structure that holds the instantaneous link available capacities is just a thread that periodically sends SNMP queries to all routers in the network to ask for their interface counters. The interface counters, though, are only updated every second, and this is a clear limitation of our algorithm. For instance, if two flows start in the second elapsed between two successive counter updates, the second flow will not take into account the capacity consumption created by the first one. (Actually, it's even worse, since we are using a 3-sample window median filter on the capacity read-outs -> new flows spaced less than 3 seconds will not be allocated correctly...  
 
-This could be overcomed by using the flow-allocations instead to determine the available capacity of a link. SNMP/sFlow measurements could be used only as a feedback loop when there is ECMP and we are not sure where the flows are actually being allocated in reality. However, this has the drawback that there is some traffic going through the links that is not orchestrated by the traffic generator (such as the SNMP queries/responses, for instance) and this could represent a not negligible part of the total bandwidth for small links (~100K of uncontrolled traffic).
+	This could be overcomed by using the flow-allocations instead to determine the available capacity of a link. SNMP/sFlow measurements could be used only as a feedback loop when there is ECMP and we are not sure where the flows are actually being allocated in reality. However, this has the drawback that there is some traffic going through the links that is not orchestrated by the traffic generator (such as the SNMP queries/responses, for instance) and this could represent a not negligible part of the total bandwidth for small links (~100K of uncontrolled traffic).
 
-2. Since the monitoring tool is SNMP, and the SNMP requests/replies are also sent in the network, when there is congestion in the network, the SNMP data arrives with high delay and thus our TEController reacts even slower. This might be happening due to: a) The routers in the network are very busy sending data to the interfaces and the SNMP requests are handled with less priority. b) The delay is caused by the congestion in the network links. 
-A solution to this problem would be to
+	2. Since the monitoring tool is SNMP, and the SNMP requests/replies are also sent in the network, when there is congestion in the network, the SNMP data arrives with high delay and thus our TEController reacts even slower. This might be happening due to: a) The routers in the network are very busy sending data to the interfaces and the SNMP requests are handled with less priority. b) The delay is caused by the congestion in the network links. 
+
+	A solution to this problem would be to
