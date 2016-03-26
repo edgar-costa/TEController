@@ -26,12 +26,20 @@ if __name__ == '__main__':
     MyOwnIp = ni.ifaddresses(MyETH0Iface)[2][0]['addr']
 
     parser = argparse.ArgumentParser()
+    parser.add_argument('-a', '--action', help="Action: start|stop flow")
     parser.add_argument('-s', '--source', help="Source hostname")
     parser.add_argument('-d', '--destination', help="destination hostname")
     parser.add_argument('--size', help="size (in bytes)")
     parser.add_argument('--duration', help="flow duration")
 
     args = parser.parse_args()
+    if not args.action:
+        action = 'start'
+    elif args.action in ['start', 'stop']:
+        action = args.action
+    else:
+        action = 'start'
+
     if args.source and args.destination and args.size and args.duration:
 
         base = Base()
@@ -43,5 +51,8 @@ if __name__ == '__main__':
                 'start_time':0,
                 'duration':base.setTimeToInt(args.duration)}
 
-        url = "http://%s:%s/startflow"%(MyOwnIp, dconf.TG_JsonPort)
+        if action == 'start':
+            url = "http://%s:%s/startflow"%(MyOwnIp, dconf.TG_JsonPort)
+        elif action == 'stop':
+            url = "http://%s:%s/stopflow"%(MyOwnIp, dconf.TG_JsonPort)
         requests.post(url, json = flow)

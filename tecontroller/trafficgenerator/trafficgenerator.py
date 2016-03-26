@@ -195,10 +195,9 @@ class TrafficGenerator(Base):
             self.scheduler.run()
         else:
             log.info("\t No flows to schedule in file\n")                
-
-                            
+                        
 def create_app(appl, traffic_generator):
-    app.config['TG'] = traffic_generator
+    appl.config['TG'] = traffic_generator
     return appl
 
 @app.route("/startflow", methods = ['POST'])
