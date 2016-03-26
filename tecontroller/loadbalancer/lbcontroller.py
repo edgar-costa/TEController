@@ -78,6 +78,7 @@ class LBController(object):
 
         # Data structure that holds the current forwarding dags for
         # all advertised destinations in the network
+        self.dagsLock = threading.Lock()
         self.dags = {}
 
         # Used to stop the thread
@@ -164,9 +165,13 @@ class LBController(object):
                 # Fetch flow from queue
                 flow = event['data']
                 log.info("\t* Flow: %s\n"%self.toLogFlowNames(flow))
-                
-                # Deal with new flow
-                self.dealWithNewFlow(flow)
+
+                # We assume that upon dealing with a new flow, the
+                # self.dags is not accessed by any other thread
+                with self.dagsLock:
+                    with self.flowAllocationLock:
+                        # Deal with new flow
+                        self.dealWithNewFlow(flow)
                 
             else:
                 t = time.strftime("%H:%M:%S", time.gmtime())
@@ -561,12 +566,11 @@ class LBController(object):
                           multi-pathed towards destination prefix:
                           [[A, B, C], [A, D, C]]"""
 
-        with self.flowAllocationLock:
-            if prefix not in self.flow_allocation.keys():
+        if prefix not in self.flow_allocation.keys():
                 # prefix not in table
-                self.flow_allocation[prefix] = {flow : path_list}
-            else:
-                self.flow_allocation[prefix][flow] = path_list
+            self.flow_allocation[prefix] = {flow : path_list}
+        else:
+            self.flow_allocation[prefix][flow] = path_list
             
         # Loggin a bit...
         t = time.strftime("%H:%M:%S", time.gmtime())
@@ -611,7 +615,7 @@ class LBController(object):
 
         # Set the current dag
         self.setCurrentDag(prefix, current_dag)
-        
+
         # Define the removeAllocatoinEntry thread
         t = threading.Thread(target=self.removeAllocationEntry, args=(prefix, flow))
         # Start the thread
@@ -625,18 +629,21 @@ class LBController(object):
         """
         # Wait until flow finishes
         time.sleep(flow['duration']) 
-
+        
+        # Acquire locks for self.flow_allocation and self.dags
+        # dictionaries
+        self.flowAllocationLock.acquire()
+        self.dagsLock.acquire()
+        
         log.info(lineend)
-
-        with self.flowAllocationLock:
-            if prefix not in self.flow_allocation.keys():
-                # prefix not in table
-                raise KeyError("The is no such prefix allocated: %s"%str(prefix))
+        if prefix not in self.flow_allocation.keys():
+            # prefix not in table
+            raise KeyError("The is no such prefix allocated: %s"%str(prefix))
+        else:
+            if flow in self.flow_allocation[prefix].keys():
+                path_list = self.flow_allocation[prefix].pop(flow, None)
             else:
-                if flow in self.flow_allocation[prefix].keys():
-                    path_list = self.flow_allocation[prefix].pop(flow, None)
-                else:
-                    raise KeyError("%s is not alloacated in this prefix %s"%str(repr(flow)))
+                raise KeyError("%s is not alloacated in this prefix %s"%str(repr(flow)))
 
         t = time.strftime("%H:%M:%S", time.gmtime())
         log.info("%s - Flow REMOVED from Paths\n"%t)
@@ -661,21 +668,21 @@ class LBController(object):
         ongoing_edge_list = []
         for (f, f_path_list) in remaining_flows:
             ongoing_edge_list += self.getEdgesFromPathList(f_path_list)
-        
+                
         # Iterate the path_list
         for path in path_list:
             # Get paths with only routers
             path_only_routers = [p for p in path if self.network_graph.is_router(p)]
-
+            
             # Calculate edges of the path
             edges = zip(path_only_routers[:-1], path_only_routers[1:])
-
+            
             # Calculate which of these edges can be set to ongoing_flows = False
             edges_without_flows = [(u, v) for (u, v) in edges if (u, v) not in ongoing_edge_list]
-
+            
             # Set them
             current_dag = self.switchDagEdgesData(current_dag, edges_without_flows, ongoing_flows=False)
-
+            
             # Now add back capacities to edges
             for (u, v) in edges:
                 data = self.initial_graph.get_edge_data(u, v)
@@ -684,19 +691,25 @@ class LBController(object):
                     # Add back the full capacity taken by the flow
                     # that just finished
                     data['capacity'] += (flow.size)
-
+                    
                     # Set also the reverse edge
                     data_i = self.initial_graph.get_edge_data(v, u)
                     data_i['capacity'] = data['capacity']
                 else:
                     to_print = "ERROR: capacity key not found in edge (%s, %s)\n"
                     log.info(to_print%(u, v))
-
+                    
         # Set the new calculated dag to its destination prefix dag
         self.setCurrentDag(prefix, current_dag)
         
         # Remove the lies for the given prefix
         self.removePrefixLies(prefix, path_list)
+
+        # Release locks
+        self.flowAllocationLock.release()
+        self.dagsLock.release()
+        
+
 
         
     def removePrefixLies(self, prefix, path_list):
@@ -930,15 +943,14 @@ class LBController(object):
         Given a prefix, returns a list of tuples:
         [(flow, path), (flow, path), ...]
         """
-        with self.flowAllocationLock:
-            if prefix in self.flow_allocation.keys():
-                return [(f, p) for f, p in self.flow_allocation[prefix].iteritems()]
-            else:
-                t = time.strftime("%H:%M:%S", time.gmtime())
-                to_print = "%s - getAllocatedFlows(): WARNING: "
-                to_print += "prefix %s not yet in flow_allocation table\n"
-                log.info(to_print%(t, prefix))
-                return []
+        if prefix in self.flow_allocation.keys():
+            return [(f, p) for f, p in self.flow_allocation[prefix].iteritems()]
+        else:
+            t = time.strftime("%H:%M:%S", time.gmtime())
+            to_print = "%s - getAllocatedFlows(): WARNING: "
+            to_print += "prefix %s not yet in flow_allocation table\n"
+            log.info(to_print%(t, prefix))
+            return []
         
     def getFlowSizes(self, prefix):
         """Returns the sum of flows with destination prefix, and how many

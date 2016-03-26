@@ -44,10 +44,15 @@ class TEControllerLab1(SimplePathLB):
                 log.info("%s - run(): %s retrieved from eventQueue\n"%(t, event['type']))
                 flow = event['data']
                 log.info("\t* Flow: %s\n"%self.toLogFlowNames(flow))
-                
-                # Deal with new flow
-                self.dealWithNewFlow(flow)
-                
+
+                # We force that upon dealing with flow, the self.dags
+                # and self.flow_allocation dictionaries are not
+                # modified.
+                with self.dagsLock:
+                    with self.flowAllocationLock:
+                        # Deal with new flow                    
+                        self.dealWithNewFlow(flow)
+                    
             else:
                 t = time.strftime("%H:%M:%S", time.gmtime())
                 log.info("%s - run(): UNKNOWN Event\n"%t)
@@ -476,26 +481,25 @@ class TEControllerLab1(SimplePathLB):
                     dag = self.switchDagEdgesData(dag, [(a_e)], active = False)
                     dag = self.switchDagEdgesData(dag, [(a_e)], ongoing_flows = False)
 
-        with self.flowAllocationLock:
-            # Update the flow_allocation
-            for f in chosen_path_moved_flows:
-                # Get path list of flow
-                pl = self.flow_allocation[dst_prefix].get(f)
+        # Update the flow_allocation
+        for f in chosen_path_moved_flows:
+            # Get path list of flow
+            pl = self.flow_allocation[dst_prefix].get(f)
             
-                final_pl = []
-                # Iterate previous paths (pp) in path list
-                for pp in pl:
-                    # Check if previous path has a node in common with chosen path
-                    indexes = [pp.index(node) for node in pp if node in chosen_path]
-                    if indexes == []:
-                        final_pl.append(pp)
-                    else:
-                        index_pp = min(indexes)
-                        index_cp = chosen_path.index(pp[index_pp])
-                        final_pl.append(pp[:index_pp] + chosen_path[index_cp:])
+            final_pl = []
+            # Iterate previous paths (pp) in path list
+            for pp in pl:
+                # Check if previous path has a node in common with chosen path
+                indexes = [pp.index(node) for node in pp if node in chosen_path]
+                if indexes == []:
+                    final_pl.append(pp)
+                else:
+                    index_pp = min(indexes)
+                    index_cp = chosen_path.index(pp[index_pp])
+                    final_pl.append(pp[:index_pp] + chosen_path[index_cp:])
                 
-                # Update allocation entry
-                self.flow_allocation[dst_prefix][f] = final_pl
+            # Update allocation entry
+            self.flow_allocation[dst_prefix][f] = final_pl
 
         # Add new edges from new computed path
         dag = self.switchDagEdgesData(dag, [chosen_path], active=True)
