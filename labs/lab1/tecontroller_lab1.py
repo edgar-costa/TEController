@@ -260,7 +260,27 @@ class TEControllerLab1(SimplePathLB):
         # Now rank them from more to less capacity available
         ordered_paths = sorted(ordered_paths, key=lambda x: x[1], reverse=True)
         return ordered_paths
-    
+
+    def getRealRequiredCapacity(self, dst_prefix, flow, path):
+        """
+        Given a flow, and the path that wants to be allocated to (pontentially), 
+        returns the real minimum capacity needed for the links on the path in order to allocate:
+
+        - The new incoming flow
+        - The already ongoing flows that are affected by forcing the path
+        """
+        # Get already ongoing flows for prefix
+        prefix_ongoing_flows = self.getAllocatedFlows(dst_prefix)
+
+        # Initialize required capacity
+        required_capacity = flow.size
+
+        # Travere nodes in path
+        for index, node in enumerate(path[:-1]):
+            # Filter flows that are coincident with path
+            moved_flows = [f for (f, pl) in ongoing_flow_allocations for p in pl if node in p]
+
+
     def flowAllocationAlgorithm(self, dst_prefix, flow, initial_paths):
         """
         """
@@ -286,11 +306,11 @@ class TEControllerLab1(SimplePathLB):
         # Calculate all possible paths for flow
         all_paths = self.getAllPathsRanked(self.initial_graph, src_cr, dst_prefix, ranked_by='length')
 
-        # Filter only those that are able to allocate flow without congestion
-        congestion_free_paths = [path for (path, plen) in all_paths if self.getMinCapacity(path[:-1]) > required_capacity]
-                    
         # Get already ongoing flows for that prefix
         ongoing_flow_allocations = self.getAllocatedFlows(dst_prefix)
+
+        # Filter only those that are able to allocate flow + ongoing flows moved without congestion
+        congestion_free_paths = [path for (path, plen) in all_paths if self.getMinCapacity(path[:-1]) > required_capacity]
         
         # Check if congestion free paths exist
         if len(congestion_free_paths) == 0:
@@ -369,10 +389,14 @@ class TEControllerLab1(SimplePathLB):
             log.info("%s - Found path/s that can allocate flow\n"%t)
 
             path_congestion_pairs = []
-            for path in congestion_free_paths:
+            for (path, plen) in all_paths:
                 # Remove the destination subnet hop node from the path
                 path = path[:-1]
                     
+
+                # Create virtual copy of capacity graph
+                cg_copy = self.cg.copy()
+
                 # Initialize accumulated required capacity
                 accumulated_required_capacity = required_capacity
                 accumulated_congestion = 0
@@ -382,17 +406,27 @@ class TEControllerLab1(SimplePathLB):
                     
                 for index, node in enumerate(path[:-1]):
                     # Get flows that will be moved to path
-                    moved_flows = [f for (f, pl) in ongoing_flow_allocations for p in pl if node in p]
-                        
+                    moved_flow_pairs = [(f, pl) for (f, pl) in ongoing_flow_allocations for p in pl if node in p]
+                    moved_flows = [f for (f,pl) in moved_flow_pairs]
+
                     # Accumulate the sizes of the flows that are moved to path
                     accumulated_required_capacity += sum([f.size for f in moved_flows])
+
+                    # Virtually substract capacities from ongoing flows
+                    for (f, pl) in moved_flows_pairs:
+                        # Accumulate edges where capacities have to be virtually changed
+                        p_edges = set()
+                        action = [p_edges.update(set(zip(p[:-1], p[1:]))) for p in pl]
+                        for (x,y) in list(p_edges):
+                            # Add flow size back to available capacity
+                            cg_copy[x][y]['capacity'] += f.size
 
                     # Add moved flows to total_moved_flows
                     total_moved_flows += moved_flows
                         
                     # Calculate edge required capacity
                     edge = (node, path[index+1])
-                    congestion = accumulated_required_capacity - self.cg[edge[0]][edge[1]]['capacity']
+                    congestion = accumulated_required_capacity - cg_copy[edge[0]][edge[1]]['capacity']
 
                     if congestion > 0:
                             accumulated_congestion += congestion 
