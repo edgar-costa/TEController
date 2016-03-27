@@ -33,6 +33,9 @@ LBC_Path = PPATH + 'tecontroller/loadbalancer/'
 # Path to Link Monitorer package
 LM_Path = PPATH + 'tecontroller/linkmonitor/'
 
+# Path to Resources folder
+RES_Path = PPATH + 'tecontroller/res/'
+
 # Path to Labs
 Labs_Path = PPATH + 'labs/'
 Lab1_Path = Labs_Path + 'lab1/'
@@ -64,3 +67,6 @@ LinksMonitor_LogFile = PPATH + "logs/links.log"
 # Start agent
 START_SNMP_AGENT = '/usr/sbin/snmpd'
 SNMP_CommunityString = 'linkmonitor'
+
+# Marshal filename for the probability calculator object
+dconf.MarshalFile = RES_Path +'dictionarydump.marshal'

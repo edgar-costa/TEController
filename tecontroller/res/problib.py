@@ -1,6 +1,62 @@
 """Module that implements the functions to calculate the congestion
 probabilities when activating ECMP in a routers of a network. 
 """
+from tecontroller.res import defaultconf as dconf
+from scipy.misc import comb, factorial
+import marshal
+
+class ProbabiliyCalculator(object):
+    def __init__(self, dump_filename=dconf.MarshalFile):
+        self.dump_filename = dump_filename
+        self.sdict = self.loadSDict()
+
+    def loadSDict(self):     
+        try:
+            dictionary_file = open(self.dump_filename, 'rb')
+            dictionarydump = marshal.load(dictionary_file)
+            dictionary_file.close()
+            return dictionarydump
+        except:
+            dictionary_file = open(self.dump_filename, 'wb')
+            dictionarydump = {}
+            marshal.dump(dictionarydump, dictionary_file)
+            dictionary_file.close()
+            return dictionarydump
+
+    def dumpSDict(self):
+        dictionary_file = open(self.dump_filename, 'wb')
+        marshal.dump(self.sdict, dictionary_file)
+        dictionary_file.close()
+
+    def SNonCongestionProbability(self, m, n, k):
+        if (m, n, k) in self.sdict.keys():
+            return self.sdict[(m,n,k)]
+
+        if m*k < n:
+            return 0
+
+        if n <= k:
+            return 1
+
+        else:
+            function = lambda t:self.SNonCongestionProbability(m-1, n-t, k)*(comb(n, t)*((1/float(m))**t)*((m-1)/float(m))**(n-t))
+            result = sum(map(function, range(0, k+1)))
+
+            if (m, n, k) not in self.sdict.keys():
+                self.sdict[(m,n,k)] = result
+            
+            return result
+
+    def SCongestionProbability(self, m, n, k):
+        if (m,n,k) in self.sdict.keys():
+            return 1 - self.sdict[(m,n,k)]
+
+        else:
+            sncp = self.SNonCongestionProbability(m,n,k)
+            self.sdict[(m,n,k)] = sncp
+            self.dumpSDict()
+            return 1.0 - sncp
+
 
 def getPathProbability(dag, path):
     """Given a DAG and a path defined as a succession of nodes in the
@@ -81,3 +137,46 @@ def flowCongestionProbability(dag, ingress_router, egress_router, flow_size):
         congestion_probability += getPathProbability(dag, path)
         
     return congestion_probability
+
+
+def ShouxiNonCongestionProbability(m, n, k):
+    if m*k < n:
+        return 0
+    if n <= k:
+        return 1
+    else:
+        function = lambda t:ShouxiNonCongestionProbability(m-1, n-t, k)*(comb(n, t)*((1/float(m))**t)*((m-1)/float(m))**(n-t))
+        result = sum(map(function, range(0, k+1)))
+        return result
+
+def CongProbability(m, n, k):
+    return 1.0 - ShouxiNonCongestionProbability(m,n,k)
+
+
+"""
+def ShouxiNonCongestionProbability(m, n, k):
+    if (m, n, k) in dictionarydump.keys():
+        return dictionarydump[(m,n,k)]
+    if m*k < n:
+        return 0
+    if n <= k:
+        return 1
+    else:
+        function = lambda t:ShouxiNonCongestionProbability(m-1, n-t, k)*(comb(n, t)*((1/float(m))**t)*((m-1)/float(m))**(n-t))
+        result = sum(map(function, range(0, k+1)))
+        if (m, n, k) not in dictionarydump.keys():
+            dictionarydump[(m,n,k)] = result
+        return result
+
+def CongProbability(m, n, k):
+    if (m,n,k) in dictionarydump.keys():
+        return 1 - dictionarydump[(m,n,k)]
+    else:
+        sncp = ShouxiNonCongestionProbability(m,n,k)
+        dictionarydump[(m,n,k)] = sncp
+        dictionary_file = open(dictionary_filename, 'wb')
+        marshal.dump(dictionarydump, dictionary_file)
+        dictionary_file.close()
+        return 1.0 - ShouxiNonCongestionProbability(m,n,k)
+"""
+
