@@ -34,11 +34,21 @@ R2 = 'r2'
 R3 = 'r3'
 R4 = 'r4'
 
-S1 = 's1'
-S2 = 's2'
-S3 = 's3'
-S4 = 's4'
-S5 = 's5'
+H10 = 'h10'
+H11 = 'h11'
+H12 = 'h12'
+
+H20 = 'h20'
+H21 = 'h21'
+H22 = 'h22'
+
+H30 = 'h30'
+H31 = 'h31'
+H32 = 'h32'
+
+H40 = 'h40'
+H41 = 'h41'
+H42 = 'h42'
 
 M1 = 'm1'
 
@@ -78,15 +88,22 @@ class Lab1Topo(IPTopo):
         self.addLink(r1, r3)
 
         # Create broadcast domains
-        self.addLink(r3, self.addHost('d1'))    
-        self.addLink(r3, self.addHost('t1'))
-        self.addLink(r3, self.addHost('x1'))
-        self.addLink(r3, self.addHost('y1'))
-     	self.addLink(r1, self.addHost(S1))  
-        self.addLink(r1, self.addHost(S2))  
-        self.addLink(r2, self.addHost(S3))
-        self.addLink(r2, self.addHost(S4))
+        self.addLink(r1, self.addHost(H10)) 
+        self.addLink(r1, self.addHost(H11)) 
+        self.addLink(r1, self.addHost(H12)) 
+
+        self.addLink(r2, self.addHost(H20))  
+     	self.addLink(r2, self.addHost(H21))  
+        self.addLink(r2, self.addHost(H22))  
+
+        self.addLink(r3, self.addHost(H30))
+        self.addLink(r3, self.addHost(H31))
+        self.addLink(r3, self.addHost(H32))
         
+        self.addLink(r4, self.addHost(H40))
+        self.addLink(r4, self.addHost(H41))
+        self.addLink(r4, self.addHost(H42))
+
         # Adding Fibbing Controller
         c1 = self.addController(C1, cfg_path=C1_cfg)
         self.addLink(c1, r4, cost=1000)
@@ -98,8 +115,6 @@ class Lab1Topo(IPTopo):
         # Adding Traffic Engineering Controller
         c3 = self.addHost(LBC, isLBController=True, algorithm='lab1')
         self.addLink(c3, r4)
-
-
 
 
 class Lab1Topo2(IPTopo):
