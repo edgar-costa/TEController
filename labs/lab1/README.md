@@ -17,6 +17,9 @@ the traffic towards an existing destination to an alternative path.
 
 6. The "instantaneous" available capacity for the links of the network is known. To this effect, the [link monitor](https://github.com/lferran/TEController/blob/master/tecontroller/linkmonitor/linksmonitor.py) and [link monitor thread](https://github.com/lferran/TEController/blob/master/tecontroller/linkmonitor/linksmonitor_thread.py) periodically checks the byte counters for all network interfaces in the network, and updates a data structure mantained in the TEController.
 
+7. Full knowledge of the paths taken by all the flows already running in the network. 
+
+
 ## The algorithm 
 
 ### Diagram
@@ -61,4 +64,4 @@ the traffic towards an existing destination to an alternative path.
 This could be overcomed by using the flow-allocations instead to determine the available capacity of a link. SNMP/sFlow measurements could be used only as a feedback loop when there is ECMP and we are not sure where the flows are actually being allocated in reality. However, this has the drawback that there is some traffic going through the links that is not orchestrated by the traffic generator (such as the SNMP queries/responses, for instance) and this could represent a not negligible part of the total bandwidth for small links (~100K of uncontrolled traffic).
 
 2. Since the monitoring tool is SNMP, and the SNMP requests/replies are also sent in the network, when there is congestion in the network, the SNMP data arrives with high delay and thus our TEController reacts even slower. This might be happening due to: a) The routers in the network are very busy sending data to the interfaces and the SNMP requests are handled with less priority. b) The delay is caused by the congestion in the network links. 
-A solution to this problem would be to
+
