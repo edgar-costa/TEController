@@ -18,7 +18,7 @@ class LinksMonitorThread(threading.Thread):
     It is passed a capacity graph and a lock from its parent, and it
     modifies it periodically.
     """
-    def __init__(self, capacity_graph, lock, logfile, median_filter=False, interval=1.05):
+    def __init__(self, capacity_graph, lock, logfile, median_filter=False, interval=1.005):
         super(LinksMonitorThread, self).__init__()
         # Read network database
         self.db = DatabaseHandler()
@@ -68,8 +68,8 @@ class LinksMonitorThread(threading.Thread):
             
     def run(self):
         while True:
-            # Go to sleep interval time
-            time.sleep(self.interval/2)
+            # Go to sleep interval time /2
+            time.sleep(self.interval/2.0)
 
             # Read capacities from SNMP
             self.updateLinksCapacities()
