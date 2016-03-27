@@ -69,4 +69,4 @@ START_SNMP_AGENT = '/usr/sbin/snmpd'
 SNMP_CommunityString = 'linkmonitor'
 
 # Marshal filename for the probability calculator object
-dconf.MarshalFile = RES_Path +'dictionarydump.marshal'
+MarshalFile = RES_Path +'dictionarydump.marshal'
