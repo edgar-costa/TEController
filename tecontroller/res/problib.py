@@ -89,17 +89,68 @@ class ProbabiliyCalculator(object):
 
         return congestion_samples/float(n_samples)
 
+    def SampledCongestionProbability(self, m, n):
+        """
+        In this case, m is a list of paths available capacities : [c1, c2, ...]
+        and n is a list of flow sizes: [s1, s2, ...]
 
-def getPathProbability(dag, path):
-    """Given a DAG and a path defined as a succession of nodes in the
-    DAG, it returns the probability of a single flow to be allocated
-    in that path.
-    """
-    probability = 1
-    for node in path[:-1]:
-        children = len(dag[node])
-        probability *= 1/float(children)
-    return probability
+        returns congestion probability.
+        """
+        all_allocs = [t for p in it.combinations_with_replacement(range(len(m)), len(n)) for t in it.permutations(p)]
+        final_allocs = []
+        action = [final_allocs.append(a) for a in all_allocs if a not in final_allocs]
+
+        n_samples = len(final_allocs) # == m**n
+        congestion_samples = 0
+        
+        available_sizes = np.asarray(m)
+        for alloc in final_allocs:
+            required_sizes = np.zeros(len(m))
+            for i, a in enumerate(alloc):
+                required_sizes[a] += n[i]
+
+            balance = available_sizes - required_sizes
+            congestion = any(filter(lambda x: True if x < 0 else False, balance))
+            if congestion:
+                congestion_samples += 1
+
+        return congestion_samples/float(n_samples)
+
+
+    def getPathProbability(self, dag, path):
+        """Given a DAG and a path defined as a succession of nodes in the
+        DAG, it returns the probability of a single flow to be allocated
+        in that path.
+        """
+        probability = 1
+        for node in path[:-1]:
+            children = len(dag[node])
+            probability *= 1/float(children)
+        return probability
+
+    def flowCongestionProbability(self, dag, ingress_router, egress_router, flow_size):
+        """We assume DAG edges incorporate the available capacities:
+        dag[x][y] is a dictionary with a 'capacity' key.
+        """
+        # Calculate all possible paths
+        all_paths = getAllPathsLimDAG(dag, ingress_router, egress_router, 0)
+
+        # Get those who own links that create congestion
+        paths_congestion = [path for path in all_paths if getMinCapacity(dag, path) < flow_size]
+
+        congestion_probability = 0
+        # Iterate those paths
+        for path in paths_congestion:
+            # Compute the probability of each of these paths to happen
+            # Add it to the total congestion probability (union)
+            congestion_probability += self.getPathProbability(dag, path)
+            
+        return congestion_probability
+
+
+
+
+# Useful functions not included in the object #################
 
 def getAllPathsLimDAG(dag, start, end, k, path=[]):
     """Recursive function that finds all paths from start node to end node
@@ -150,65 +201,4 @@ def getMinCapacity(dag, path):
     """
     caps = [dag[u][v]['capacity'] for u, v in zip(path[:-1], path[1:])]
     return min(caps)
-
-def flowCongestionProbability(dag, ingress_router, egress_router, flow_size):
-    """We assume DAG edges incorporate the available capacities:
-    dag[x][y] is a dictionary with a 'capacity' key.
-    """
-    # Calculate all possible paths
-    all_paths = getAllPathsLimDAG(dag, ingress_router, egress_router, 0)
-
-    # Get those who own links that create congestion
-    paths_congestion = [path for path in all_paths if getMinCapacity(dag, path) < flow_size]
-
-    congestion_probability = 0
-    # Iterate those paths
-    for path in paths_congestion:
-        # Compute the probability of each of these paths to happen
-        # Add it to the total congestion probability (union)
-        congestion_probability += getPathProbability(dag, path)
-        
-    return congestion_probability
-
-
-def ShouxiNonCongestionProbability(m, n, k):
-    if m*k < n:
-        return 0
-    if n <= k:
-        return 1
-    else:
-        function = lambda t:ShouxiNonCongestionProbability(m-1, n-t, k)*(comb(n, t)*((1/float(m))**t)*((m-1)/float(m))**(n-t))
-        result = sum(map(function, range(0, k+1)))
-        return result
-
-def CongProbability(m, n, k):
-    return 1.0 - ShouxiNonCongestionProbability(m,n,k)
-
-
-"""
-def ShouxiNonCongestionProbability(m, n, k):
-    if (m, n, k) in dictionarydump.keys():
-        return dictionarydump[(m,n,k)]
-    if m*k < n:
-        return 0
-    if n <= k:
-        return 1
-    else:
-        function = lambda t:ShouxiNonCongestionProbability(m-1, n-t, k)*(comb(n, t)*((1/float(m))**t)*((m-1)/float(m))**(n-t))
-        result = sum(map(function, range(0, k+1)))
-        if (m, n, k) not in dictionarydump.keys():
-            dictionarydump[(m,n,k)] = result
-        return result
-
-def CongProbability(m, n, k):
-    if (m,n,k) in dictionarydump.keys():
-        return 1 - dictionarydump[(m,n,k)]
-    else:
-        sncp = ShouxiNonCongestionProbability(m,n,k)
-        dictionarydump[(m,n,k)] = sncp
-        dictionary_file = open(dictionary_filename, 'wb')
-        marshal.dump(dictionarydump, dictionary_file)
-        dictionary_file.close()
-        return 1.0 - ShouxiNonCongestionProbability(m,n,k)
-"""
 
