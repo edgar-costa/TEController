@@ -3,7 +3,7 @@ from tecontroller.loadbalancer.simplepathlb import SimplePathLB
 from tecontroller.linkmonitor.linksmonitor_thread import LinksMonitorThread
 from fibbingnode.misc.mininetlib import get_logger
 from tecontroller.res import defaultconf as dconf
-from tecontroller.res.problib import *
+from tecontroller.res.problib import ProbabiliyCalculator
 import threading
 import time
 import Queue
@@ -15,6 +15,9 @@ class TEControllerLab1(SimplePathLB):
     def __init__(self):
         # Call init method from LBController
         super(TEControllerLab1, self).__init__()
+
+        # Instantiate probability calculator object
+        self.pc = ProbabiliyCalculator()
 
         # Create lock for synchronization on accessing self.cg
         self.capacityGraphLock = threading.Lock()
@@ -128,7 +131,7 @@ class TEControllerLab1(SimplePathLB):
                 log.info("\t* Flow size: %d\n"%flow.size)
                 log.info("\t* Equal Cost Paths: %s\n"%self.toLogRouterNames(currentPaths))
                     
-                congProb = flowCongestionProbability(adag, ingress_router,
+                congProb = self.pc.flowCongestionProbability(adag, ingress_router,
                                                      egress_router, flow.size)
                 # Apply decision function
                 # Act accordingly
