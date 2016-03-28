@@ -146,7 +146,6 @@ class ProbabiliyCalculator(object):
             
         return congestion_probability
 
-
 # Useful functions not included in the object #################
 
 def getAllPathsLimDAG(dag, start, end, k, path=[]):
