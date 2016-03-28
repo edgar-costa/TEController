@@ -7,6 +7,7 @@ import itertools as it
 import numpy as np
 import marshal
 import random
+import time
 
 # Change version constant
 marshal.version = 4
@@ -15,6 +16,7 @@ class ProbabiliyCalculator(object):
     def __init__(self, dump_filename=dconf.MarshalFile):
         self.dump_filename = dump_filename
         self.sdict = self.loadSDict()
+        self.timer = Timer()
 
     def loadSDict(self):
         try:
@@ -174,6 +176,23 @@ class ProbabiliyCalculator(object):
             
         return congestion_probability
 
+
+class Timer(object):
+    def __init__(self, verbose=False):
+        self.verbose = verbose
+        
+    def __enter__(self):
+        self.start = time.time()
+        return self
+    
+    def __exit__(self, *args):
+        self.end = time.time()
+        self.secs = self.end - self.start
+        self.msecs = self.secs * 1000  # millisecs
+        if self.verbose:
+            print 'elapsed time: %f ms' % self.msecs
+            
+    
 # Useful functions not included in the object #################
 
 def getAllPathsLimDAG(dag, start, end, k, path=[]):
