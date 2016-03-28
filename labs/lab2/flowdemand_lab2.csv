@@ -1,0 +1,17 @@
+#src,dst,sport,dport,size,start_time,duration
+
+# Fill up (r2, r3) to 50%
+h22,h32,30001,5001,500K,1s,3m
+
+# Fill up (r1, r3) to 80%
+h12,h31,30021,5001,800K,2s,3m
+
+# Fill up (r1, r4) to 80%
+h42,h11,30031,5001,800K,3s,3m
+
+# Start test flows
+h10,h30,30001,5001,100K,10s,3m
+h10,h30,30002,5001,200K,15s,3m
+h10,h30,30003,5001,100K,20s,3m
+h10,h30,30004,5001,300K,25s,3m
+
