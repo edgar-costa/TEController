@@ -116,7 +116,6 @@ class ProbabiliyCalculator(object):
 
         return congestion_samples/float(n_samples)
 
-
     def getPathProbability(self, dag, path):
         """Given a DAG and a path defined as a succession of nodes in the
         DAG, it returns the probability of a single flow to be allocated
