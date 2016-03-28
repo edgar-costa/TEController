@@ -6,6 +6,7 @@ from scipy.misc import comb, factorial
 import itertools as it
 import numpy as np
 import marshal
+import random
 
 # Change version constant
 marshal.version = 4
@@ -69,7 +70,9 @@ class ProbabiliyCalculator(object):
 
         returns congestion probability.
         """
-        all_allocs = [t for p in it.combinations_with_replacement(range(len(m)), len(n)) for t in it.permutations(p)]
+        all_allocs = [t for p in
+                      it.combinations_with_replacement(range(len(m)), len(n)) for t
+                      in it.permutations(p)]
         final_allocs = []
         action = [final_allocs.append(a) for a in all_allocs if a not in final_allocs]
 
@@ -89,7 +92,7 @@ class ProbabiliyCalculator(object):
 
         return congestion_samples/float(n_samples)
 
-    def SampledCongestionProbability(self, m, n):
+    def SampledCongestionProbability(self, m, n, percentage=10, estimate=0):
         """
         In this case, m is a list of paths available capacities : [c1, c2, ...]
         and n is a list of flow sizes: [s1, s2, ...]
@@ -100,22 +103,47 @@ class ProbabiliyCalculator(object):
         final_allocs = []
         action = [final_allocs.append(a) for a in all_allocs if a not in final_allocs]
 
-        n_samples = len(final_allocs) # == m**n
-        congestion_samples = 0
-        
+        n_samples = len(final_allocs)
+
         available_sizes = np.asarray(m)
-        for alloc in final_allocs:
-            required_sizes = np.zeros(len(m))
-            for i, a in enumerate(alloc):
-                required_sizes[a] += n[i]
 
-            balance = available_sizes - required_sizes
-            congestion = any(filter(lambda x: True if x < 0 else False, balance))
-            if congestion:
-                congestion_samples += 1
+        laps = 1
+        if estimate != 0:
+            laps = estimate
 
-        return congestion_samples/float(n_samples)
+        probs = []
+        for lap in range(laps):
+            # Take percentage % of samples only
+            portion_samples = n_samples/percentage
+        
+            # Choose uniformly at random indexes within final_allocs
+            indices = sorted(random.sample(xrange(n_samples), portion_samples)) 
+            
+            # Filter only those indexes from finall_allocs
+            sampled_allocs = [final_allocs[i] for i in indices]
 
+            total_samples = len(sampled_allocs)
+            congested_samples = 0
+        
+            for alloc in sampled_allocs:
+                required_sizes = np.zeros(len(m))
+                for i, a in enumerate(alloc):
+                    required_sizes[a] += n[i]
+
+                balance = available_sizes - required_sizes
+                congestion = any(filter(lambda x: True if x < 0 else False, balance))
+                if congestion:
+                    congested_samples += 1
+                    
+            probs.append(congested_samples/float(total_samples))
+            
+        if not estimate:
+            return probs[0] 
+
+        else:
+            probs = np.asarray(probs)
+            return probs.mean(), probs.std()
+        
     def getPathProbability(self, dag, path):
         """Given a DAG and a path defined as a succession of nodes in the
         DAG, it returns the probability of a single flow to be allocated
