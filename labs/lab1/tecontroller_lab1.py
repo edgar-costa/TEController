@@ -130,15 +130,17 @@ class TEControllerLab1(SimplePathLB):
                 #log.info("\t * Engress router: %s\n"%egress_router)
                 log.info("\t* Flow size: %d\n"%flow.size)
                 log.info("\t* Equal Cost Paths: %s\n"%self.toLogRouterNames(currentPaths))
-                    
-                congProb = self.pc.flowCongestionProbability(adag, ingress_router,
-                                                     egress_router, flow.size)
+
+                with self.pc.timer as t:
+                    congProb = self.pc.flowCongestionProbability(adag, ingress_router,
+                                                                 egress_router, flow.size)
                 # Apply decision function
                 # Act accordingly
                 # Log it
                 to_print = "\t* Flow will be allocated "
                 to_print += "with a congestion probability of %.2f%%\n"
                 log.info(to_print%(congProb*100.0))
+                log.info("\t* It took %s ms to compute probabilities\n"%str(self.pc.timer.msecs))
                 to_print = "\t* Paths: %s\n"
                 log.info(to_print%str([self.toLogRouterNames(path) for path in currentPaths]))
 
