@@ -308,7 +308,7 @@ class TEControllerLab1(SimplePathLB):
         dst_prefix = dst_prefix
 
         # Get current DAG for destination prefix
-        dag = self.getActiveDag(dst_prefix)
+        cdag = self.geCurrentDag(dst_prefix)
         
         # Get required capacity
         required_capacity = flow['size']
@@ -480,11 +480,11 @@ class TEControllerLab1(SimplePathLB):
         # used anymore)
         for node in chosen_path:
             # Get active edges of node
-            active_edges = self.getActiveEdges(dag, node)
+            active_edges = self.getActiveEdges(cdag, node)
             for a_e in active_edges:
                 if a_e not in chosen_path_edges:
-                    dag = self.switchDagEdgesData(dag, [(a_e)], active = False)
-                    dag = self.switchDagEdgesData(dag, [(a_e)], ongoing_flows = False)
+                    cdag = self.switchDagEdgesData(cdag, [(a_e)], active = False)
+                    cdag = self.switchDagEdgesData(cdag, [(a_e)], ongoing_flows = False)
 
         # Update the flow_allocation
         for f in chosen_path_moved_flows:
@@ -507,10 +507,10 @@ class TEControllerLab1(SimplePathLB):
             self.flow_allocation[dst_prefix][f] = final_pl
 
         # Add new edges from new computed path
-        dag = self.switchDagEdgesData(dag, [chosen_path], active=True)
+        cdag = self.switchDagEdgesData(cdag, [chosen_path], active=True)
             
         # This complete DAG goes to the prefix-dag data attribute
-        self.setCurrentDag(dst_prefix, dag)
+        self.setCurrentDag(dst_prefix, cdag)
             
         # Retrieve only the active edges to force fibbing
         final_dag = self.getActiveDag(dst_prefix)
