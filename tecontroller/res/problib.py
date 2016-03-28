@@ -15,7 +15,7 @@ class ProbabiliyCalculator(object):
         self.dump_filename = dump_filename
         self.sdict = self.loadSDict()
 
-    def loadSDict(self):     
+    def loadSDict(self):
         try:
             with open(self.dump_filename, 'rb') as dfile:
                 data = dfile.read()
@@ -145,8 +145,6 @@ class ProbabiliyCalculator(object):
             congestion_probability += self.getPathProbability(dag, path)
             
         return congestion_probability
-
-
 
 
 # Useful functions not included in the object #################
