@@ -3,6 +3,8 @@ probabilities when activating ECMP in a routers of a network.
 """
 from tecontroller.res import defaultconf as dconf
 from scipy.misc import comb, factorial
+import itertools as it
+import numpy as np
 import marshal
 
 # Change version constant
@@ -59,6 +61,33 @@ class ProbabiliyCalculator(object):
             self.sdict[(m,n,k)] = sncp
             self.dumpSDict()
             return 1.0 - sncp
+
+    def ExactCongestionProbability(self, m, n):
+        """
+        In this case, m is a list of paths available capacities : [c1, c2, ...]
+        and n is a list of flow sizes: [s1, s2, ...]
+
+        returns congestion probability.
+        """
+        all_allocs = [t for p in it.combinations_with_replacement(range(len(m)), len(n)) for t in it.permutations(p)]
+        final_allocs = []
+        action = [final_allocs.append(a) for a in all_allocs if a not in final_allocs]
+
+        n_samples = len(final_allocs) # == m**n
+        congestion_samples = 0
+        
+        available_sizes = np.asarray(m)
+        for alloc in final_allocs:
+            required_sizes = np.zeros(len(m))
+            for i, a in enumerate(alloc):
+                required_sizes[a] += n[i]
+
+            balance = available_sizes - required_sizes
+            congestion = any(filter(lambda x: True if x < 0 else False, balance))
+            if congestion:
+                congestion_samples += 1
+
+        return congestion_samples/float(n_samples)
 
 
 def getPathProbability(dag, path):
