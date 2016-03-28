@@ -5,6 +5,9 @@ from tecontroller.res import defaultconf as dconf
 from scipy.misc import comb, factorial
 import marshal
 
+# Change version constant
+marshal.version = 4
+
 class ProbabiliyCalculator(object):
     def __init__(self, dump_filename=dconf.MarshalFile):
         self.dump_filename = dump_filename
@@ -12,22 +15,22 @@ class ProbabiliyCalculator(object):
 
     def loadSDict(self):     
         try:
-            dictionary_file = open(self.dump_filename, 'rb')
-            dictionarydump = marshal.load(dictionary_file)
-            dictionary_file.close()
-            return dictionarydump
+            with open(self.dump_filename, 'rb') as dfile:
+                data = dfile.read()
+                dictionarydump = marshal.loads(data)
+                return dictionarydump
         except:
-            dictionary_file = open(self.dump_filename, 'wb')
-            dictionarydump = {}
-            marshal.dump(dictionarydump, dictionary_file)
-            dictionary_file.close()
-            return dictionarydump
-
+            with open(self.dump_filename, 'wb') as dfile:
+                dictionarydump = {}
+                data = marshal.dumps(dictionarydump, 4)
+                dfile.write(data)
+                return dictionarydump
+            
     def dumpSDict(self):
-        dictionary_file = open(self.dump_filename, 'wb')
-        marshal.dump(self.sdict, dictionary_file)
-        dictionary_file.close()
-
+        with open(self.dump_filename, 'wb') as dfile:
+            data = marshal.dumps(self.sdict, 4)
+            dfile.write(data)
+            
     def SNonCongestionProbability(self, m, n, k):
         if (m, n, k) in self.sdict.keys():
             return self.sdict[(m,n,k)]
@@ -39,7 +42,7 @@ class ProbabiliyCalculator(object):
             return 1
 
         else:
-            function = lambda t:self.SNonCongestionProbability(m-1, n-t, k)*(comb(n, t)*((1/float(m))**t)*((m-1)/float(m))**(n-t))
+            function = lambda t:self.SNonCongestionProbability(m-1, n-t, k)*(float(comb(n, t))*((1/float(m))**t)*((m-1)/float(m))**(n-t))
             result = sum(map(function, range(0, k+1)))
 
             if (m, n, k) not in self.sdict.keys():
