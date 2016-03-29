@@ -29,7 +29,7 @@ log = get_logger()
 
 dconf.LBC_Path
 
-commented = False#True #
+commented = True #False#
 
 algo_to_file = {'lab1': dconf.Lab1_Path + 'tecontroller_lab1.py',
                 'lab2': dconf.Lab2_Path + 'tecontroller_lab2.py',
