@@ -114,6 +114,11 @@ class TrafficGenerator(Base):
         # Sleep after it is your time to start
         time.sleep(flow['start_time'])
 
+        # Call to informLBController if it is active
+        if self._lbc_ip:
+            self.informLBController(flow)
+            #time.sleep(0.2)
+            
         # Create new flow with hosts ip's instead of interfaces
         # Iperf only understands ip's
         flow2 = Flow(src = flow['src'].ip.compressed,
@@ -140,11 +145,7 @@ class TrafficGenerator(Base):
             log.info("LOG: Exception in user code:\n")
             log.info('-'*60+'\n')
             log.info(traceback.print_exc())
-            log.info('-'*60+'\n')
-            
-        # Call to informLBController if it is active
-        if self._lbc_ip:
-            self.informLBController(flow)
+            log.info('-'*60+'\n')            
 
     def stopFlow(self, flow):
         """Instructs host to stop iperf client session (flow).
