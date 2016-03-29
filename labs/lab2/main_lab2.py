@@ -109,11 +109,11 @@ class Lab1Topo(IPTopo):
         self.addLink(c1, r4, cost=1000)
 
         # Adding Traffic Generator Host
-        c2 = self.addHost(TG, isTrafficGenerator=True, flowfile=dconf.Lab1_Path+'flowdemand_lab1.csv') 
+        c2 = self.addHost(TG, isTrafficGenerator=True, flowfile=dconf.Lab2_Path+'flowdemand_lab2.csv') 
         self.addLink(c2, r4)
 
         # Adding Traffic Engineering Controller
-        c3 = self.addHost(LBC, isLBController=True, algorithm='lab1')
+        c3 = self.addHost(LBC, isLBController=True, algorithm='lab2')
         self.addLink(c3, r4)
 
 
