@@ -41,10 +41,10 @@ class ProbabiliyCalculator(object):
             return self.sdict[(m,n,k)]
 
         if m*k < n:
-            return 0
+            return 0.0
 
         if n <= k:
-            return 1
+            return 1.0
 
         else:
             function = lambda t:self.SNonCongestionProbability(m-1, n-t, k)*(float(comb(n, t))*((1/float(m))**t)*((m-1)/float(m))**(n-t))
@@ -57,7 +57,7 @@ class ProbabiliyCalculator(object):
 
     def SCongestionProbability(self, m, n, k):
         if (m,n,k) in self.sdict.keys():
-            return 1 - self.sdict[(m,n,k)]
+            return 1.0 - self.sdict[(m,n,k)]
 
         else:
             sncp = self.SNonCongestionProbability(m,n,k)
