@@ -167,7 +167,7 @@ class Lab1Topo2(IPTopo):
         #self.addLink(c2, r4)
 
         # Adding Traffic Engineering Controller
-        c3 = self.addHost(LBC, isLBController=True, algorithm='lab1')
+        c3 = self.addHost(LBC, isLBController=True, algorithm='lab2')
         self.addLink(c3, r4)
 
         
