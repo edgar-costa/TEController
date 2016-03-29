@@ -9,7 +9,6 @@ import numpy as np
 
 log = get_logger()
 
-
 class LinksMonitorThread(threading.Thread):
     """This class defines a thread that will be spawned by the TEController 
     algorithm in order to periodically update the available capacities
@@ -121,7 +120,7 @@ class LinksMonitorThread(threading.Thread):
             for i, iface_name in enumerate(iface_names):
                 iface_availableCap = availableCaps[i]
                 self.updateLinkCapacity(iface_name, iface_availableCap)
-
+                
     def logLinksLoads(self):
         # Make a copy of the self.cg and release the lock
         with self.lock:
@@ -187,14 +186,7 @@ class LinksMonitorThread(threading.Thread):
             else:
                 # No median filter
                 self.cg[x][y]['capacity'] = new_capacity
-
                 
-    def updateCapacities(self, new_links_capacities):
-        # update self.cg wrt new_capacities_graph
-        for (x,y), edge_data in new_links_capacities.iteritems():
-            x_ip = self.db.routerid(x)
-            y_ip = self.db.routerid(y)
-        
     def printLinkToEdgesLine(self, capacity_graph):
         s = ""
         to_iterate = sorted(self.link_to_edge_bindings.keys())
@@ -219,10 +211,6 @@ class LinksMonitorThread(threading.Thread):
     
     def _startLinks(self):
         """
-        Returns a dictionary:
-        edge -> bw, load, interface
-        set({x, y}) -> 
-        
         Only router-to-router links are of interest (since we can't modify
         routes inside subnetworks).
         """
