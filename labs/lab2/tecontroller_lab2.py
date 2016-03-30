@@ -12,8 +12,12 @@ import itertools as it
 log = get_logger()
 lineend = "-"*100+'\n'
 
+#ALGORITHM = 'exact'
+ALGORITHM = 'sampled'
+
 class TEControllerLab2(SimplePathLB):
-    def __init__(self):
+    def __init__(self, probabilityAlgorithm='simplified', congestionThreshold = 0.9):
+        
         # Call init method from LBController
         super(TEControllerLab2, self).__init__()
 
@@ -30,7 +34,18 @@ class TEControllerLab2(SimplePathLB):
         # Variable where we save the last "read-out" copy of the
         # capacity graph
         self.cgc = self.cg
-            
+
+        # Set the congestion threshold
+        self.congestionThreshold = congestionThreshold
+        t = time.strftime("%H:%M:%S", time.gmtime())
+        log.info("%s - Congestion Threshold is set to %.2f%% of the link\n"%(t, (self.congestionThreshold)*100.0))
+        
+        # Type of algorithm used to calculate congestion probability
+        # in the ECMP part. It can be: simplified, exact or sampled
+        self.probabilityAlgorithm = probabilityAlgorithm
+        t = time.strftime("%H:%M:%S", time.gmtime())
+        log.info("%s - ECMP Congestion Probability Calculation function used: %s\n"%(t, self.probabilityAlgorithm))
+        
         # Start the links monitorer thread linked to the event queue
         lmt = LinksMonitorThread(capacity_graph = self.cg,
                                  lock = self.capacityGraphLock,
@@ -76,7 +91,12 @@ class TEControllerLab2(SimplePathLB):
             # Make copy of the capacity graph at that moment in time
             # and release the lock.
             self.cgc = self.cg.copy()
-            
+
+        t = time.strftime("%H:%M:%S", time.gmtime())
+        log.info("%s - Copy of the capacity graph done. Edges available capacities:\n"%t)
+        for (x, y, data) in self.toLogDagNames(self.cgc).edges(data=True):
+            log.info("\t(%s, %s) -> %s\n"%(x, y, data['capacity']))
+
         # Get the communicating interfaces
         src_iface = flow['src']
         dst_iface = flow['dst']
@@ -174,20 +194,60 @@ class TEControllerLab2(SimplePathLB):
             if self.canAllocateFlow(flow, currentPath):
                 # No congestion. Do nothing
                 t = time.strftime("%H:%M:%S", time.gmtime())
-                log.info("%s - Flow can be ALLOCATED\n"%t)
-
+                to_log = "%s - Flow can be ALLOCATED. Path: %s, min capacity: %s\n"
+                log.info(to_log%(t, self.toLogRouterNames(currentPath), self.getMinCapacity(currentPath[0])))
+                
                 # We just allocate the flow to the currentPath
                 self.addAllocationEntry(dst_prefix, flow, currentPath)
 
             else:
                 # Congestion created. 
                 t = time.strftime("%H:%M:%S", time.gmtime())
-                log.info("%s - Flow will cause CONGESTION in current path: %s\n"%(t, self.toLogRouterNames(currentPath)))
-                
+                to_log = "%s - Flow will cause CONGESTION. Path: %s, min capacity: %s\n"
+                log.info(to_log%(t, self.toLogRouterNames(currentPath), self.getMinCapacity(currentPath[0])))
+                                 
                 # Call the subclassed method to properly 
                 # allocate flow to a congestion-free path
                 self.flowAllocationAlgorithm(dst_prefix, flow, currentPath)
-                
+
+    def canAllocateFlow(self, flow, path_list):
+        """Returns true if there is at least flow.size bandwidth available in
+        all links along the path (or multiple paths in case of ECMP)
+        from flow.src to src.dst,
+        """
+        for path in path_list:
+            # Get edge with minimum capacity of the path
+            ((x,y), minCap) = self.getMinCapacityEdge(path)
+            bw = self.cgc[x][y].get('bw')
+
+            currentload = (bw - minCap)/float(bw)
+            if currentload > self.congestionThreshold:
+                return False
+            else:
+                nextload = ((bw - minCap) + flow.size)/float(bw)
+                if nextload > self.congestionThreshold:
+                    return False
+        return True
+
+    
+    def getMinCapacityEdge(self, path):
+        caps_edges = []
+        for (u,v) in zip(path[:-1], path[1:]):
+            edge_data = self.cgc.get_edge_data(u, v)
+            if edge_data:
+                cap = edge_data.get('capacity', None)
+                caps_edges.append(((u,v), cap))
+        try:
+            min_cap_edge = min(caps_edges, key=lambda x: x[1])
+            return min_cap_edge
+        
+        except ValueError:
+            t = time.strftime("%H:%M:%S", time.gmtime())
+            log.info("%s - getMinCapacity(): ERROR: min could not be calculated\n"%t)
+            log.info("Argument should be a list! (not a list of lists)")
+            raise ValueError
+
+        
     def getMinCapacity(self, path):
         """
         We overwrite the method so that capacities are now checked from the
@@ -434,7 +494,6 @@ class TEControllerLab2(SimplePathLB):
     def ECMPAlgorithm(self, dst_prefix, flow):
         """
         """
-        import ipdb; ipdb.set_trace()        
         
         # Get flow ingress router
         ingress_rid = self.getIngressRouter(flow)
@@ -450,12 +509,13 @@ class TEControllerLab2(SimplePathLB):
 
         # Calculate maximum flow size and parameter n
         flow_sizes = [f.size for (f, pl) in ongoing_flows_same_ir]+[flow.size]
-        max_flow_size = max(flow_sizes)
-        n = len(flow_sizes)
         
         # Create virtual copy of capacity graph
         cg_copy = self.cgc.copy()
 
+
+        #import ipdb; ipdb.set_trace()
+        
         # Add back capacities to their respective paths
         for f, pl in ongoing_flows_same_ir:
             # Accumulate edges where capacities have to be virtually changed
@@ -486,52 +546,26 @@ class TEControllerLab2(SimplePathLB):
         t = time.strftime("%H:%M:%S", time.gmtime())
         log.info("%s - Disjoint paths found: Path -> virtual minimum capacity\n"%t)
         for (p, pvcap) in disjoint_paths:
-            log.info("\t%s -> %s\n"%(str(self.toLogRouterNames(p)), str(pvcap)))
-        
+            log.info("\t%s\t->\t%s\n"%(str(self.toLogRouterNames(p)), str(pvcap)))
+
+        # Log flow sizes
+        log.info("%s - Flow sizes:\n"%t)
+        log.info("\t%s\n"%str(flow_sizes))
+            
         # Calculate all combinations of possible paths.
         all_path_subsets = []
         action = [all_path_subsets.append(c) for i in range(2, len(disjoint_paths)+1) for c in list(it.combinations(disjoint_paths, i))]
 
-        # Iterate them, and choose the one that minimizes congestion probability
-        with self.pc.timer as t:
-            probs_items = []
-            for path_subset in all_path_subsets:
-                # Calculate minimun path capacity and parameter m
-                minimum_path_capacity = min([pvcap for (path, pvcap) in path_subset])
-                m = len(path_subset)
-                
-                # Calculate k: how many flows can each path allocate at max.
-                k = int(minimum_path_capacity/max_flow_size)
-
-                # Compute congestion probability
-                congProb = self.pc.SCongestionProbability(m, n, k)
-
-                log.info("\tPaths: %s\n"%(str(self.toLogRouterNames([p for p,c in path_subset]))))
-                log.info("\tMinimun path capacity: %s\n"%(str(minimum_path_capacity)))
-                log.info("\tMax flow size: %s\n"%(str(max_flow_size)))
-                log.info("\tm: %d, n: %d, k: %d -> congProb: %.2f\n"%(m,n,k,congProb))
-                
-                # Append intermediate result
-                probs_items.append((path_subset, congProb))
-
-        import ipdb; ipdb.set_trace()        
-        # Get path subset that minimizes congestion probability
-        chosen_subset = min(probs_items, key=lambda x: x[1])
-
-        # Get the paths only
-        chosen_paths = [p for (p, c) in chosen_subset[0]]
-
-        # Get the congestion probability
-        congProb_chosen_paths = chosen_subset[1]
-
-        # Log search results
-        to_log = "\t* ECMP on paths: %s minimizes the congestion probability: %.2f%%\n"
-        log.info(to_log%(str(self.toLogRouterNames(chosen_paths)), congProb_chosen_paths*100))
-        to_log = "\t* It took %s ms to calculate probabilities\n"
-        log.info(to_log%(str(self.pc.timer.msecs)))
+        if self.probabilityAlgorithm == 'sampled':
+            chosen_paths = self.SampledProbability(all_path_subsets, flow_sizes)
+            
+        elif self.probabilityAlgorithm == 'exact':
+            chosen_paths = self.ExactProbability(all_path_subsets, flow_sizes)
+            
+        else:
+            chosen_paths = self.SimplifiedProbability(all_path_subsets, flow_sizes)
 
         # Fib chosen paths
-
         # Deactivate old edges from initial path nodes (won't be
         # used anymore)
         for chosen_path in chosen_paths:
@@ -580,12 +614,152 @@ class TEControllerLab2(SimplePathLB):
         for (u, v) in zip(path[:-1], path[1:]):
             caps.append(capacity_graph[u][v].get('capacity', None))
         return min(caps)
+    
 
+    def SimplifiedProbability(self, all_path_subsets, flow_sizes):
+        # Get biggest flow size
+        max_flow_size = max(flow_sizes)
+
+        # Compute how many flows there are. We assume here we all have
+        # max_flow_size
+        n = len(flow_sizes)
+
+        # Iterate path combinations and choose the one that minimizes
+        # congestion probability
+        with self.pc.timer as t:
+            probs_items = []
+            for path_subset in all_path_subsets:
+                # Calculate minimun path capacity and parameter m
+                minimum_path_capacity = min([pvcap for (path, pvcap) in path_subset])
+                m = len(path_subset)
+                
+                # Calculate k: how many flows can each path allocate at max.
+                k = int(minimum_path_capacity/max_flow_size)
+
+                # Compute congestion probability
+                congProb = self.pc.SCongestionProbability(m, n, k)
+
+                log.info("\tPaths: %s\n"%(str(self.toLogRouterNames([p for p,c in path_subset]))))
+                log.info("\tMinimun path capacity: %s\n"%(str(minimum_path_capacity)))
+                log.info("\tMax flow size: %s\n"%(str(max_flow_size)))
+                log.info("\tm: %d, n: %d, k: %d -> congProb: %.2f\n"%(m,n,k,congProb))
+                
+                # Append intermediate result
+                probs_items.append((path_subset, congProb))
+
+        # Get path subset that minimizes congestion probability
+        chosen_subset = min(probs_items, key=lambda x: x[1])
+
+        # Get the paths only
+        chosen_paths = [p for (p, c) in chosen_subset[0]]
+
+        # Get the congestion probability
+        congProb_chosen_paths = chosen_subset[1]
+
+        # Log search results
+        to_log = "\t* ECMP on paths: %s minimizes the congestion probability: %.2f%%\n"
+        log.info(to_log%(str(self.toLogRouterNames(chosen_paths)), congProb_chosen_paths*100))
+        to_log = "\t* It took %s ms to calculate probabilities\n"
+        log.info(to_log%(str(self.pc.timer.msecs)))
+
+        return chosen_paths
+
+
+    def ExactProbability(self, all_path_subsets, flow_sizes):
+        """
+        """
+        # Iterate path combinations and choose the one that minimizes
+        # congestion probability
+        with self.pc.timer as t:
+            probs_items = []
+            for path_subset in all_path_subsets:
+                # Save path capacities only
+                m = [pvcap for (path, pvcap) in path_subset]
+
+                # Save flow sizes
+                n = flow_sizes
+
+                # Compute congestion probability
+                congProb = self.pc.ExactCongestionProbability(m, n)
+
+                # Log results
+                paths = [p for p,c in path_subset]
+                log.info("\tPath combination:\n")
+                for i, p in enumerate(paths):
+                    log.info("\t\t* %s, capacity: %s\n"%(str(self.toLogRouterNames(p)), m[i]))
+                log.info("\tExact congestion probability: %.2f\n\n"%(congProb))
+                
+                # Append intermediate result
+                probs_items.append((path_subset, congProb))
+
+        # Get path subset that minimizes congestion probability
+        chosen_subset = min(probs_items, key=lambda x: x[1])
+
+        # Get the paths only
+        chosen_paths = [p for (p, c) in chosen_subset[0]]
+
+        # Get the congestion probability
+        congProb_chosen_paths = chosen_subset[1]
+
+        # Log search results
+        to_log = "\t* ECMP on paths: %s minimizes the congestion probability: %.2f%%\n"
+        log.info(to_log%(str(self.toLogRouterNames(chosen_paths)), congProb_chosen_paths*100))
+        to_log = "\t* It took %s ms to calculate probabilities\n"
+        log.info(to_log%(str(self.pc.timer.msecs)))
+        return chosen_paths
+
+
+    
+    def SampledProbability(self, all_path_subsets, flow_sizes):
+        # Iterate path combinations and choose the one that minimizes
+        # congestion probability
+        with self.pc.timer as t:
+            probs_items = []
+            for path_subset in all_path_subsets:
+                # Save path capacities only
+                m = [pvcap for (path, pvcap) in path_subset]
+                
+                # Save flow sizes
+                n = flow_sizes
+
+                # Compute congestion probability
+                (congProb, std) = self.pc.SampledCongestionProbability(m, n, percentage=30, estimate=10)
+
+                # Log results
+                paths = [p for p,c in path_subset]
+                log.info("\tPath combination:\n")
+                for i, p in enumerate(paths):
+                    log.info("\t\t* %s, capacity: %s\n"%(str(self.toLogRouterNames(p)), m[i]))
+                if not std:
+                    log.info("\tExact congestion probability: %.2f\n\n"%(congProb))
+                else:
+                    log.info("\tExact congestion probability: %.2f +/- %.5f\n\n"%(congProb, std))
+                # Append intermediate result
+                probs_items.append((path_subset, congProb))
+
+        # Get path subset that minimizes congestion probability
+        chosen_subset = min(probs_items, key=lambda x: x[1])
+
+        # Get the paths only
+        chosen_paths = [p for (p, c) in chosen_subset[0]]
+
+        # Get the congestion probability
+        congProb_chosen_paths = chosen_subset[1]
+
+        # Log search results
+        to_log = "\t* ECMP on paths: %s minimizes the congestion probability: %.2f%%\n"
+        log.info(to_log%(str(self.toLogRouterNames(chosen_paths)), congProb_chosen_paths*100))
+        to_log = "\t* It took %s ms to calculate probabilities\n"
+        log.info(to_log%(str(self.pc.timer.msecs)))
+        return chosen_paths
+
+
+    
 if __name__ == '__main__':
     log.info("LOAD BALANCER CONTROLLER - Lab 2 - Enforcing simple paths + ECMP when needed\n")
     log.info("-"*90+"\n")
     time.sleep(dconf.LBC_InitialWaitingTime)
     
-    tec = TEControllerLab2()
+    tec = TEControllerLab2(probabilityAlgorithm=ALGORITHM)
     tec.run()
                                 
