@@ -16,7 +16,7 @@ lineend = "-"*100+'\n'
 ALGORITHM = 'sampled'
 
 class TEControllerLab2(SimplePathLB):
-    def __init__(self, probabilityAlgorithm='simplified', congestionThreshold = 0.9):
+    def __init__(self, probabilityAlgorithm='simplified', congestionThreshold = 0.95):
         
         # Call init method from LBController
         super(TEControllerLab2, self).__init__()
@@ -352,7 +352,7 @@ class TEControllerLab2(SimplePathLB):
         ongoing_flow_allocations = self.getAllocatedFlows(dst_prefix)
 
         # Filter only those that are able to allocate flow + ongoing flows moved without congestion
-        congestion_free_paths = [path for (path, plen) in all_paths if self.getMinCapacity(path[:-1]) > required_capacity]
+        congestion_free_paths = [path for (path, plen) in all_paths if self.canAllocateFlow([path[:-1]], flow) == True]
         
         # Check if congestion free paths exist
         if len(congestion_free_paths) == 0:
@@ -460,7 +460,7 @@ class TEControllerLab2(SimplePathLB):
                             index_pp = min(indexes)
                             index_cp = chosen_path.index(pp[index_pp])
                             final_pl.append(pp[:index_pp] + chosen_path[index_cp:])
-                        
+                            
                     # Update allocation entry
                     self.flow_allocation[dst_prefix][f] = final_pl
 
