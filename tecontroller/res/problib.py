@@ -140,11 +140,11 @@ class ProbabiliyCalculator(object):
             probs.append(congested_samples/float(total_samples))
             
         if not estimate:
-            return probs[0] 
+            return (probs[0], None) 
 
         else:
             probs = np.asarray(probs)
-            return probs.mean(), probs.std()
+            return (probs.mean(), probs.std())
         
     def getPathProbability(self, dag, path):
         """Given a DAG and a path defined as a succession of nodes in the
