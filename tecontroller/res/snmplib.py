@@ -55,8 +55,6 @@ class SnmpCounters(Base):
                        self.setSizeToStr2(bytes_observed),
                        self.setTimeToStr(duration))
         return s
-
-
     
     def setRefreshTimeToMinimum(self):
         start = time.time()
@@ -70,8 +68,7 @@ class SnmpCounters(Base):
         if time_info:
             to_log = "snmplib.py: setRefreshTimeToMinimum() took: %d seconds\n"
             log.info(to_log%(time.time()-start))
-
-    
+ 
     def getInterfaces(self):
         """
         """
