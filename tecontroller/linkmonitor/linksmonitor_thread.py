@@ -83,7 +83,11 @@ class LinksMonitorThread(threading.Thread):
         # Update counters first
         self._updateCounters()
         
+        # List in which we hold the already updated interfaces
+        interfaces_updated = []
+        
         for router, counter in self.counters.iteritems():
+            
             # Get router interfaces names
             iface_names = [data['name'] for data in counter.interfaces]
               
@@ -108,7 +112,7 @@ class LinksMonitorThread(threading.Thread):
                     bandwidths.append(bw_tmp[0])
                 else:
                     bandwidths.append(0)
-                                        
+
             # Convert as a numpy array
             bandwidths = np.asarray(bandwidths)
 
@@ -118,9 +122,23 @@ class LinksMonitorThread(threading.Thread):
             # Set link available capacities by interface name
             # Get lock first
             for i, iface_name in enumerate(iface_names):
-                iface_availableCap = availableCaps[i]
-                self.updateLinkCapacity(iface_name, iface_availableCap)
-                
+                if iface_name not in interfaces_updated:
+                    iface_availableCap = availableCaps[i]
+
+                    # Get interface of other side of the link
+                    edge = [edge for edge, data in self.links.iteritems() if data['interface'] == iface_name]
+                    if edge == []:
+                        # Means is not a router-to-router link
+                        pass
+                    else:
+                        (x,y) = edge[0]
+                        iface_opposed_name = self.links[(y,x)]['interface']
+                        self.updateLinkCapacity(iface_name, iface_availableCap)
+                        self.updateLinkCapacity(iface_opposed_name, iface_availableCap)
+                        interfaces_updated.append(iface_name)
+                        interfaces_updated.append(iface_opposed_name)
+                        
+                    
     def logLinksLoads(self):
         # Make a copy of the self.cg and release the lock
         with self.lock:
