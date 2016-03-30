@@ -17,7 +17,7 @@ class LinksMonitorThread(threading.Thread):
     It is passed a capacity graph and a lock from its parent, and it
     modifies it periodically.
     """
-    def __init__(self, capacity_graph, lock, logfile, median_filter=False, interval=1.005):
+    def __init__(self, capacity_graph, lock, logfile, median_filter=False, interval=1.01):
         super(LinksMonitorThread, self).__init__()
         # Read network database
         self.db = DatabaseHandler()
@@ -70,12 +70,14 @@ class LinksMonitorThread(threading.Thread):
             # Go to sleep interval time /2
             time.sleep(self.interval/2.0)
 
+            #start_time = time.time()
             # Read capacities from SNMP
             self.updateLinksCapacities()
 
             # Log them in the log file too
             if self.logfile:
                 self.logLinksLoads()
+            #log.info("It took %.3f to update and log the new capacities readout\n"%(time.time()-start_time))
             
     def updateLinksCapacities(self):
         """
@@ -163,8 +165,10 @@ class LinksMonitorThread(threading.Thread):
         Blocks until the counters have been updated.
         """
         for r, counter in self.counters.iteritems():
+            #start_time = time.time()
             while (counter.fromLastLecture() < self.interval):
                 pass
+            #log.info("I was stuck %.3f seconds waiting for interval to pass\n"%(time.time()-start_time))
             counter.updateCounters32()
 
     def updateLinkCapacity(self, iface_name, new_capacity):
@@ -202,8 +206,31 @@ class LinksMonitorThread(threading.Thread):
                 self.cg[x][y]['capacity'] = chosen_cap
         
             else:
-                # No median filter
-                self.cg[x][y]['capacity'] = new_capacity
+                window = self.cg[x][y]['window']
+
+                if len(window) == 3:
+                    window.pop()
+                    # Rate of new capacity wrt previous one
+                    rate = new_capacity/float(window[0])
+                    if rate < 2.05 and rate > 1.95:
+                        # Double read-out found
+                        new_capacity = window[0]
+            
+                        window = [new_capacity] + window
+                
+                        # No median filter but we store also the last 3
+                        # capacities in the window
+                        self.cg[x][y]['window'] = window
+                        self.cg[x][y]['capacity'] = new_capacity
+                    else:
+                        window = [new_capacity] + window
+                        self.cg[x][y]['window'] = window
+                        self.cg[x][y]['capacity'] = new_capacity
+                else:
+                    window = [new_capacity] + window
+                    self.cg[x][y]['window'] = window
+                    self.cg[x][y]['capacity'] = new_capacity
+
                 
     def printLinkToEdgesLine(self, capacity_graph):
         s = ""
