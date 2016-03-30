@@ -72,7 +72,7 @@ def main(args):
             label_f = label+' filtered'
             ax.plot(seconds, loads[:,i], 'r.', label=label)
             ax.plot(seconds, loads2[:,i], 'b-', label=label_f)
-            ax.set_ylim(0,100)
+            ax.set_ylim(0,150)
             ax.legend([label, label_f], loc='right')
             #ax.legend([label_f], loc='right')
             ax.grid(True)
