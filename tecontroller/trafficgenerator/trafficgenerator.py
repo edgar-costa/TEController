@@ -117,7 +117,7 @@ class TrafficGenerator(Base):
         # Call to informLBController if it is active
         if self._lbc_ip:
             self.informLBController(flow)
-            #time.sleep(0.2)
+            time.sleep(0.2)
             
         # Create new flow with hosts ip's instead of interfaces
         # Iperf only understands ip's
