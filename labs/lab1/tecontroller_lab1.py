@@ -84,6 +84,12 @@ class TEControllerLab1(SimplePathLB):
             # and release the lock.
             self.cgc = self.cg.copy()
 
+        t = time.strftime("%H:%M:%S", time.gmtime())
+        log.info("%s - Copy of the capacity graph done. Current edge usages:"%t)
+        for (x, y, data) in self.toLogDagNames(self.cgc).edges(data=True):
+            currentLoad = self.getCurrentEdgeLoad(x,y)
+            log.info("\t(%s, %s) -> Capacity: %d (%.2f%%)\n"%(x, y, data['capacity'], currentLoad*100))
+            
         # Get the communicating interfaces
         src_iface = flow['src']
         dst_iface = flow['dst']
@@ -205,6 +211,15 @@ class TEControllerLab1(SimplePathLB):
                 # Call the subclassed method to properly 
                 # allocate flow to a congestion-free path
                 self.flowAllocationAlgorithm(dst_prefix, flow, currentPath)
+
+
+    def getCurrentEdgeLoad(self, x,y):
+        cap = self.cgc[x][y].get('capacity')
+        bw = self.cgc[x][y].get('bw')
+        if cap and bw:
+            currentLoad = (bw - cap)/float(bw)
+        return currentLoad
+        
                 
     def getMinCapacity(self, path):
         """
@@ -457,6 +472,10 @@ class TEControllerLab1(SimplePathLB):
                 # Append it in variable
                 path_congestion_pairs.append((path, accumulated_congestion, total_moved_flows))
 
+            # Log it first
+            for (path, accumulated_congestion, mf) in path_congestion_pairs:
+                log.info("\t\t- Path: %s, Congestion: %d, Moved flows: %s\n"%(self.toLogRouterNames(path), accumulated_congestion, str([str(f) for f in mf])))
+                
             # Let's choose the one with the least congestion
             least_congestion = min(path_congestion_pairs, key=lambda x: x[1])
                 
