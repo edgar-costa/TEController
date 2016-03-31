@@ -129,7 +129,7 @@ class TEControllerLab1(SimplePathLB):
         
             # Insert current available capacities in DAG
             for (u, v, data) in adag.edges(data=True):
-                cap = self.cg[u][v]['capacity']
+                cap = self.cgc[u][v]['capacity']
                 data['capacity'] = cap
         
             # Get ingress and egress router
@@ -311,7 +311,7 @@ class TEControllerLab1(SimplePathLB):
         """
         ng_temp = network_graph.copy()
         for (x, y, data) in network_graph.edges(data=True):
-            cap = self.cg[x][y].get('capacity', None)
+            cap = self.cgc[x][y].get('capacity', None)
             if cap and cap <= flow_size and self.network_graph.is_router(x) and self.network_graph.is_router(y):
                 edge = (x, y)
                 ng_temp.remove_edge(x, y) 
@@ -446,7 +446,7 @@ class TEControllerLab1(SimplePathLB):
                         
                     # Calculate edge required capacity
                     edge = (node, path[index+1])
-                    congestion = accumulated_required_capacity - self.cg[edge[0]][edge[1]]['capacity']
+                    congestion = accumulated_required_capacity - self.cgc[edge[0]][edge[1]]['capacity']
 
                     # Only add if it's positive, since negative
                     # congestion is not used anyway.
