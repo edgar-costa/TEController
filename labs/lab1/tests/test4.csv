@@ -1,0 +1,39 @@
+#src,dst,sport,dport,size,start_time,duration
+
+## TEST 4 #####################################
+## Limitation 1 ###############################
+# Fill up (r2, r3) to 50%
+
+#h22,h32,30001,5001,500K,1s,3m
+
+# Fill up (r1, r3) to 80%
+
+#h12,h31,30021,5001,800K,2s,3m
+
+# Fill up (r1, r4) to 80%
+
+#h42,h11,30031,5001,800K,3s,3m
+
+# Start flows to h30
+#f1
+#h10,h30,30001,5001,100K,10s,3m
+
+#f2
+#h10,h30,30002,5001,200K,15s,3m
+
+#f3
+#h10,h30,30003,5001,100K,20s,3m
+
+#f4
+#h10,h30,30004,5001,300K,25s,3m
+
+# Comments:
+# f1 should be allocated in [r1, r3], but when f2 arrives, all both
+# flows should move to path [r1,r2,r3], since they together don't fit
+# in any other path. f3 is allocated in [r1, r2, r3] too, which is the
+# default path for the flow when it arrives, and it fits in it. When
+# f4 arrives, all traffic towards h30 can't be fit in any single path,
+# so the congestion probability is 100%.
+
+# Note that if we would apply ECMP on the three existing paths from r1
+# to destination h30, the congestion probability would be reduced.

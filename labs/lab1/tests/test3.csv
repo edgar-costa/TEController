@@ -1,0 +1,26 @@
+#src,dst,sport,dport,size,start_time,duration
+
+## TEST 3 #####################################
+## Moving already ongonig flows ###############
+# Fill up (r1, r4) to 50%
+
+#h10,h40,30001,5001,500K,1s,30s
+
+# Fill up (r3, r1) to 40%
+
+#h32,h12,30001,5001,400K,6s,30s
+
+# Start Flow(h11->h31):500K
+
+#h11,h31,30021,5001,500K,11s,30s
+
+# Start Flow(h12->h31):300K
+
+#h12,h31,30031,5001,300K,16s,30s
+
+# Comments:
+# Flow(h11->h31) should be allocated in path [r1, r3]. Flow(h12->h31)
+# should make Flow(h11->h31) move too to path [r1, r2, r3]. Even
+# though Flow(h2->h31) would fit in the next-shortest path [r1,r4,r3],
+# when applying the DAG to force this path, Flow(h11->h31) would also
+# move there and create congestion.

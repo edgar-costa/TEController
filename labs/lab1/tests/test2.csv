@@ -1,0 +1,26 @@
+#src,dst,sport,dport,size,start_time,duration
+
+## TEST 2 #####################################
+## When single flow is too big ################
+# Fill edge (r4, r3) to 20%
+
+h40,h30,30031,5001,200K,2s,30s
+
+# Fill edge (r2, r3) to 20%
+
+h21,h31,30031,5001,200K,4s,30s
+
+# Send big flow h21 -> h31
+
+h22,h32,30031,5001,1200K,10s,30s
+
+
+# Comments:
+# You should observe how the algorithm chooses the path in the network
+# that will create less congestion (even though the flow can't be
+# allocated in the network without congestion). In this case, the
+# chosen path is [r2, r1, r3].
+
+# Side note: Observe how SNMP # readings are delayed when there is
+# congestion in the network. Possible solution: create isolated
+# network for SNMP.
