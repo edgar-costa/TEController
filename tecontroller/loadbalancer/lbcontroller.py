@@ -460,7 +460,7 @@ class LBController(object):
         else:
             t = time.strftime("%H:%M:%S", time.gmtime())
             to_print = "%s - getActivePaths(): No paths could be found between %s and %s for subnet prefix %s\n"
-            log.info(to_print%(str(src_iface), str(dst_iface), dst_prefix))
+            log.info(to_print%(t, str(src_iface), str(dst_iface), dst_prefix))
             return [[]]
         
     def _createInitialDags(self):
