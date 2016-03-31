@@ -93,10 +93,13 @@ class TEControllerLab2(SimplePathLB):
             self.cgc = self.cg.copy()
 
         t = time.strftime("%H:%M:%S", time.gmtime())
-        log.info("%s - Copy of the capacity graph done. Edges available capacities:\n"%t)
-        for (x, y, data) in self.toLogDagNames(self.cgc).edges(data=True):
-            log.info("\t(%s, %s) -> %s\n"%(x, y, data['capacity']))
-
+        log.info("%s - Copy of the capacity graph done. Current edge usages:\n"%t)
+        for (x, y, data) in self.cgc.edges(data=True):
+            currentLoad = self.getCurrentEdgeLoad(x,y)
+            x_name = self.db.getNameFromIP(x)
+            y_name = self.db.getNameFromIP(y)
+            log.info("\t(%s, %s) -> Capacity available %d (%.2f%% full)\n"%(x_name, y_name, data['capacity'], currentLoad*100))
+            
         # Get the communicating interfaces
         src_iface = flow['src']
         dst_iface = flow['dst']
@@ -229,6 +232,13 @@ class TEControllerLab2(SimplePathLB):
                     return False
         return True
 
+    def getCurrentEdgeLoad(self, x,y):
+        cap = self.cgc[x][y].get('capacity')
+        bw = self.cgc[x][y].get('bw')
+        if cap and bw:
+            currentLoad = (bw - cap)/float(bw)
+        return currentLoad
+    
     def getMinCapacityEdge(self, path):
         caps_edges = []
         for (u,v) in zip(path[:-1], path[1:]):
