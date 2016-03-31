@@ -85,10 +85,12 @@ class TEControllerLab1(SimplePathLB):
             self.cgc = self.cg.copy()
 
         t = time.strftime("%H:%M:%S", time.gmtime())
-        log.info("%s - Copy of the capacity graph done. Current edge usages:"%t)
-        for (x, y, data) in self.toLogDagNames(self.cgc).edges(data=True):
+        log.info("%s - Copy of the capacity graph done. Current edge usages:\n"%t)
+        for (x, y, data) in self.cgc.edges(data=True):
             currentLoad = self.getCurrentEdgeLoad(x,y)
-            log.info("\t(%s, %s) -> Capacity: %d (%.2f%%)\n"%(x, y, data['capacity'], currentLoad*100))
+            x_name = self.db.getNameFromIP(x)
+            y_name = self.db.getNameFromIP(y)
+            log.info("\t(%s, %s) -> Capacity available %d (%.2f%% full)\n"%(x_name, y_name, data['capacity'], currentLoad*100))
             
         # Get the communicating interfaces
         src_iface = flow['src']
@@ -421,7 +423,7 @@ class TEControllerLab1(SimplePathLB):
             t = time.strftime("%H:%M:%S", time.gmtime())
             log.info("%s - Flow can't be allocated in the network\n"%t)
             log.info("\t* Allocating it in the path that will create less congestion\n")
-            log.info("\t* (But we should look for re-arrangement of already allocated flows...)\n")
+            log.info("\t* (But we should look for re-arrangement of already allocated flows... activating ECMP!)\n")
 
             # Here, we should try to re-arrange flows in a way that
             # all of them can be allocated. But for the moment, we
@@ -438,6 +440,7 @@ class TEControllerLab1(SimplePathLB):
             path_congestion_pairs = []
             # Try out all paths, and force the one that will create less congestion.
             # Intermediate results are saved in path_congestion_pairs
+
             for path in congested_paths:
                 # Remove the destination subnet hop node from the path
                 path = path[:-1]
