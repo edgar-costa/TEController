@@ -42,6 +42,10 @@ Lab1_Path = Labs_Path + 'lab1/'
 Lab2_Path = Labs_Path + 'lab2/'
 Lab3_Path = Labs_Path + 'lab3/'
 
+# Paths to test folders
+Lab1_Tests = Lab1_Path + 'tests/'
+Lab2_Tests = Lab2_Path + 'tests/'
+
 # Default port for the json-daemons for the hosts in the network
 Hosts_JsonPort = "5000"
 
