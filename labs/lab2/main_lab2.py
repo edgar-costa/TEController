@@ -55,7 +55,7 @@ M1 = 'm1'
 BW = 1  # Absurdly low bandwidth for easy congestion (in Mb)
 
 class Lab1Topo(IPTopo):
-    def build(self, *args, **kwargs):
+    def build(self, testfile, *args, **kwargs):
         """
             +--+         +--+  +--+
             |S4|         |D |  |T |
@@ -109,7 +109,7 @@ class Lab1Topo(IPTopo):
         self.addLink(c1, r4, cost=1000)
 
         # Adding Traffic Generator Host
-        c2 = self.addHost(TG, isTrafficGenerator=True, flowfile=dconf.Lab2_Path+'flowdemand_lab2.csv') 
+        c2 = self.addHost(TG, isTrafficGenerator=True, flowfile=testfile) 
         self.addLink(c2, r4)
 
         # Adding Traffic Engineering Controller
@@ -118,7 +118,7 @@ class Lab1Topo(IPTopo):
 
 
 class Lab1Topo2(IPTopo):
-    def build(self, *args, **kwargs):
+    def build(self, testfile, *args, **kwargs):
 
         topo = """
             r2-------r5
@@ -163,16 +163,16 @@ class Lab1Topo2(IPTopo):
         self.addLink(c1, r4, cost=1000)
 
         # Adding Traffic Generator Host
-        #c2 = self.addHost(TG, isTrafficGenerator=True) 
-        #self.addLink(c2, r4)
+        c2 = self.addHost(TG, isTrafficGenerator=True, flowfile=testfile) 
+        self.addLink(c2, r4)
 
         # Adding Traffic Engineering Controller
         c3 = self.addHost(LBC, isLBController=True, algorithm='lab2')
         self.addLink(c3, r4)
 
         
-def launch_network():
-    net = IPNet(topo = Lab1Topo(),
+def launch_network(testfile):
+    net = IPNet(topo = Lab1Topo(testfile),
                 debug =_lib.DEBUG_FLAG,
                 intf = custom(TCIntf, bw = BW),
                 host = MyCustomHost)
@@ -197,6 +197,9 @@ if __name__ == '__main__':
                         help='Set log levels to debug',
                         action='store_true',
                         default=False)
+    parser.add_argument('-t', '--testfile',
+                        help='Give path of csv file with flows for test',
+                        default=dconf.Lab2_Tests+'notest.csv')
     args = parser.parse_args()
     
     if args.debug:
@@ -210,5 +213,6 @@ if __name__ == '__main__':
         launch_controller()
         
     elif args.net:
-        launch_network()
+        launch_network(dconf.Lab1_Tests+args.testfile)
+        
             
