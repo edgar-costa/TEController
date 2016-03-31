@@ -92,36 +92,39 @@
 ## Limitation 1 ###############################
 # Fill up (r2, r3) to 50%
 
-h22,h32,30001,5001,500K,1s,3m
+#h22,h32,30001,5001,500K,3s,3m
 
-# Fill up (r1, r3) to 80%
+# Fill up (r1, r3) to 70%
 
-h12,h31,30021,5001,800K,2s,3m
+#h12,h31,30021,5001,700K,5s,3m
 
-# Fill up (r1, r4) to 80%
+# Fill up (r1, r4) to 70%
 
-h42,h11,30031,5001,800K,3s,3m
+#h42,h11,30031,5001,700K,7s,3m
 
 # Start flows to h30
 #f1
-h10,h30,30001,5001,100K,10s,3m
+#h10,h30,30001,5001,100K,15s,3m
 
 #f2
-h10,h30,30002,5001,200K,12s,3m
+#h10,h30,30002,5001,100K,25s,3m
 
 #f3
-h10,h30,30003,5001,100K,14s,3m
+#h10,h30,30003,5001,150K,35s,3m
 
 #f4
-h10,h30,30004,5001,300K,16s,3m
+#h10,h30,30004,5001,100K,45s,3m
 
-# Comments:
-# f1 should be allocated in [r1, r3], but when f2 arrives, all both
-# flows should move to path [r1,r2,r3], since they together don't fit
-# in any other path. f3 is allocated in [r1, r2, r3] too, which is the
-# default path for the flow when it arrives, and it fits in it. When
-# f4 arrives, all traffic towards h30 can't be fit in any single path,
-# so the congestion probability is 100%.
+#f5
+#h10,h30,30005,5001,150K,55s,3m
 
-# Note that if we would apply ECMP on the three existing paths from r1
-# to destination h30, the congestion probability would be reduced.
+
+# Comments: f1 and f2 should be allocated in [r1, r3], but when f3
+# arrives, all three flows should move to path [r1,r2,r3], since they
+# don't fit in any other path. f4 is allocated in [r1, r2, r3] too,
+# which is the default path for the flow when it arrives, and it fits
+# in it. When f5 arrives, all traffic towards h30 can't be fit in any
+# single path, so the congestion probability is 100%. Therefore, the
+# ECMP algorithm is activated, and it should compute the path
+# combination that maximally reduces the probability.
+
