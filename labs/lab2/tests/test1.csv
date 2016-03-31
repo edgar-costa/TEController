@@ -1,0 +1,130 @@
+#src,dst,sport,dport,size,start_time,duration
+
+## TEST 1 ######################################
+## Testing Allocation Algorithm ################
+# Fill (r1, r3) up to 80% usage
+
+#h10,h30,30001,5001,800K,2s,30s
+
+# Allocate flow to dst h31 to path [r1, r4, r3]
+
+#h11,h31,30001,5001,800K,7s,30s
+
+# Allocate flow to dst h31 to path [r1, r2, r3]
+
+#h12,h32,30001,5001,800K,12s,30s
+
+# Check that network is reset to default state
+
+#h11,h32,30001,5001,800K,45s,10s
+
+# Comments:
+# You should observe how there is no congestion in the network, and
+# all links are load-balanced. In the end, you should observe how
+# Flow(h11->h32) is allocated to default shortest path, since there is
+# no more traffic in the network (the lies are removed correctly).
+
+
+
+
+
+
+## TEST 2 #####################################
+## When single flow is too big ################
+# Fill edge (r4, r3) to 20%
+
+#h40,h30,30031,5001,200K,2s,30s
+
+# Fill edge (r2, r3) to 20%
+
+#h21,h31,30031,5001,200K,4s,30s
+
+# Send big flow h21 -> h31
+
+#h22,h32,30031,5001,1200K,10s,30s
+
+# Comments:
+# You should observe how the algorithm chooses the path in the network
+# that will create less congestion (even though the flow can't be
+# allocated in the network without congestion). In this case, the
+# chosen path is [r2, r1, r3].
+
+# Side note: Observe how SNMP # readings are delayed when there is
+# congestion in the network. Possible solution: create isolated
+# network for SNMP.
+
+
+
+
+
+
+## TEST 3 #####################################
+## Moving already ongonig flows ###############
+# Fill up (r1, r4) to 50%
+
+#h10,h40,30001,5001,500K,1s,30s
+
+# Fill up (r3, r1) to 40%
+
+#h32,h12,30001,5001,400K,6s,30s
+
+# Start Flow(h11->h31):500K
+
+#h11,h31,30021,5001,500K,11s,30s
+
+# Start Flow(h12->h31):300K
+
+#h12,h31,30031,5001,300K,16s,30s
+
+# Comments:
+# Flow(h11->h31) should be allocated in path [r1, r3]. Flow(h12->h31)
+# should make Flow(h11->h31) move too to path [r1, r2, r3]. Even
+# though Flow(h2->h31) would fit in the next-shortest path [r1,r4,r3],
+# when applying the DAG to force this path, Flow(h11->h31) would also
+# move there and create congestion.
+
+
+
+
+
+
+## TEST 4 #####################################
+## Limitation 1 ###############################
+# Fill up (r2, r3) to 50%
+
+#h22,h32,30001,5001,500K,3s,3m
+
+# Fill up (r1, r3) to 70%
+
+#h12,h31,30021,5001,700K,5s,3m
+
+# Fill up (r1, r4) to 70%
+
+#h42,h11,30031,5001,700K,7s,3m
+
+# Start flows to h30
+#f1
+#h10,h30,30001,5001,100K,15s,3m
+
+#f2
+#h10,h30,30002,5001,100K,25s,3m
+
+#f3
+#h10,h30,30003,5001,150K,35s,3m
+
+#f4
+#h10,h30,30004,5001,100K,45s,3m
+
+#f5
+#h10,h30,30005,5001,150K,55s,3m
+
+
+# Comments: f1 and f2 should be allocated in [r1, r3], but when f3
+# arrives, all three flows should move to path [r1,r2,r3], since they
+# don't fit in any other path. f4 is allocated in [r1, r2, r3] too,
+# which is the default path for the flow when it arrives, and it fits
+# in it. When f5 arrives, all traffic towards h30 can't be fit in any
+# single path, so the congestion probability is 100%. Therefore, the
+# ECMP algorithm is activated, and it should compute the path
+# combination that maximally reduces the probability.
+
