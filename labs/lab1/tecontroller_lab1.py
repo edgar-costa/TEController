@@ -12,7 +12,7 @@ log = get_logger()
 lineend = "-"*100+'\n'
 
 class TEControllerLab1(SimplePathLB):
-    def __init__(self):
+    def __init__(self, congestionThreshold = 0.95)):
         # Call init method from LBController
         super(TEControllerLab1, self).__init__()
 
@@ -22,9 +22,19 @@ class TEControllerLab1(SimplePathLB):
         # Create lock for synchronization on accessing self.cg
         self.capacityGraphLock = threading.Lock()
 
+        # Set the congestion threshold
+        self.congestionThreshold = congestionThreshold
+        t = time.strftime("%H:%M:%S", time.gmtime())
+        log.info("%s - Congestion Threshold is set to %.2f%% of the link\n"%(t, (self.congestionThreshold)*100.0))
+
+
         # Graph that will hold the link available capacities
         with self.capacityGraphLock:
             self.cg = self._createCapacitiesGraph()
+
+        # Variable where we save the last "read-out" copy of the
+        # capacity graph
+        self.cgc = self.cg.copy()
 
         # Start the links monitorer thread linked to the event queue
         lmt = LinksMonitorThread(capacity_graph = self.cg,
@@ -70,117 +80,131 @@ class TEControllerLab1(SimplePathLB):
         # fixed for all execution of the dealWithNewFlow function
 
         with self.capacityGraphLock:
-            # Get the communicating interfaces
-            src_iface = flow['src']
-            dst_iface = flow['dst']
-                
-            # Get host ip's
-            src_ip = src_iface.ip
-            dst_ip = dst_iface.ip
-                
-            # Get their correspoding networks
-            src_network = src_iface.network
-            dst_network = self.getCurrentOSPFPrefix(dst_iface.compressed)
-    
-            # Get the string-type prefixes
-            src_prefix = src_network.compressed
-            dst_prefix = dst_network.compressed
-            log.info("\t* Flow matches the following OSPF advertized prefix: %s\n"%str(dst_prefix))                
-            
-            # Get current Active DAG for prefix
-            adag = self.getActiveDag(dst_prefix)
-            log.info("\t* Active DAG for %s: %s\n"%(dst_prefix, self.toLogDagNames(adag).edges()))
+            # Make copy of the capacity graph at that moment in time
+            # and release the lock.
+            self.cgc = self.cg.copy()
 
-            # Get the current path from source to destination
-            currentPaths = self.getActivePaths(src_iface, dst_iface, dst_prefix)
-            log.info("\t* Current paths: %s\n"%str(self.toLogRouterNames(currentPaths)))
+        # Get the communicating interfaces
+        src_iface = flow['src']
+        dst_iface = flow['dst']
             
-            # ECMP active?
-            if len(currentPaths) > 1:
-                # ECMP is happening
-                ecmp_active = True
-                log.info("\t* ECMP is ACTIVE in some routers in path\n")
-            elif len(currentPaths) == 1:
-                # ECMP not active
-                ecmp_active = False
-                log.info("\t* ECMP is NOT active\n")
+        # Get host ip's
+        src_ip = src_iface.ip
+        dst_ip = dst_iface.ip
+                
+        # Get their correspoding networks
+        src_network = src_iface.network
+        dst_network = self.getCurrentOSPFPrefix(dst_iface.compressed)
+
+        # Get the string-type prefixes
+        src_prefix = src_network.compressed
+        dst_prefix = dst_network.compressed
+        log.info("\t* Flow matches the following OSPF advertized prefix: %s\n"%str(dst_prefix))                
+        
+        # Get current Active DAG for prefix
+        adag = self.getActiveDag(dst_prefix)
+        log.info("\t* Active DAG for %s: %s\n"%(dst_prefix, self.toLogDagNames(adag).edges()))
+
+        # Get the current path from source to destination
+        currentPaths = self.getActivePaths(src_iface, dst_iface, dst_prefix)
+        log.info("\t* Current paths: %s\n"%str(self.toLogRouterNames(currentPaths)))
+        
+        # ECMP active?
+        if len(currentPaths) > 1:
+            # ECMP is happening
+            ecmp_active = True
+            log.info("\t* ECMP is ACTIVE in some routers in path\n")
+        elif len(currentPaths) == 1:
+            # ECMP not active
+            ecmp_active = False
+            log.info("\t* ECMP is NOT active\n")
+        else:
+            t = time.strftime("%H:%M:%S", time.gmtime())
+            to_log = "%s - dealWithNewFlow(): ERROR. No path between src and dst\n"
+            log.info(to_log%t)
+            return
+
+        if ecmp_active:
+            # Calculate congestion probability
+        
+            # Insert current available capacities in DAG
+            for (u, v, data) in adag.edges(data=True):
+                cap = self.cg[u][v]['capacity']
+                data['capacity'] = cap
+        
+            # Get ingress and egress router
+            ingress_router = currentPaths[0][0]
+            egress_router = currentPaths[0][-1]
+
+            # compute congestion probability
+            t = time.strftime("%H:%M:%S", time.gmtime())
+            log.info("%s - Computing flow congestion probability\n"%t)
+            #log.info("\t * DAG: %s\n"%(self.toLogDagNames(adag).edges(data=True)))
+            #log.info("\t * Ingress router: %s\n"%ingress_router)
+            #log.info("\t * Engress router: %s\n"%egress_router)
+            log.info("\t* Flow size: %d\n"%flow.size)
+            log.info("\t* Equal Cost Paths: %s\n"%self.toLogRouterNames(currentPaths))
+
+            with self.pc.timer as t:
+                congProb = self.pc.flowCongestionProbability(adag, ingress_router,
+                                                             egress_router, flow.size)
+            # Apply decision function
+            # Act accordingly
+            # Log it
+            to_print = "\t* Flow will be allocated "
+            to_print += "with a congestion probability of %.2f%%\n"
+            log.info(to_print%(congProb*100.0))
+            log.info("\t* It took %s ms to compute probabilities\n"%str(self.pc.timer.msecs))
+            to_print = "\t* Paths: %s\n"
+            log.info(to_print%str([self.toLogRouterNames(path) for path in currentPaths]))
+
+
+            t = time.strftime("%H:%M:%S", time.gmtime())
+            log.info("%s - Applying decision function...\n"%t)
+
+            if self.shouldDeactivateECMP(adag, currentPaths, congProb):
+                # Here we have to think what to do when probability of
+                # congestion is too high.
+                log.info("\t* ECMP Should be de-activated!\n")
+                pass
+
             else:
+                log.info("\t* For the moment, returning always False...\n")
+
+                # Allocate flow to current paths
+                self.addAllocationEntry(dst_prefix, flow, currentPaths)
+        else:
+            # currentPath is still a list of a single list: [[A,B,C]]
+            # but makes it more understandable
+            currentPath = currentPaths
+
+            # Can currentPath allocate flow w/o congestion?
+            if self.canAllocateFlow(flow, currentPath):
+                # No congestion. Do nothing
                 t = time.strftime("%H:%M:%S", time.gmtime())
-                to_log = "%s - dealWithNewFlow(): ERROR. No path between src and dst\n"
-                log.info(to_log%t)
-                return
+                log.info("%s - Flow can be ALLOCATED in current path: %s\n"%(t, self.toLogRouterNames(currentPath)))
 
-            if ecmp_active:
-                # Calculate congestion probability
-            
-                # Insert current available capacities in DAG
-                for (u, v, data) in adag.edges(data=True):
-                    cap = self.cg[u][v]['capacity']
-                    data['capacity'] = cap
-            
-                # Get ingress and egress router
-                ingress_router = currentPaths[0][0]
-                egress_router = currentPaths[0][-1]
+                (edge, currentLoad) = self.getFullestEdge(currentPath[0])
+                increase = self.utilizationIncrease(currentPath[0], flow)
+                log.info("\t* Min capacity edge %s is %.1f%% full\n"%(str(edge), currentLoad))
+                log.info("\t* New Flow with size %d represents an increase of %.1f%%\n"%(flow.size, increase))
 
-                # compute congestion probability
-                t = time.strftime("%H:%M:%S", time.gmtime())
-                log.info("%s - Computing flow congestion probability\n"%t)
-                #log.info("\t * DAG: %s\n"%(self.toLogDagNames(adag).edges(data=True)))
-                #log.info("\t * Ingress router: %s\n"%ingress_router)
-                #log.info("\t * Engress router: %s\n"%egress_router)
-                log.info("\t* Flow size: %d\n"%flow.size)
-                log.info("\t* Equal Cost Paths: %s\n"%self.toLogRouterNames(currentPaths))
+                # We just allocate the flow to the currentPath
+                self.addAllocationEntry(dst_prefix, flow, currentPath)
 
-                with self.pc.timer as t:
-                    congProb = self.pc.flowCongestionProbability(adag, ingress_router,
-                                                                 egress_router, flow.size)
-                # Apply decision function
-                # Act accordingly
-                # Log it
-                to_print = "\t* Flow will be allocated "
-                to_print += "with a congestion probability of %.2f%%\n"
-                log.info(to_print%(congProb*100.0))
-                log.info("\t* It took %s ms to compute probabilities\n"%str(self.pc.timer.msecs))
-                to_print = "\t* Paths: %s\n"
-                log.info(to_print%str([self.toLogRouterNames(path) for path in currentPaths]))
-
-
-                t = time.strftime("%H:%M:%S", time.gmtime())
-                log.info("%s - Applying decision function...\n"%t)
-
-                if self.shouldDeactivateECMP(adag, currentPaths, congProb):
-                    # Here we have to think what to do when probability of
-                    # congestion is too high.
-                    log.info("\t* ECMP Should be de-activated!\n")
-                    pass
-
-                else:
-                    log.info("\t* For the moment, returning always False...\n")
-
-                    # Allocate flow to current paths
-                    self.addAllocationEntry(dst_prefix, flow, currentPaths)
             else:
-                # currentPath is still a list of a single list: [[A,B,C]]
-                # but makes it more understandable
-                currentPath = currentPaths
+                # Congestion created. 
+                t = time.strftime("%H:%M:%S", time.gmtime())
+                log.info("%s - Flow will cause CONGESTION in current path: %s\n"%(t, self.toLogRouterNames(currentPath)))
 
-                # Can currentPath allocate flow w/o congestion?
-                if self.canAllocateFlow(flow, currentPath):
-                    # No congestion. Do nothing
-                    t = time.strftime("%H:%M:%S", time.gmtime())
-                    log.info("%s - Flow can be ALLOCATED\n"%t)
-
-                    # We just allocate the flow to the currentPath
-                    self.addAllocationEntry(dst_prefix, flow, currentPath)
-
-                else:
-                    # Congestion created. 
-                    t = time.strftime("%H:%M:%S", time.gmtime())
-                    log.info("%s - Flow will cause CONGESTION in current path: %s\n"%(t, self.toLogRouterNames(currentPath)))
-                
-                    # Call the subclassed method to properly 
-                    # allocate flow to a congestion-free path
-                    self.flowAllocationAlgorithm(dst_prefix, flow, currentPath)
+                (edge, currentLoad) = self.getFullestEdge(currentPath[0])
+                increase = self.utilizationIncrease(currentPath[0], flow)
+                log.info("\t* Min capacity edge %s is %.1f%% full\n"%(str(edge), currentLoad))
+                log.info("\t* New Flow with size %d represents an increase of %.1f%%\n"%(flow.size, increase))
+            
+                # Call the subclassed method to properly 
+                # allocate flow to a congestion-free path
+                self.flowAllocationAlgorithm(dst_prefix, flow, currentPath)
                 
     def getMinCapacity(self, path):
         """
@@ -189,7 +213,7 @@ class TEControllerLab1(SimplePathLB):
         """
         caps_in_path = []
         for (u,v) in zip(path[:-1], path[1:]):
-            edge_data = self.cg.get_edge_data(u, v)
+            edge_data = self.cgc.get_edge_data(u, v)
             if edge_data:
                 cap = edge_data.get('capacity', None)
                 caps_in_path.append(cap)
@@ -201,6 +225,59 @@ class TEControllerLab1(SimplePathLB):
             log.info("%s - getMinCapacity(): ERROR: min could not be calculated\n"%t)
             log.info("\t* Path: %s\n"%path)            
             raise ValueError
+
+    def canAllocateFlow(self, flow, path_list):
+        """Returns true if there is at least flow.size bandwidth available in
+        all links along the path (or multiple paths in case of ECMP)
+        from flow.src to src.dst,
+        """
+        for path in path_list:
+            # Get edge with minimum capacity of the path
+            ((x,y), minCap) = self.getMinCapacityEdge(path)
+            bw = self.cgc[x][y].get('bw')
+
+            currentload = (bw - minCap)/float(bw)
+            if currentload > self.congestionThreshold:
+                return False
+            else:
+                nextload = ((bw - minCap) + flow.size)/float(bw)
+                if nextload > self.congestionThreshold:
+                    return False
+        return True
+
+    def getMinCapacityEdge(self, path):
+        caps_edges = []
+        for (u,v) in zip(path[:-1], path[1:]):
+            edge_data = self.cgc.get_edge_data(u, v)
+            if edge_data:
+                cap = edge_data.get('capacity', None)
+                caps_edges.append(((u,v), cap))
+        try:
+            min_cap_edge = min(caps_edges, key=lambda x: x[1])
+            return min_cap_edge
+        
+        except ValueError:
+            t = time.strftime("%H:%M:%S", time.gmtime())
+            log.info("%s - getMinCapacity(): ERROR: min could not be calculated\n"%t)
+            log.info("Argument should be a list! (not a list of lists)")
+            raise ValueError
+
+    def getFullestEdge(self, path):
+        # Get edge with minimum capacity of the path
+        ((x,y), minCap) = self.getMinCapacityEdge(path)
+        bw = self.cgc[x][y].get('bw')
+
+        currentLoad = (bw - minCap)/float(bw)
+        return ((x,y), currentLoad)
+
+    def utilizationIncrease(self, path, flow):
+        # Get edge with minimum capacity of the path
+        ((x,y), minCap) = self.getMinCapacityEdge(path)
+        bw = self.cgc[x][y].get('bw')
+
+        currentLoad = (bw - minCap)/float(bw)
+        nextLoad = ((bw - minCap) + flow.size)/float(bw)
+        return nextLoad - currentLoad
 
     def _createCapacitiesGraph(self):
         # Get copy of the network graph
@@ -290,7 +367,6 @@ class TEControllerLab1(SimplePathLB):
             # Filter flows that are coincident with path
             moved_flows = [f for (f, pl) in ongoing_flow_allocations for p in pl if node in p]
 
-
     def flowAllocationAlgorithm(self, dst_prefix, flow, initial_paths):
         """
         """
@@ -320,7 +396,7 @@ class TEControllerLab1(SimplePathLB):
         ongoing_flow_allocations = self.getAllocatedFlows(dst_prefix)
 
         # Filter only those that are able to allocate flow + ongoing flows moved without congestion
-        congestion_free_paths = [path for (path, plen) in all_paths if self.getMinCapacity(path[:-1]) > required_capacity]
+        congestion_free_paths = [path for (path, plen) in all_paths if self.canAllocateFlow([path[:-1]], flow) == True]
         
         # Check if congestion free paths exist
         if len(congestion_free_paths) == 0:
@@ -405,7 +481,7 @@ class TEControllerLab1(SimplePathLB):
                     
 
                 # Create virtual copy of capacity graph
-                cg_copy = self.cg.copy()
+                cg_copy = self.cgc.copy()
 
                 # Initialize accumulated required capacity
                 accumulated_required_capacity = required_capacity

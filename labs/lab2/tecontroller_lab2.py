@@ -33,7 +33,7 @@ class TEControllerLab2(SimplePathLB):
 
         # Variable where we save the last "read-out" copy of the
         # capacity graph
-        self.cgc = self.cg
+        self.cgc = self.cg.copy()
 
         # Set the congestion threshold
         self.congestionThreshold = congestionThreshold
@@ -229,7 +229,6 @@ class TEControllerLab2(SimplePathLB):
                     return False
         return True
 
-    
     def getMinCapacityEdge(self, path):
         caps_edges = []
         for (u,v) in zip(path[:-1], path[1:]):
@@ -246,8 +245,7 @@ class TEControllerLab2(SimplePathLB):
             log.info("%s - getMinCapacity(): ERROR: min could not be calculated\n"%t)
             log.info("Argument should be a list! (not a list of lists)")
             raise ValueError
-
-        
+ 
     def getMinCapacity(self, path):
         """
         We overwrite the method so that capacities are now checked from the
@@ -615,7 +613,6 @@ class TEControllerLab2(SimplePathLB):
             caps.append(capacity_graph[u][v].get('capacity', None))
         return min(caps)
     
-
     def SimplifiedProbability(self, all_path_subsets, flow_sizes):
         # Get biggest flow size
         max_flow_size = max(flow_sizes)
@@ -664,7 +661,6 @@ class TEControllerLab2(SimplePathLB):
 
         return chosen_paths
 
-
     def ExactProbability(self, all_path_subsets, flow_sizes):
         """
         """
@@ -707,8 +703,6 @@ class TEControllerLab2(SimplePathLB):
         to_log = "\t* It took %s ms to calculate probabilities\n"
         log.info(to_log%(str(self.pc.timer.msecs)))
         return chosen_paths
-
-
     
     def SampledProbability(self, all_path_subsets, flow_sizes):
         # Iterate path combinations and choose the one that minimizes
@@ -754,7 +748,6 @@ class TEControllerLab2(SimplePathLB):
         return chosen_paths
 
 
-    
 if __name__ == '__main__':
     log.info("LOAD BALANCER CONTROLLER - Lab 2 - Enforcing simple paths + ECMP when needed\n")
     log.info("-"*90+"\n")
