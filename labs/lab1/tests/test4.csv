@@ -39,5 +39,8 @@ h10,h30,30005,5001,150K,55s,3m
 # f4 arrives, all traffic towards h30 can't be fit in any single path,
 # so the congestion probability is 100%.
 
+# In the plot, you should observe how the congestion affects the SNMP
+#  readings and the capacity readouts spread much more in time.
+
 # Note that if we would apply ECMP on the three existing paths from r1
 # to destination h30, the congestion probability would be reduced.
