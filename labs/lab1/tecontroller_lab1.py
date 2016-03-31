@@ -186,8 +186,8 @@ class TEControllerLab1(SimplePathLB):
 
                 (edge, currentLoad) = self.getFullestEdge(currentPath[0])
                 increase = self.utilizationIncrease(currentPath[0], flow)
-                log.info("\t* Min capacity edge %s is %.1f%% full\n"%(str(edge), currentLoad))
-                log.info("\t* New Flow with size %d represents an increase of %.1f%%\n"%(flow.size, increase))
+                log.info("\t* Min capacity edge %s is %.1f%% full\n"%(str(edge), currentLoad*100))
+                log.info("\t* New Flow with size %d represents an increase of %.1f%%\n"%(flow.size, increase*100))
 
                 # We just allocate the flow to the currentPath
                 self.addAllocationEntry(dst_prefix, flow, currentPath)
@@ -199,8 +199,8 @@ class TEControllerLab1(SimplePathLB):
 
                 (edge, currentLoad) = self.getFullestEdge(currentPath[0])
                 increase = self.utilizationIncrease(currentPath[0], flow)
-                log.info("\t* Min capacity edge %s is %.1f%% full\n"%(str(edge), currentLoad))
-                log.info("\t* New Flow with size %d represents an increase of %.1f%%\n"%(flow.size, increase))
+                log.info("\t* Min capacity edge %s is %.1f%% full\n"%(str(edge), currentLoad*100))
+                log.info("\t* New Flow with size %d represents an increase of %.1f%%\n"%(flow.size, increase*100))
             
                 # Call the subclassed method to properly 
                 # allocate flow to a congestion-free path
@@ -539,7 +539,7 @@ class TEControllerLab1(SimplePathLB):
 
             else:
                 log.info("\t* There are paths that do not create congestion\n")
-                #import ipdb; ipdb.set_trace()
+                
                 paths_without_congestion = [(p, c, f) for (p, c, f) in path_congestion_pairs if c == 0]
                 chosen_path = paths_without_congestion[0][0]
                 chosen_path_moved_flows = paths_without_congestion[0][2] 
