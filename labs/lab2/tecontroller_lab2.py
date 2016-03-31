@@ -350,7 +350,7 @@ class TEControllerLab2(SimplePathLB):
         ongoing_flow_allocations = self.getAllocatedFlows(dst_prefix)
 
         # Filter only those that are able to allocate flow + ongoing flows moved without congestion
-        congestion_free_paths = [path for (path, plen) in all_paths if self.canAllocateFlow([path[:-1]], flow) == True]
+        congestion_free_paths = [path for (path, plen) in all_paths if self.canAllocateFlow(flow, [path[:-1]]) == True]
         
         # Check if congestion free paths exist
         if len(congestion_free_paths) == 0:
