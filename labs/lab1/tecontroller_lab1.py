@@ -12,7 +12,7 @@ log = get_logger()
 lineend = "-"*100+'\n'
 
 class TEControllerLab1(SimplePathLB):
-    def __init__(self, congestionThreshold = 0.95)):
+    def __init__(self, congestionThreshold = 0.95):
         # Call init method from LBController
         super(TEControllerLab1, self).__init__()
 
@@ -384,7 +384,7 @@ class TEControllerLab1(SimplePathLB):
         dst_prefix = dst_prefix
 
         # Get current DAG for destination prefix
-        cdag = self.geCurrentDag(dst_prefix)
+        cdag = self.getCurrentDag(dst_prefix)
         
         # Get required capacity
         required_capacity = flow['size']
