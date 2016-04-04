@@ -30,6 +30,10 @@ class LinksMonitorThread(threading.Thread):
 
         # Capacity graph object
         self.cg = capacity_graph
+
+        # Dictionary that holds the binding between router id and the
+        # router ip in the control network
+        self.ip_to_control = {}
         
         # Start router counters
         self.counters = self._startCounters()
@@ -250,8 +254,16 @@ class LinksMonitorThread(threading.Thread):
         
         Returns a dict: routerip -> SnmpCounters.
         """
+        counters_dict = {}
         with self.lock:
-            counters_dict = {r:SnmpCounters(routerIp=r) for r in self.cg.routers}
+            for r in self.cg.routers:
+                # Get control ip for router
+                r_control_ip = self.db.getRouterControlIp(r)
+                self.ip_to_control[r] = r_control_ip
+                if r_control_ip:
+                    counters_dict[r] = SnmpCounters(routerIp = r_control_ip)
+                else:
+                    counters_dict[r] = SnmpCounters(routerIp = r)
         return counters_dict
     
     def _startLinks(self):
