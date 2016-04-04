@@ -204,3 +204,21 @@ class DatabaseHandler(TopologyDB):
                             }
         return edges
 
+
+    def getRouterControlIp(self, r):
+        """Given a router id, it returns the control-network IP for that
+        router. If control network can't be found, return None"""
+        router_name = [n for n, data in self.network.iteritems() if
+                       data['type'] == 'router' and data['routerid'] == r]
+        if router_name != []:
+            router_name = router_name[0]
+            # Get the ip of that router pointing to s1 switch: control
+            # network.
+            if 's1' in self.network[router_name].keys():
+                ip_iface_str = self.network[router_name]['s1']['ip']
+                ip = ipaddress.ip_interface(ip_iface_str).ip.compressed
+                return ip
+            else:
+                return None
+        else:
+            return None
