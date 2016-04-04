@@ -116,6 +116,11 @@ class Lab1Topo(IPTopo):
         c3 = self.addHost(LBC, isLBController=True, algorithm='lab1')
         self.addLink(c3, r4)
 
+        # Create the monitoring network
+        ms = self.addSwitch('s1')
+        # connect nodes in it
+        for n in (c3, c2, r1, r2, r3, r4):
+            self.addLink(ms, n, cost=-1)
 
 class Lab1Topo2(IPTopo):
     def build(self, testfile, *args, **kwargs):
