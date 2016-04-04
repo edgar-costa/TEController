@@ -253,14 +253,21 @@ class LBController(object):
             if 'C' in x or 'C' in y: # means is the controller...
                 continue
 
+            
             if self.network_graph.is_router(x) and self.network_graph.is_router(y):
                 # Fill edges between routers only!
                 xname = self.db.getNameFromIP(x)
                 yname = self.db.getNameFromIP(y)
                 if xname and yname:
-                    bw = self.db.interface_bandwidth(xname, yname)
-                    data['bw'] = int(bw*1e6)
-                    data['capacity'] = int(bw*1e6)
+                    try:
+                        bw = self.db.interface_bandwidth(xname, yname)
+                        data['bw'] = int(bw*1e6)
+                        data['capacity'] = int(bw*1e6)
+                    except:
+                        import ipdb; ipdb.set_trace()
+                        print "EXCEPTION"
+                        print x,y
+                        print xname, yname
                 else:
                     t = time.strftime("%H:%M:%S", time.gmtime())
                     log.info("%s - _readBwDataFromDB(): ERROR: did not find %s (%s) and %s (%s)\n"%(t, x, xname, y, yname))

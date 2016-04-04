@@ -29,7 +29,7 @@ log = get_logger()
 
 dconf.LBC_Path
 
-commented = True #False#
+commented = False#True #
 
 algo_to_file = {'lab1': dconf.Lab1_Path + 'tecontroller_lab1.py',
                 'lab2': dconf.Lab2_Path + 'tecontroller_lab2.py',
@@ -65,8 +65,13 @@ class MyCustomHost(_node.Host):
             algorithm = kwargs.get('algorithm', 'None')
             if not commented:
                 lbcl = open(lbc_logfile, 'w')
-                tec = self.popen(algo_to_file[algorithm],
-                                 stdin=None, stdout=lbcl, stderr=lbcl)
+                pcalgorithm = kwargs.get('pcalgorithm', None)
+                
+                if pcalgorithm != None:
+                    tec = self.popen(algo_to_file[algorithm], pcalgorithm, stdin=None, stdout=lbcl, stderr=lbcl)
+                else:
+                    tec = self.popen(algo_to_file[algorithm],
+                                     stdin=None, stdout=lbcl, stderr=lbcl)
                 lbcl.close()
             
         elif 'isMonitorer' in kwargs.keys() and kwargs.get('isMonitorer') == True:

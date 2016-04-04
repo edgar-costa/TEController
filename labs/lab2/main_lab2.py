@@ -55,7 +55,7 @@ M1 = 'm1'
 BW = 1  # Absurdly low bandwidth for easy congestion (in Mb)
 
 class Lab1Topo(IPTopo):
-    def build(self, testfile, *args, **kwargs):
+    def build(self, testfile, pcalgorithm, *args, **kwargs):
         """
             +--+         +--+  +--+
             |S4|         |D |  |T |
@@ -113,12 +113,12 @@ class Lab1Topo(IPTopo):
         self.addLink(c2, r4)
 
         # Adding Traffic Engineering Controller
-        c3 = self.addHost(LBC, isLBController=True, algorithm='lab2')
+        c3 = self.addHost(LBC, isLBController=True, algorithm='lab2', pcalgorithm=pcalgorithm)
         self.addLink(c3, r4)
 
 
 class Lab1Topo2(IPTopo):
-    def build(self, testfile, *args, **kwargs):
+    def build(self, testfile,pcalgorithm, *args, **kwargs):
 
         topo = """
             r2-------r5
@@ -167,12 +167,12 @@ class Lab1Topo2(IPTopo):
         self.addLink(c2, r4)
 
         # Adding Traffic Engineering Controller
-        c3 = self.addHost(LBC, isLBController=True, algorithm='lab2')
+        c3 = self.addHost(LBC, isLBController=True, algorithm='lab2', pcalgorithm=pcalgorithm)
         self.addLink(c3, r4)
 
         
-def launch_network(testfile):
-    net = IPNet(topo = Lab1Topo(testfile),
+def launch_network(testfile, pcalgorithm):
+    net = IPNet(topo = Lab1Topo(testfile, pcalgorithm),
                 debug =_lib.DEBUG_FLAG,
                 intf = custom(TCIntf, bw = BW),
                 host = MyCustomHost)
@@ -200,6 +200,9 @@ if __name__ == '__main__':
     parser.add_argument('-t', '--testfile',
                         help='Give path of csv file with flows for test',
                         default=dconf.Lab2_Tests+'notest.csv')
+    parser.add_argument('-a', '--pcalgorithm',
+                        help='Give the name of the algorithm used to compute congestion probabilities: exact|sampled|simplified',
+                        default='exact')
     args = parser.parse_args()
     
     if args.debug:
@@ -213,6 +216,6 @@ if __name__ == '__main__':
         launch_controller()
         
     elif args.net:
-        launch_network(dconf.Lab1_Tests+args.testfile)
+        launch_network(dconf.Lab2_Tests+args.testfile, args.pcalgorithm)
         
             

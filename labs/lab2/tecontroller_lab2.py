@@ -8,6 +8,7 @@ import threading
 import time
 import Queue
 import itertools as it
+import sys
 
 log = get_logger()
 lineend = "-"*100+'\n'
@@ -762,7 +763,12 @@ if __name__ == '__main__':
     log.info("LOAD BALANCER CONTROLLER - Lab 2 - Enforcing simple paths + ECMP when needed\n")
     log.info("-"*90+"\n")
     time.sleep(dconf.LBC_InitialWaitingTime)
+
+    if len(sys.argv) == 2:
+        algorithm = sys.argv[1]
+    else:
+        algorithm = 'exact'
     
-    tec = TEControllerLab2(probabilityAlgorithm=ALGORITHM)
+    tec = TEControllerLab2(probabilityAlgorithm=algorithm)
     tec.run()
                                 
