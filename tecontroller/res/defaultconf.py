@@ -57,6 +57,7 @@ defaultFlowFile = TG_Path + 'flowfile.csv'
 Hosts_InitialWaitingTime = 10
 LBC_InitialWaitingTime = 20
 TG_InitialWaitingTime = 30
+FeedbackThreadWaitingTime = Hosts_InitialWaitingTime
 
 # Default port for which IPERF server is listening in the custom hosts
 Hosts_DefaultIperfPort = '5001'
@@ -74,3 +75,7 @@ SNMP_CommunityString = 'linkmonitor'
 
 # Marshal filename for the probability calculator object
 MarshalFile = RES_Path +'dictionarydump.marshal'
+
+# Path where the .cap files of the routers are saved
+CAP_Path = PPATH + "logs/"
+
