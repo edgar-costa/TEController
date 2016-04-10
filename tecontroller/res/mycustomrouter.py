@@ -3,6 +3,9 @@ default in the mininet routers.
 """
 from fibbingnode.misc.mininetlib.iprouter import IPRouter
 from tecontroller.res import defaultconf as dconf
+from subprocess import Popen, PIPE
+import time
+import threading
 
 class MyCustomRouter(IPRouter):
     """Implements MyCustomRouter class.
@@ -12,3 +15,14 @@ class MyCustomRouter(IPRouter):
         
         # Spawn the command to start the snmpd process in the router
         self.cmd(dconf.START_SNMP_AGENT)
+        
+        # Create process that will write in the .cap file
+        self.feedback_id = self.router.id
+        
+    def start(self):
+        super(MyCustomRouter, self).start()
+
+        # Call separate thread
+        router_filename = dconf.CAP_Path+self.feedback_id+'.cap'
+        router_file = open(router_filename, 'w')
+        self.popen(['tcpdump', '-n', 'udp', '-i', 'any'], stdout=router_file)
