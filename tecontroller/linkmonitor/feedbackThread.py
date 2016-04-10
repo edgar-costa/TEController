@@ -29,8 +29,7 @@ class feedbackThread(threading.Thread):
         Tuples of (flow, possible path list) are read from the requestQueue.
 
         A dictionary indexed by flow -> allocated path is returned
-        """
-        
+        """        
         while True:
             (nf, pl) = self.requestQueue.get() #blocking
             requestFlows = [(nf, pl)]
@@ -43,6 +42,9 @@ class feedbackThread(threading.Thread):
     def dealWithRequest(self, requestFlows):
         """
         """
+        # Results are saved here
+        responsePathDict = {}
+        
         # Read all .cap files from last time
         newReadOut = {}
         for rid, capfile in newReadOut.iteritems():
@@ -52,13 +54,54 @@ class feedbackThread(threading.Thread):
         readOutFlowSets = {}
         for rid, lines in newReadOut.iteritems():
             ridSet = set()
+            for line in lines:
+                try:
+                    # Parse ip's 
+                    src_tmp = line.split(' ')[2]
+                    src_ip_tmp = src_tmp.split('.')[:4]
+                    src_ip = ipaddress.ip_address('.'.join(map(str, src_ip_tmp)))
+                    dst_tmp = line.split(' ')[2].strip(':')
+                    dst_ip_tmp = dst_tmp.split('.')[:4]
+                    dport = dst_tmp.splot('.')[4]
+                    dst_ip = ipaddress.ip_address('.'.join(map(str, dst_ip_tmp)))
+                    ridSet.update({(src_ip, dst_ip, dport)})
+                except:
+                    import ipdb; ipdb.set_trace()
+                    pass
+                
+            # Add set into dictionary
+            readOutFlowSets[rid] = ridSet
             
-            
-        # Create set of flows to look for in files
-        flowsSet = set()
         for f, pl in requestedFlows:
-            flowsSet.update({(f.src, f.sport, f.dst, f.dport)})
+            #flowsSet.update({(f.src, f.sport, f.dst, f.dport)})
+            # We can't fix the source port from iperf client, so it
+            # will never match. This implies that same host can't same
+            # two UDP flows to the same destination host.
+            flowSet = set()
+            flowSet.update({(f.src, f.dst, f.dport)})
+            
+            # Set of routers containing flow
+            routers_containing_flow = {rid for rid, rset in
+                                       readOutFlowSets.iteritems() if
+                                       rset.intersection(flowSet) != set()}
+            
+            # Iterate path list and choose which of them is the one in
+            # which the flow is allocated
+            pathSetList = [(p, set(p)) for p in pl]
 
+            # Compute similarities with routers containing flows set
+            pathCoincidences = [(p, pset,
+                                 len(pset.intersection(routers_containing_flows)))
+                                for (p, pset) in pathSetList]
+
+            # Get the one with biggest common routers
+            (p, pset, similarity) = max(pathCoincidences, key=lambda x: x[2])
+
+            responsePathDict[f] = p
+
+        return responsePathDict
+
+    
     def pickCapFiles(self):
         """
         Returns a dictionary indexed by router id -> corresponding .cap file
