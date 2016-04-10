@@ -16,6 +16,7 @@ from tecontroller.res.dbhandler import DatabaseHandler
 
 from tecontroller.res.flow import Flow
 from tecontroller.loadbalancer.jsonlistener import JsonListener
+from tecontroller.linkmonitor.feedbackThread import feedbackThread
 
 import networkx as nx
 import threading
@@ -36,6 +37,9 @@ lbcontroller_logfile = dconf.Hosts_LogFolder + "LBC_json.log"
 log = get_logger()
 
 eventQueue = Queue.Queue()
+
+feedbackRequestQueue = Queue.Queue()
+feedbackResponseQueue = Queue.Queue()
 
 lineend = "-"*100+'\n'
 
@@ -150,6 +154,17 @@ class LBController(object):
         t = time.strftime("%H:%M:%S", time.gmtime())
         log.info("%s - Json listener thread created\n"%t)
 
+        # Create attributes
+        self.feedbackRequestQueue = feedbackRequestQueue
+        self.feedbackResponseQueue = feedbackResponseQueue
+
+        # Spawn FeedbackThread
+        ft = feedbackThread(self.feedbackRequestQueue, self.feedbackResponseQueue)
+        ft.start()
+        t = time.strftime("%H:%M:%S", time.gmtime())
+        log.info("%s - feedbackThread started\n"%t)
+        
+        
     def run(self):
         """Main loop that deals with new incoming events
         """
