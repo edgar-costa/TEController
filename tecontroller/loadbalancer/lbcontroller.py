@@ -270,7 +270,6 @@ class LBController(object):
         for (x, y, data) in self.network_graph.edges(data=True):
             if 'C' in x or 'C' in y: # means is the controller...
                 continue
-
             
             if self.network_graph.is_router(x) and self.network_graph.is_router(y):
                 # Fill edges between routers only!
@@ -490,15 +489,18 @@ class LBController(object):
         
     def _createInitialDags(self):
         """Populates the self.dags attribute by creating a complete DAG for
-        each destination.
+        each destination. In other words, a DAG representing
+        all-shortest paths from any router in the network towards each
+        destination.
         """
+
         # Log it
         t = time.strftime("%H:%M:%S", time.gmtime())
         log.info("%s - Creating initial DAGs\n"%t)
         pairs_already_logged = []
                            
         apdp = nx.all_pairs_dijkstra_path(self.initial_graph, weight='metric')
-
+        
         for prefix in self.network_graph.prefixes:
             dag = nx.DiGraph()
 
@@ -511,16 +513,17 @@ class LBController(object):
             other_routers = [rn for rn in self.network_graph.routers if rn != cr]
 
             for r in other_routers:
+                
                 # Get the shortest path
                 dpath = apdp[r][cr]
                 
                 # Are there possibly more paths with the same cost? Let's check:
                 # Get length of the default dijkstra shortest path
-                dlength = self.getPathLength(dpath+[subnet_prefix])
+                dlength = self.getPathLength(dpath)
 
                 # Get all paths with length equal to the defaul path length
-                default_paths = self._getAllPathsLim(self.initial_graph, r, subnet_prefix, dlength)
-                
+                default_paths = self._getAllPathsLim(self.initial_graph, r, cr, dlength)
+
                 if len(default_paths) > 1:
                     # ECMP is happening
                     ecmp = True
