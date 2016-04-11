@@ -157,6 +157,9 @@ class LBController(object):
         # Create attributes
         self.feedbackRequestQueue = feedbackRequestQueue
         self.feedbackResponseQueue = feedbackResponseQueue
+        
+        # List in which we save flows pending for allocation feedback
+        self.pendingForFeedback = {}
 
         # Spawn FeedbackThread
         ft = feedbackThread(self.feedbackRequestQueue, self.feedbackResponseQueue)
@@ -589,7 +592,7 @@ class LBController(object):
                           [[A, B, C], [A, D, C]]"""
 
         if prefix not in self.flow_allocation.keys():
-                # prefix not in table
+            # prefix not in table
             self.flow_allocation[prefix] = {flow : path_list}
         else:
             self.flow_allocation[prefix][flow] = path_list
@@ -619,22 +622,6 @@ class LBController(object):
             # Modify first the current destination dag: ongoing_flows = True
             current_dag = self.switchDagEdgesData(current_dag, edges, ongoing_flows=True)
                         
-            for (u, v) in edges:
-                # Get capacity of the edge (u,v)
-                data = self.initial_graph.get_edge_data(u, v)
-                capacity = data.get('capacity', None)
-                if capacity:
-                    # Substract full flow size in edges of both paths 
-                    data['capacity'] -= (flow.size)
-                    
-                    # Modify also the capacity data of the reverse edge
-                    data_i = self.initial_graph.get_edge_data(v, u)
-                    data_i['capacity'] = data['capacity']
-
-                else:
-                    to_print = "ERROR: capacity key not found in edge (%s, %s)\n"
-                    log.info(to_print%(u, v))
-
         # Set the current dag
         self.setCurrentDag(prefix, current_dag)
 
@@ -705,22 +692,6 @@ class LBController(object):
             # Set them
             current_dag = self.switchDagEdgesData(current_dag, edges_without_flows, ongoing_flows=False)
             
-            # Now add back capacities to edges
-            for (u, v) in edges:
-                data = self.initial_graph.get_edge_data(u, v)
-                capacity = data.get('capacity', None)
-                if capacity:
-                    # Add back the full capacity taken by the flow
-                    # that just finished
-                    data['capacity'] += (flow.size)
-                    
-                    # Set also the reverse edge
-                    data_i = self.initial_graph.get_edge_data(v, u)
-                    data_i['capacity'] = data['capacity']
-                else:
-                    to_print = "ERROR: capacity key not found in edge (%s, %s)\n"
-                    log.info(to_print%(u, v))
-                    
         # Set the new calculated dag to its destination prefix dag
         self.setCurrentDag(prefix, current_dag)
         
