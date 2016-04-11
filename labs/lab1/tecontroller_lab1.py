@@ -176,6 +176,7 @@ class TEControllerLab1(SimplePathLB):
             # ECMP is happening
             ecmp_active = True
             log.info("\t* ECMP is ACTIVE in some routers in path\n")
+            
         elif len(currentPaths) == 1:
             # ECMP not active
             ecmp_active = False
@@ -187,8 +188,8 @@ class TEControllerLab1(SimplePathLB):
             return
 
         if ecmp_active:
-            # Calculate congestion probability
-        
+            # Calculate congestion probability of single flow!
+            
             # Insert current available capacities in DAG
             for (u, v, data) in adag.edges(data=True):
                 cap = self.cgc[u][v]['capacity']
@@ -200,7 +201,7 @@ class TEControllerLab1(SimplePathLB):
 
             # compute congestion probability
             t = time.strftime("%H:%M:%S", time.gmtime())
-            log.info("%s - Computing flow congestion probability\n"%t)
+            log.info("%s - Computing single flow congestion probability\n"%t)
             #log.info("\t * DAG: %s\n"%(self.toLogDagNames(adag).edges(data=True)))
             #log.info("\t * Ingress router: %s\n"%ingress_router)
             #log.info("\t * Engress router: %s\n"%egress_router)
@@ -213,13 +214,11 @@ class TEControllerLab1(SimplePathLB):
             # Apply decision function
             # Act accordingly
             # Log it
-            to_print = "\t* Flow will be allocated "
-            to_print += "with a congestion probability of %.2f%%\n"
+            to_print = "\t* Flow would create congestion with a probability of %.2f%%\n"
             log.info(to_print%(congProb*100.0))
             log.info("\t* It took %s ms to compute probabilities\n"%str(self.pc.timer.msecs))
             to_print = "\t* Paths: %s\n"
             log.info(to_print%str([self.toLogRouterNames(path) for path in currentPaths]))
-
 
             t = time.strftime("%H:%M:%S", time.gmtime())
             log.info("%s - Applying decision function...\n"%t)
@@ -232,9 +231,16 @@ class TEControllerLab1(SimplePathLB):
 
             else:
                 log.info("\t* For the moment, returning always False...\n")
-
                 # Allocate flow to current paths
                 self.addAllocationEntry(dst_prefix, flow, currentPaths)
+
+                # Adding flow and paths to pendingForFeedback
+                log.info("\t* Adding flow and paths to pendingForFeedback...\n")
+                if not self.pendingForFeedback.get(f, None):
+                    self.pendingForFeedback[f] = currentPaths
+                else:
+                    raise KeyError("How is it possible that flow is in there? It shouldn't happen\n")
+                
         else:
             # currentPath is still a list of a single list: [[A,B,C]]
             # but makes it more understandable
