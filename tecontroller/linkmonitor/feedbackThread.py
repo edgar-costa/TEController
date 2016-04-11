@@ -26,20 +26,16 @@ class feedbackThread(threading.Thread):
         
     def run(self):
         """
-        Tuples of (flow, possible path list) are read from the requestQueue.
+        A dictionary of flow -> possible path list is read from the requestQueue.
 
         A dictionary indexed by flow -> allocated path is returned
         """        
         while True:
-            (nf, pl) = self.requestQueue.get() #blocking
-            requestFlows = [(nf, pl)]
-            while not self.requestQueue.empty():
-                requestFlows.append(self.requestQueue.get())
-                
+            requestFlowsDict = self.requestQueue.get() # Blocking read
             responsePathDict = self.dealWithRequest(requestFlows)
             self.responseQueue.put(responsePathDict)
 
-    def dealWithRequest(self, requestFlows):
+    def dealWithRequest(self, requestFlowsDict):
         """
         """
         # Results are saved here
@@ -72,7 +68,7 @@ class feedbackThread(threading.Thread):
             # Add set into dictionary
             readOutFlowSets[rid] = ridSet
             
-        for f, pl in requestedFlows:
+        for f, pl in requestFlowsDict.iteritems():
             #flowsSet.update({(f.src, f.sport, f.dst, f.dport)})
             # We can't fix the source port from iperf client, so it
             # will never match. This implies that same host can't same
@@ -97,8 +93,16 @@ class feedbackThread(threading.Thread):
             # Get the one with biggest common routers
             (p, pset, similarity) = max(pathCoincidences, key=lambda x: x[2])
 
-            responsePathDict[f] = p
+            # Only put in responsePathDict if all routers in which
+            # flow was observed coincede with one of its possible
+            # paths.
+            if len(pset) == similarity:
+                responsePathDict[f] = p
 
+            else:
+                # No full path found for this flow yet!
+                pass
+            
         return responsePathDict
 
     
