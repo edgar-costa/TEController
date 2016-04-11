@@ -1147,7 +1147,7 @@ class LBController(object):
             return [self.db.getNameFromIP(p) for p in path_list if self.network_graph.is_router(p)] 
 
     def toLogFlowNames(self, flow):
-        a = "(%s -> %s): %s, t_o: %s, duration: %s" 
+        a = "Flow[(%s -> %s): %s, t_o: %s, duration: %s]" 
         return a%(self.db.getNameFromIP(flow.src.compressed),
                   self.db.getNameFromIP(flow.dst.compressed),
                   flow.setSizeToStr(flow.size),
