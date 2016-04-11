@@ -33,6 +33,9 @@ R1 = 'r1'
 R2 = 'r2'
 R3 = 'r3'
 R4 = 'r4'
+R5 = 'r5'
+R6 = 'r6'
+R7 = 'r7'
 
 H10 = 'h10'
 H11 = 'h11'
@@ -49,6 +52,11 @@ H32 = 'h32'
 H40 = 'h40'
 H41 = 'h41'
 H42 = 'h42'
+
+H50 = 'h50'
+H60 = 'h60'
+H70 = 'h70'
+
 
 M1 = 'm1'
 
@@ -122,7 +130,7 @@ class Lab1Topo(IPTopo):
         for n in (c3, c2, r1, r2, r3, r4):
             self.addLink(ms, n, cost=-1)
 
-class Lab1Topo2(IPTopo):
+class Lab1ECMPTopo(IPTopo):
     def build(self, testfile, *args, **kwargs):
 
         topo = """
@@ -134,14 +142,16 @@ class Lab1Topo2(IPTopo):
            \  /     \_ /
             r3--------r6
         """
-        # Add routers and router-router links
+
+        # Add routers and router-router links        
+        routers = [R1, R2, R3, R4, R5, R6, R7]
         r1 = self.addRouter(R1, cls=MyCustomRouter)
         r2 = self.addRouter(R2, cls=MyCustomRouter)
         r3 = self.addRouter(R3, cls=MyCustomRouter)
         r4 = self.addRouter(R4, cls=MyCustomRouter)
-        r5 = self.addRouter('r5', cls=MyCustomRouter)
-        r6 = self.addRouter('r6', cls=MyCustomRouter)
-        r7 = self.addRouter('r7', cls=MyCustomRouter)
+        r5 = self.addRouter(R5, cls=MyCustomRouter)
+        r6 = self.addRouter(R6, cls=MyCustomRouter)
+        r7 = self.addRouter(R7, cls=MyCustomRouter)
 
         self.addLink(r1, r2)
         self.addLink(r1, r3)
@@ -155,13 +165,13 @@ class Lab1Topo2(IPTopo):
         self.addLink(r6, r7)
 
         # Create broadcast domains
-     	self.addLink(r1, self.addHost(S1))  
-        self.addLink(r2, self.addHost(S2))  
-        self.addLink(r3, self.addHost(S3))
-        self.addLink(r4, self.addHost(S4))
-        self.addLink(r5, self.addHost('d1'))    
-        self.addLink(r6, self.addHost('t1'))
-        self.addLink(r7, self.addHost('x1'))
+     	self.addLink(r1, self.addHost(H10))  
+        self.addLink(r2, self.addHost(H20))  
+        self.addLink(r3, self.addHost(H30))
+        self.addLink(r4, self.addHost(H40))
+        self.addLink(r5, self.addHost(H50))    
+        self.addLink(r6, self.addHost(H60))
+        self.addLink(r7, self.addHost(H70))
 
         # Adding Fibbing Controller
         c1 = self.addController(C1, cfg_path=C1_cfg)
@@ -174,9 +184,16 @@ class Lab1Topo2(IPTopo):
         # Adding Traffic Engineering Controller
         c3 = self.addHost(LBC, isLBController=True, algorithm='lab1')
         self.addLink(c3, r4)
-        
+
+        # Create the monitoring network
+        ms = self.addSwitch('s1')
+        # connect nodes in it
+        for n in routers+[c3, c2]:
+            self.addLink(ms, n, cost=-1)
+            
+            
 def launch_network(testfile):
-    net = IPNet(topo = Lab1Topo(testfile=testfile),
+    net = IPNet(topo = Lab1ECMPTopo(testfile=testfile),#Lab1Topo(testfile=testfile),
                 debug =_lib.DEBUG_FLAG,
                 intf = custom(TCIntf, bw = BW),
                 host = MyCustomHost)

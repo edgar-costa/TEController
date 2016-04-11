@@ -45,85 +45,97 @@ class TEControllerLab1(SimplePathLB):
     def run(self):
         """Main loop that deals with new incoming events
         """
+        getTimeout = 1
         while not self.isStopped():            
-            # Get event from the queue (blocking)
-            event = self.eventQueue.get()
-
+            # Get event from the queue (blocking with timeout)
+            try:
+                event = self.eventQueue.get(timeout=getTimeout)
+            except:
+                event = None
+                
             # Check if flows allocations still pending for feedback
             if self.pendingForFeedback != {}:
-                if not self.responseQueue.empty():
+                if not self.feedbackResponseQueue.empty():
                     # Read element from responseQueue
-                    responsePathDict = self.responseQueue.get()
+                    responsePathDict = self.feedbackResponseQueue.get()
                     self.dealWithAllocationFeedback(responsePathDict)
-            
-            if event['type'] == 'newFlowStarted':
-                # Log it
-                log.info(lineend)
-                t = time.strftime("%H:%M:%S", time.gmtime())
-                log.info("%s - run(): %s retrieved from eventQueue\n"%(t, event['type']))
-                flow = event['data']
-                log.info("\t* Flow: %s\n"%self.toLogFlowNames(flow))
+                    
+            if event:
+                if event['type'] == 'newFlowStarted':
+                    # Log it
+                    log.info(lineend)
+                    t = time.strftime("%H:%M:%S", time.gmtime())
+                    log.info("%s - run(): %s retrieved from eventQueue\n"%(t, event['type']))
+                    flow = event['data']
+                    log.info("\t* Flow: %s\n"%self.toLogFlowNames(flow))
 
-                # We force that upon dealing with flow, the self.dags
-                # and self.flow_allocation dictionaries are not
-                # modified.
-                with self.dagsLock:
-                    with self.flowAllocationLock:
-                        # Deal with new flow                    
-                        self.dealWithNewFlow(flow)
-                        
-            else:
-                t = time.strftime("%H:%M:%S", time.gmtime())
-                log.info("%s - run(): UNKNOWN Event\n"%t)
-                log.info("\t* Event: "%str(event))
+                    # We force that upon dealing with flow, the self.dags
+                    # and self.flow_allocation dictionaries are not
+                    # modified.
+                    with self.dagsLock:
+                        with self.flowAllocationLock:
+                            # Deal with new flow                    
+                            self.dealWithNewFlow(flow)
+                else:
+                    t = time.strftime("%H:%M:%S", time.gmtime())
+                    log.info("%s - run(): UNKNOWN Event\n"%t)
+                    log.info("\t* Event: "%str(event))
 
             if self.pendingForFeedback != {}:
                 # Log a bit
                 t = time.strftime("%H:%M:%S", time.gmtime())
-                log.info("%s - Some flows are yet to be exactly allocated\n"%t)
-                log.info("\t*  Puting pending flows into requestFeedbackQueue:\n")
-                log.info("\t*  %s:\n"%str([(f,pl) for f,pl in self.pendingForFeedback.iteritems()])))
-
+                #log.info("%s - Some flows are yet to be exactly allocated\n"%t)
+                #log.info("\t*  Puting pending flows into requestFeedbackQueue:\n")
+                #log.info("\t*  %s:\n"%str([(self.toLogFlowNames(f), self.toLogRouterNames(pl)) for f, pl in self.pendingForFeedback.iteritems()]))
                 # Put into queue
-                self.requestQueue.put(self.pendingForFeedback.copy())
+                self.feedbackRequestQueue.put(self.pendingForFeedback.copy())
                 
     def dealWithAllocationFeedback(self, responsePathDict):
         # Acquire locks for self.flow_allocation and self.dags
         # dictionaries
         t = time.strftime("%H:%M:%S", time.gmtime())
-        log.info("%s - Allocation feedback received: processing...\n"%s)
+        log.info("%s - Allocation feedback received: processing...\n"%t)
         
         self.flowAllocationLock.acquire()
         self.dagsLock.acquire()
 
         # Iterate flows for which there is allocation feedback
         for (f, p) in responsePathDict.iteritems():
+            flow_dst_prefix = self.getCurrentOSPFPrefix(f.dst.compressed)
+            flow_dst_prefix = flow_dst_prefix.compressed
+            
             # Update flow_allocation dictionary
-            pl = self.flow_allocations.get(f, None)
-            if pl == None:
-                raise KeyError
-            else:
-                # Log a bit
-                to_log = "\t* %s allocated to %s. Previous options: %s\n"
-                log.info(to_log%(self.toLogFlowNames(flow), self.toLogRouterNames([p]), self.toLogRouterNames(pl)))
-
-                # Update allocation
-                self.flow_allocations[f] = [p]
-
-                # Update current DAG (ongoing_flows = False) should be
-                # done here. But since it's not used anyway, we skip
-                # it for now...
-
-                # Remove flow from pendingForFeedback
-                if f in self.pendingForFeedback.keys():
+            if flow_dst_prefix in self.flow_allocation.keys():
+                pl = self.flow_allocation[flow_dst_prefix].get(f, None)
+                if pl == None:
+                    # It means flow finished... so we should remove it
+                    # from pendingForFeedback
                     self.pendingForFeedback.pop(f)
                 else:
-                    raise KeyError
+                    # Log a bit
+                    to_log = "\t* %s allocated to %s.\n\t  Previous options: %s\n"
+                    log.info(to_log%(self.toLogFlowNames(f), self.toLogRouterNames([p]), self.toLogRouterNames(pl)))
+
+                    # Update allocation
+                    self.flow_allocation[flow_dst_prefix][f] = [p]
+
+                    # Update current DAG (ongoing_flows = False) should be
+                    # done here. But since it's not used anyway, we skip
+                    # it for now...
+
+                    # Remove flow from pendingForFeedback
+                    if f in self.pendingForFeedback.keys():
+                        self.pendingForFeedback.pop(f)
+                    else:
+                        raise KeyError
+            else:
+                # It means flow finished... so we should remove it
+                # from pendingForFeedback
+                self.pendingForFeedback.pop(f)
 
         # Release locks
         self.flowAllocationLock.release()
         self.dagsLock.release()
-
         
     def dealWithNewFlow(self, flow):
         """
@@ -236,8 +248,8 @@ class TEControllerLab1(SimplePathLB):
 
                 # Adding flow and paths to pendingForFeedback
                 log.info("\t* Adding flow and paths to pendingForFeedback...\n")
-                if not self.pendingForFeedback.get(f, None):
-                    self.pendingForFeedback[f] = currentPaths
+                if not self.pendingForFeedback.get(flow, None):
+                    self.pendingForFeedback[flow] = currentPaths
                 else:
                     raise KeyError("How is it possible that flow is in there? It shouldn't happen\n")
                 
