@@ -27,7 +27,6 @@ class TEControllerLab1(SimplePathLB):
         t = time.strftime("%H:%M:%S", time.gmtime())
         log.info("%s - Congestion Threshold is set to %.2f%% of the link\n"%(t, (self.congestionThreshold)*100.0))
 
-
         # Graph that will hold the link available capacities
         with self.capacityGraphLock:
             self.cg = self._createCapacitiesGraph()
@@ -46,10 +45,17 @@ class TEControllerLab1(SimplePathLB):
     def run(self):
         """Main loop that deals with new incoming events
         """
-        while not self.isStopped():
+        while not self.isStopped():            
             # Get event from the queue (blocking)
             event = self.eventQueue.get()
-                        
+
+            # Check if flows allocations still pending for feedback
+            if self.pendingForFeedback != {}:
+                if not self.responseQueue.empty():
+                    # Read element from responseQueue
+                    responsePathDict = self.responseQueue.get()
+                    self.dealWithAllocationFeedback(responsePathDict)
+            
             if event['type'] == 'newFlowStarted':
                 # Log it
                 log.info(lineend)
@@ -65,12 +71,60 @@ class TEControllerLab1(SimplePathLB):
                     with self.flowAllocationLock:
                         # Deal with new flow                    
                         self.dealWithNewFlow(flow)
-                    
+                        
             else:
                 t = time.strftime("%H:%M:%S", time.gmtime())
                 log.info("%s - run(): UNKNOWN Event\n"%t)
                 log.info("\t* Event: "%str(event))
 
+            if self.pendingForFeedback != {}:
+                # Log a bit
+                t = time.strftime("%H:%M:%S", time.gmtime())
+                log.info("%s - Some flows are yet to be exactly allocated\n"%t)
+                log.info("\t*  Puting pending flows into requestFeedbackQueue:\n")
+                log.info("\t*  %s:\n"%str([(f,pl) for f,pl in self.pendingForFeedback.iteritems()])))
+
+                # Put into queue
+                self.requestQueue.put(self.pendingForFeedback.copy())
+                
+    def dealWithAllocationFeedback(self, responsePathDict):
+        # Acquire locks for self.flow_allocation and self.dags
+        # dictionaries
+        t = time.strftime("%H:%M:%S", time.gmtime())
+        log.info("%s - Allocation feedback received: processing...\n"%s)
+        
+        self.flowAllocationLock.acquire()
+        self.dagsLock.acquire()
+
+        # Iterate flows for which there is allocation feedback
+        for (f, p) in responsePathDict.iteritems():
+            # Update flow_allocation dictionary
+            pl = self.flow_allocations.get(f, None)
+            if pl == None:
+                raise KeyError
+            else:
+                # Log a bit
+                to_log = "\t* %s allocated to %s. Previous options: %s\n"
+                log.info(to_log%(self.toLogFlowNames(flow), self.toLogRouterNames([p]), self.toLogRouterNames(pl)))
+
+                # Update allocation
+                self.flow_allocations[f] = [p]
+
+                # Update current DAG (ongoing_flows = False) should be
+                # done here. But since it's not used anyway, we skip
+                # it for now...
+
+                # Remove flow from pendingForFeedback
+                if f in self.pendingForFeedback.keys():
+                    self.pendingForFeedback.pop(f)
+                else:
+                    raise KeyError
+
+        # Release locks
+        self.flowAllocationLock.release()
+        self.dagsLock.release()
+
+        
     def dealWithNewFlow(self, flow):
         """
         Re-writes the parent class method.
