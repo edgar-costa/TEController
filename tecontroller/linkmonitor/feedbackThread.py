@@ -2,7 +2,8 @@ from fibbingnode.misc.mininetlib import get_logger
 from tecontroller.res.dbhandler import DatabaseHandler
 from tecontroller.res import defaultconf as dconf
 from tecontroller.res.flow import Flow
-
+import ipaddress
+import traceback
 import threading
 import time
 
@@ -23,32 +24,35 @@ class feedbackThread(threading.Thread):
 
         # Fill router cap files
         self.capFilesDict = self.pickCapFiles()
-        
+
+        # Data structure that maintains a set of current flows passing
+        # through each router in the last second
+        self.router_flowsets = {}
+        self.updateRouterFlowSets()
+            
     def run(self):
         """
         A dictionary of flow -> possible path list is read from the requestQueue.
 
         A dictionary indexed by flow -> allocated path is returned
-        """        
+        """
+        queueTimeout = 1 #seconds
         while True:
-            requestFlowsDict = self.requestQueue.get() # Blocking read
-            responsePathDict = self.dealWithRequest(requestFlows)
-            self.responseQueue.put(responsePathDict)
+            try:
+                requestFlowsDict = self.requestQueue.get(timeout=queueTimeout) # Blocking read
+            except:
+                # Update flow sets for each router
+                self.updateRouterFlowSets()
+            else:
+                responsePathDict = self.dealWithRequest(requestFlowsDict)
+                if responsePathDict != {}:
+                    self.responseQueue.put(responsePathDict)
+                    
+                self.updateRouterFlowSets()
 
-    def dealWithRequest(self, requestFlowsDict):
-        """
-        """
-        # Results are saved here
-        responsePathDict = {}
-        
-        # Read all .cap files from last time
-        newReadOut = {}
-        for rid, capfile in newReadOut.iteritems():
-            newReadOut[rid] = capfile.readlines()
-
-        # Create readOut flow sets
-        readOutFlowSets = {}
-        for rid, lines in newReadOut.iteritems():
+    def updateRouterFlowSets(self):
+        for rid, capfile in self.capFilesDict.iteritems():
+            lines = capfile.readlines()
             ridSet = set()
             for line in lines:
                 try:
@@ -56,29 +60,37 @@ class feedbackThread(threading.Thread):
                     src_tmp = line.split(' ')[2]
                     src_ip_tmp = src_tmp.split('.')[:4]
                     src_ip = ipaddress.ip_address('.'.join(map(str, src_ip_tmp)))
-                    dst_tmp = line.split(' ')[2].strip(':')
+                    dst_tmp = line.split(' ')[4].strip(':')
                     dst_ip_tmp = dst_tmp.split('.')[:4]
-                    dport = dst_tmp.splot('.')[4]
+                    dport = dst_tmp.split('.')[4]
                     dst_ip = ipaddress.ip_address('.'.join(map(str, dst_ip_tmp)))
                     ridSet.update({(src_ip, dst_ip, dport)})
                 except:
-                    import ipdb; ipdb.set_trace()
+                    #import ipdb; ipdb.set_trace()
+                    #traceback.print_exception()
                     pass
                 
             # Add set into dictionary
-            readOutFlowSets[rid] = ridSet
-            
+            self.router_flowsets[rid] = ridSet
+
+    def dealWithRequest(self, requestFlowsDict):
+        """
+        """
+        # Results are saved here
+        responsePathDict = {}
+        
+        start_time = time.time()
         for f, pl in requestFlowsDict.iteritems():
             #flowsSet.update({(f.src, f.sport, f.dst, f.dport)})
             # We can't fix the source port from iperf client, so it
             # will never match. This implies that same host can't same
             # two UDP flows to the same destination host.
             flowSet = set()
-            flowSet.update({(f.src, f.dst, f.dport)})
+            flowSet.update({(f.src.ip, f.dst.ip, str(f.dport))})
             
             # Set of routers containing flow
-            routers_containing_flow = {rid for rid, rset in
-                                       readOutFlowSets.iteritems() if
+            routers_containing_flow = {self.db.getIpFromHostName(rid) for rid, rset in
+                                       self.router_flowsets.iteritems() if
                                        rset.intersection(flowSet) != set()}
             
             # Iterate path list and choose which of them is the one in
@@ -86,23 +98,39 @@ class feedbackThread(threading.Thread):
             pathSetList = [(p, set(p)) for p in pl]
 
             # Compute similarities with routers containing flows set
-            pathCoincidences = [(p, pset,
-                                 len(pset.intersection(routers_containing_flows)))
+            pathCoincidences = [(p, pset, pset.intersection(routers_containing_flow),  
+                                 len(pset.intersection(routers_containing_flow)))
                                 for (p, pset) in pathSetList]
 
             # Get the one with biggest common routers
-            (p, pset, similarity) = max(pathCoincidences, key=lambda x: x[2])
+            (p, pset, prouters, similarity) = max(pathCoincidences, key=lambda x: x[3])
 
+            # Get path differences
+            path_unique_nodes = [] #list of tuples
+            for p in pl:
+                pset = set(p)
+                pl_copy = pl[:]
+                pl_copy.remove(p)
+                others_set = set()
+                for p_pl in pl_copy:
+                    others_set.update(set(p_pl))
+                unique_nodes = pset.difference(others_set)
+                path_unique_nodes.append((p, unique_nodes))
+            
             # Only put in responsePathDict if all routers in which
             # flow was observed coincede with one of its possible
             # paths.
             if len(pset) == similarity:
                 responsePathDict[f] = p
-
+                
             else:
-                # No full path found for this flow yet!
+                # No full path found for this flow yet! But check for
+                # unique nodes
+                #for (p, pset, prouters, sim) in pathCoincidences:
+                #    for (p, if prouters
                 pass
             
+        #log.info("*** It took %s seconds to compute which path should it go\n"%(time.time()-start_time))
         return responsePathDict
 
     
