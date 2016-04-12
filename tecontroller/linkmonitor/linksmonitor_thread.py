@@ -149,7 +149,6 @@ class LinksMonitorThread(threading.Thread):
                         #self.updateLinkCapacity(iface_opposed_name, iface_availableCap)
                         interfaces_updated.append(iface_name)
                         #interfaces_updated.append(iface_opposed_name)
-                        
                     
     def logLinksLoads(self):
         # Make a copy of the self.cg and release the lock
@@ -241,7 +240,6 @@ class LinksMonitorThread(threading.Thread):
                     self.cg[x][y]['window'] = window
                     self.cg[x][y]['capacity'] = new_capacity
 
-                
     def printLinkToEdgesLine(self, capacity_graph):
         s = ""
         to_iterate = sorted(self.link_to_edge_bindings.keys())
