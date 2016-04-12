@@ -61,12 +61,12 @@ class LinksMonitorThread(threading.Thread):
         taken = []
         i = 0
         for (u, v) in self.cg.edges():
-            if (u, v) in taken or (v, u) in taken:
-                continue
-            else:
-                taken.append((u,v))
-                bindings[i] = (u, v)
-                i = i + 1
+            #if (u, v) in taken or (v, u) in taken:
+            #    continue
+            #else:
+            #taken.append((u,v))
+            bindings[i] = (u, v)
+            i = i + 1
         return bindings
             
     def run(self):
@@ -144,11 +144,11 @@ class LinksMonitorThread(threading.Thread):
                         pass
                     else:
                         (x,y) = edge[0]
-                        iface_opposed_name = self.links[(y,x)]['interface']
+                        #iface_opposed_name = self.links[(y,x)]['interface']
                         self.updateLinkCapacity(iface_name, iface_availableCap)
-                        self.updateLinkCapacity(iface_opposed_name, iface_availableCap)
+                        #self.updateLinkCapacity(iface_opposed_name, iface_availableCap)
                         interfaces_updated.append(iface_name)
-                        interfaces_updated.append(iface_opposed_name)
+                        #interfaces_updated.append(iface_opposed_name)
                         
                     
     def logLinksLoads(self):
