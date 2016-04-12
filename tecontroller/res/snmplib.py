@@ -137,23 +137,6 @@ class SnmpCounters(Base):
         we are using snmpwalk now.
         """
         start = time.time()
-        # ifInOctets
-        # call snmpwalk
-        #p = subprocess.Popen(['snmpwalk', '-v', '1', '-c', dconf.SNMP_CommunityString, self.routerIp, 'ifInOctets'],
-        #                     stdout=subprocess.PIPE,
-        #                     stderr=subprocess.PIPE)
-        #out, err = p.communicate()
-        #if err:
-        #    #log.info("snmplib.py: updateCounters32() ERROR: %s\n"%(str(err)))
-        #    return
-        
-        # process snmpwalk output
-        #numbers_t = [a.split(" = ")[0] for a in out.split('\n') if len(a.split(" = ")) == 2]
-        #numbers = [a[a.index('.')+1:] for a in numbers_t if a][1:]
-        
-        #in_counters_t = [a.split(" = ")[1] for a in out.split('\n') if len(a.split(" = ")) == 2]
-        #in_counters = np.asarray([int(a[a.index(':')+2:]) for a in in_counters_t if a][1:])
-        
         # ifOutOctets
         # call snmpwalk
         p = subprocess.Popen(['snmpwalk', '-v', '1', '-c', dconf.SNMP_CommunityString, self.routerIp, 'ifOutOctets'],
