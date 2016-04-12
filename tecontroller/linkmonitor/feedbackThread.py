@@ -64,7 +64,7 @@ class feedbackThread(threading.Thread):
                     dst_ip_tmp = dst_tmp.split('.')[:4]
                     dport = dst_tmp.split('.')[4]
                     dst_ip = ipaddress.ip_address('.'.join(map(str, dst_ip_tmp)))
-                    ridSet.update({(src_ip, dst_ip, dport)})
+                    ridSet.update({((src_ip, 's'), (dst_ip, 'd'), dport)})
                 except:
                     #import ipdb; ipdb.set_trace()
                     #traceback.print_exception()
@@ -81,12 +81,13 @@ class feedbackThread(threading.Thread):
         
         start_time = time.time()
         for f, pl in requestFlowsDict.iteritems():
+
             #flowsSet.update({(f.src, f.sport, f.dst, f.dport)})
             # We can't fix the source port from iperf client, so it
             # will never match. This implies that same host can't same
             # two UDP flows to the same destination host.
             flowSet = set()
-            flowSet.update({(f.src.ip, f.dst.ip, str(f.dport))})
+            flowSet.update({((f.src.ip, 's'), (f.dst.ip, 'd'), str(f.dport))})
             
             # Set of routers containing flow
             routers_containing_flow = {self.db.getIpFromHostName(rid) for rid, rset in
@@ -105,29 +106,13 @@ class feedbackThread(threading.Thread):
             # Get the one with biggest common routers
             (p, pset, prouters, similarity) = max(pathCoincidences, key=lambda x: x[3])
 
-            # Get path differences
-            path_unique_nodes = [] #list of tuples
-            for p in pl:
-                pset = set(p)
-                pl_copy = pl[:]
-                pl_copy.remove(p)
-                others_set = set()
-                for p_pl in pl_copy:
-                    others_set.update(set(p_pl))
-                unique_nodes = pset.difference(others_set)
-                path_unique_nodes.append((p, unique_nodes))
-            
             # Only put in responsePathDict if all routers in which
             # flow was observed coincede with one of its possible
             # paths.
             if len(pset) == similarity:
+                #import ipdb; ipdb.set_trace()
                 responsePathDict[f] = p
-                
             else:
-                # No full path found for this flow yet! But check for
-                # unique nodes
-                #for (p, pset, prouters, sim) in pathCoincidences:
-                #    for (p, if prouters
                 pass
             
         #log.info("*** It took %s seconds to compute which path should it go\n"%(time.time()-start_time))
