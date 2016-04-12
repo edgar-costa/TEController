@@ -257,7 +257,7 @@ class TEControllerLab1(SimplePathLB):
                 self.flowAllocationAlgorithm(dst_prefix, flow, currentPaths)
 
             else:
-                log.info("\t* For the moment, returning always False...\n")
+                log.info("\t* ECMP is not de-activated!\n")
                 # Allocate flow t current paths
                 self.addAllocationEntry(dst_prefix, flow, currentPaths)
 
