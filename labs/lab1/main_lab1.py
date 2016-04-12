@@ -57,7 +57,6 @@ H50 = 'h50'
 H60 = 'h60'
 H70 = 'h70'
 
-
 M1 = 'm1'
 
 BW = 1  # Absurdly low bandwidth for easy congestion (in Mb)
@@ -90,10 +89,10 @@ class Lab1Topo(IPTopo):
         r4 = self.addRouter(R4, cls=MyCustomRouter)
 
         self.addLink(r1, r2, cost=10)
-        self.addLink(r1, r4)
-        self.addLink(r2, r3)
-        self.addLink(r3, r4)
-        self.addLink(r1, r3)
+        self.addLink(r1, r4, cost=2)
+        self.addLink(r1, r3, cost=2)
+        self.addLink(r2, r3, cost=2)
+        self.addLink(r3, r4, cost=2)
 
         # Create broadcast domains
         self.addLink(r1, self.addHost(H10)) 
@@ -114,7 +113,7 @@ class Lab1Topo(IPTopo):
 
         # Adding Fibbing Controller
         c1 = self.addController(C1, cfg_path=C1_cfg)
-        self.addLink(c1, r4, cost=1000)
+        self.addLink(c1, r4, cost=999)
 
         # Adding Traffic Generator Host
         c2 = self.addHost(TG, isTrafficGenerator=True, flowfile=testfile) 
@@ -125,11 +124,13 @@ class Lab1Topo(IPTopo):
         self.addLink(c3, r4)
 
         # Create the monitoring network
-        ms = self.addSwitch('s1')
+        monitorSwitch = self.addSwitch('s1')
         # connect nodes in it
-        for n in (c3, c2, r1, r2, r3, r4):
-            self.addLink(ms, n, cost=-1)
+        nodes_to_monitor = [r1, r2, r3, r4, c2, c3]
+        for n in nodes_to_monitor:
+            self.addLink(monitorSwitch, n, cost=-1)
 
+            
 class Lab1ECMPTopo(IPTopo):
     def build(self, testfile, *args, **kwargs):
 
@@ -152,7 +153,6 @@ class Lab1ECMPTopo(IPTopo):
         r5 = self.addRouter(R5, cls=MyCustomRouter)
         r6 = self.addRouter(R6, cls=MyCustomRouter)
         r7 = self.addRouter(R7, cls=MyCustomRouter)
-
         self.addLink(r1, r2)
         self.addLink(r1, r3)
         self.addLink(r2, r4)
@@ -164,7 +164,7 @@ class Lab1ECMPTopo(IPTopo):
         self.addLink(r5, r7)
         self.addLink(r6, r7)
 
-        # Create broadcast domains
+        # Create broadcast domains: one in each router
      	self.addLink(r1, self.addHost(H10))  
         self.addLink(r2, self.addHost(H20))  
         self.addLink(r3, self.addHost(H30))
@@ -189,11 +189,11 @@ class Lab1ECMPTopo(IPTopo):
         ms = self.addSwitch('s1')
         # connect nodes in it
         for n in routers+[c3, c2]:
-            self.addLink(ms, n, cost=-1)
-            
+            self.addLink(ms, n, cost=-1)            
+
             
 def launch_network(testfile):
-    net = IPNet(topo = Lab1ECMPTopo(testfile=testfile),#Lab1Topo(testfile=testfile),
+    net = IPNet(topo = Lab1Topo(testfile=testfile),#Lab1ECMPTopo(testfile=testfile),#
                 debug =_lib.DEBUG_FLAG,
                 intf = custom(TCIntf, bw = BW),
                 host = MyCustomHost)
@@ -203,6 +203,21 @@ def launch_network(testfile):
     FibbingCLI(net)
     net.stop()
 
+    
+def launch_controller():
+    CFG.read(C1_cfg)
+    db = TopologyDB(db=dconf.DB_path)
+    manager = SouthboundManager(optimizer=OSPFSimple())
+
+    import ipdb; ipdb.set_trace()    
+    manager.simple_path_requirement(db.subnet(R3, D1), [db.routerid(r)
+                                                        for r in (R1, R2, R3)])
+    try:
+        manager.run()
+    except KeyboardInterrupt:
+        manager.stop()
+
+    
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     group = parser.add_mutually_exclusive_group()
