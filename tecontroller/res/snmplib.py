@@ -145,7 +145,7 @@ class SnmpCounters(Base):
                              stderr=subprocess.PIPE)
         out, err = p.communicate()
         if err:
-            log.info("snmplib.py: updateCounters32() ERROR: %s\n"%(str(err)))
+            #log.info("snmplib.py: updateCounters32() ERROR: %s\n"%(str(err)))
             return
         
         # process snmpwalk output
@@ -162,7 +162,7 @@ class SnmpCounters(Base):
                              stderr=subprocess.PIPE)
         out, err = p.communicate()
         if err:
-            log.info("snmplib.py: updateCounters32() ERROR: %s\n"%(str(err)))
+            #log.info("snmplib.py: updateCounters32() ERROR: %s\n"%(str(err)))
             return
 
         # process snmpwalk output
