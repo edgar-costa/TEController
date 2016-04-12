@@ -549,6 +549,7 @@ class LBController(object):
                             edge_data = dag.get_edge_data(u,v)
                             edge_data['active'] = True
                             edge_data['fibbed'] = False
+                            edge_data['defaul'] = True
                             edge_data['ongoing_flows'] = False
 
             # Add DAG to prefix
