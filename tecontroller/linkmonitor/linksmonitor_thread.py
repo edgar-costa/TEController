@@ -71,10 +71,8 @@ class LinksMonitorThread(threading.Thread):
             
     def run(self):
         while True:
-            # Go to sleep interval time /2
-            time.sleep(self.interval/2.0)
-
-            #start_time = time.time()
+            start_time = time.time()
+            
             # Read capacities from SNMP
             self.updateLinksCapacities()
 
@@ -82,6 +80,14 @@ class LinksMonitorThread(threading.Thread):
             if self.logfile:
                 self.logLinksLoads()
             #log.info("It took %.3f to update and log the new capacities readout\n"%(time.time()-start_time))
+            
+            # Go to sleep remaining time to interval
+            elapsed_time = (time.time() - start_time)
+            if elapsed_time < self.interval:
+                sleep_time = self.interval - elapsed_time
+                time.sleep(sleep_time)
+            else:
+                pass
             
     def updateLinksCapacities(self):
         """
