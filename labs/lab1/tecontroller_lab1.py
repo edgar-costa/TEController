@@ -46,21 +46,33 @@ class TEControllerLab1(SimplePathLB):
         """Main loop that deals with new incoming events
         """
         getTimeout = 1
+
+        logtimes = False
+        
         while not self.isStopped():            
             # Get event from the queue (blocking with timeout)
             try:
+                if logtimes:
+                    start_time = time.time()
+                    log.info("*** Waiting for event to arrive...\n")
                 event = self.eventQueue.get(timeout=getTimeout)
             except:
+                if logtimes:
+                    log.info("*** Waited %s seconds. Timeout occurred...\n"%(str(time.time()-start_time)))
                 event = None
                 
             # Check if flows allocations still pending for feedback
             if self.pendingForFeedback != {}:
+                log.info("*** Some Flows Pending for Feedback...\n")
                 if not self.feedbackResponseQueue.empty():
                     # Read element from responseQueue
                     responsePathDict = self.feedbackResponseQueue.get()
                     self.dealWithAllocationFeedback(responsePathDict)
                     
             if event:
+                log.info("*** Got event!...\n")
+                start_time = time.time()
+                
                 if event['type'] == 'newFlowStarted':
                     # Log it
                     log.info(lineend)
@@ -76,6 +88,9 @@ class TEControllerLab1(SimplePathLB):
                         with self.flowAllocationLock:
                             # Deal with new flow                    
                             self.dealWithNewFlow(flow)
+
+                    if logtimes:
+                        log.info("*** It took %s seconds to deal with new flow event...\n"%(str(time.time()-start_time)))
                 else:
                     t = time.strftime("%H:%M:%S", time.gmtime())
                     log.info("%s - run(): UNKNOWN Event\n"%t)
@@ -122,7 +137,7 @@ class TEControllerLab1(SimplePathLB):
                     # Update current DAG (ongoing_flows = False) should be
                     # done here. But since it's not used anyway, we skip
                     # it for now...
-
+                    
                     # Remove flow from pendingForFeedback
                     if f in self.pendingForFeedback.keys():
                         self.pendingForFeedback.pop(f)
@@ -239,11 +254,11 @@ class TEControllerLab1(SimplePathLB):
                 # Here we have to think what to do when probability of
                 # congestion is too high.
                 log.info("\t* ECMP Should be de-activated!\n")
-                pass
+                self.flowAllocationAlgorithm(dst_prefix, flow, currentPaths)
 
             else:
                 log.info("\t* For the moment, returning always False...\n")
-                # Allocate flow to current paths
+                # Allocate flow t current paths
                 self.addAllocationEntry(dst_prefix, flow, currentPaths)
 
                 # Adding flow and paths to pendingForFeedback
@@ -388,7 +403,10 @@ class TEControllerLab1(SimplePathLB):
 
         TODO
         """
-        return False
+        if congProb > 0.5:
+            return True
+        else:
+            return False
 
     def getNetworkWithoutFullEdges(self, network_graph, flow_size):
         """Returns a nx.DiGraph representing the network graph without the
