@@ -131,7 +131,6 @@ class SnmpCounters(Base):
         # removing sit0 interface
         #remove_sit0_action = [ifaces_dict.remove(iface) for iface in ifaces_dict if iface['name'] == 'sit0']
         return ifaces_dict
-
     
     def updateCounters32(self):
         """This function should use pySnmp library instead. But due to a bug,
@@ -140,20 +139,20 @@ class SnmpCounters(Base):
         start = time.time()
         # ifInOctets
         # call snmpwalk
-        p = subprocess.Popen(['snmpwalk', '-v', '1', '-c', dconf.SNMP_CommunityString, self.routerIp, 'ifInOctets'],
-                             stdout=subprocess.PIPE,
-                             stderr=subprocess.PIPE)
-        out, err = p.communicate()
-        if err:
-            #log.info("snmplib.py: updateCounters32() ERROR: %s\n"%(str(err)))
-            return
+        #p = subprocess.Popen(['snmpwalk', '-v', '1', '-c', dconf.SNMP_CommunityString, self.routerIp, 'ifInOctets'],
+        #                     stdout=subprocess.PIPE,
+        #                     stderr=subprocess.PIPE)
+        #out, err = p.communicate()
+        #if err:
+        #    #log.info("snmplib.py: updateCounters32() ERROR: %s\n"%(str(err)))
+        #    return
         
         # process snmpwalk output
-        numbers_t = [a.split(" = ")[0] for a in out.split('\n') if len(a.split(" = ")) == 2]
-        numbers = [a[a.index('.')+1:] for a in numbers_t if a][1:]
+        #numbers_t = [a.split(" = ")[0] for a in out.split('\n') if len(a.split(" = ")) == 2]
+        #numbers = [a[a.index('.')+1:] for a in numbers_t if a][1:]
         
-        in_counters_t = [a.split(" = ")[1] for a in out.split('\n') if len(a.split(" = ")) == 2]
-        in_counters = np.asarray([int(a[a.index(':')+2:]) for a in in_counters_t if a][1:])
+        #in_counters_t = [a.split(" = ")[1] for a in out.split('\n') if len(a.split(" = ")) == 2]
+        #in_counters = np.asarray([int(a[a.index(':')+2:]) for a in in_counters_t if a][1:])
         
         # ifOutOctets
         # call snmpwalk
@@ -170,7 +169,8 @@ class SnmpCounters(Base):
         out_counters = np.asarray([int(a[a.index(':')+2:]) for a in out_counters_t if a][1:])
 
         # Treated as np.arrays from here on
-        total_counters = np.multiply((in_counters + out_counters), 8) # in bits
+        #total_counters = np.multiply((in_counters + out_counters), 8) # in bits
+        total_counters = np.multiply(out_counters, 8) # in bits
                 
         # update interfaces data structure
         updateTime = time.time()
