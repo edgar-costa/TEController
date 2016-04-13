@@ -492,10 +492,11 @@ class TEControllerLab2(SimplePathLB):
             new_adag = self.addVirtualCapacities(new_adag, dst_prefix)
 
             import ipdb; ipdb.set_trace()
-            # From here down, not ready yet.
+            # Compute new path taken by sources in new re-computed DAG
+            new_sources = self.computeNewSources(new_adag, flow, dst_prefix)
 
             # Compute congestion probability Pc
-            congProb = self.computeCongProb(probAlgo, new_adag, dst_prefix)
+            congProb = self.computeCongProb(probAlgo, new_adag, new_sources)
 
             # If found congProb low enough
             if self.isLowEnough(congProb):
@@ -524,27 +525,6 @@ class TEControllerLab2(SimplePathLB):
         # Fib it
 
         # Update flows and leave
-
-    # TODO FUNCTIONS #########################################
-
-    def getNIterations(self, all_dags):
-        # We iterate all of them now
-
-        return len(all_dags)
-
-    def shouldCalculateAllDAGs(self):
-
-        return True
-
-    def isLowEnough(self, congProb):
-        if congProb < 0.1:
-            return True
-        else:
-            return False
-
-    def chooseProbabilityAlgorithm(self):
-        # This should be replaced by the results of the evaluation
-        return 'exact'
 
     def recomputeAllSourcesDag(self, all_dag, new_ridx_dag):
         """
@@ -607,7 +587,78 @@ class TEControllerLab2(SimplePathLB):
             if 'flag' in data.keys():
                 data.pop('flag')
 
-        return all_dag
+        return all_dag    
+
+    # TODO FUNCTIONS #########################################
+
+    def getNIterations(self, all_dags):
+        # We iterate all of them now
+
+        return len(all_dags)
+
+    def shouldCalculateAllDAGs(self):
+
+        return True
+
+    def isLowEnough(self, congProb):
+        if congProb < 0.1:
+            return True
+        else:
+            return False
+
+    def chooseProbabilityAlgorithm(self):
+        # This should be replaced by the results of the evaluation
+        return 'exact'
+
+    def computeNewSources(new_adag, flow, dst_prefix):
+        """
+        Returns the list of tuples that assigns each flow to
+        dst_prefix to its new computed on the new all-sources dag.
+        """
+        # Fetch allocated flows
+        ongoing_flows = self.getAllocatedFlows(dst_prefix)
+        flows = [flow]+[f for (f, p) in ongoing_flows]
+
+        # Calculate ingress routers for each flow
+        irs = map(flows, key=lambda x: self.getIngressRouter(x))
+
+        # Calculate egress router (should be the same for all)
+        er = self.getEgressRouter(flow)
+
+        # Result list of tuples (flow, [p1, p2])
+        sources_to_paths = []
+
+        # Search for all paths for each flow
+        for index, f in enumerate(flows):
+            all_flow_paths = daglib.getAllPathsLim(new_adag, irs[index], er, 0)
+            sources_to_paths.append((f, all_flow_paths))
+
+        return sources_to_paths
+
+    def computeCongProb(algorithm, all_dag, sources):
+        """
+        :param algorithm: name of the algorithm to compute the probability with.
+        :param all_dag: all routers dag with virtual capacities
+        :param sources: list of tuples (f, pl) with flows and corresponding allocated
+                        possible paths
+        """
+        # Convert flows into sizes and paths into capacities
+        flow_sizes = []
+        path_mincaps = []
+        for (f, pl) in sources:
+            flow_sizes.append(f.size)
+            caps = []
+            for p in pl:
+                cap = self._getVirtualMinCapacity(all_dag, p)
+                caps.append(cap)
+
+        if algorithm == 'exact':
+                self.pc.ExactCongestionProbability(path_capacities, flow_sizes)
+        elif algorithm == 'sampled':
+            pass
+        else:
+            pass
+
 
     ##########################################################
 
@@ -744,7 +795,6 @@ class TEControllerLab2(SimplePathLB):
         else:
             pass
         
-    
     def SimplifiedProbability(self, all_path_subsets, flow_sizes):
         # Get biggest flow size
         max_flow_size = max(flow_sizes)
@@ -793,7 +843,7 @@ class TEControllerLab2(SimplePathLB):
 
         return chosen_paths
 
-    def ExactProbability(self, all_path_subsets, flow_sizes):
+    def ExactProbability(self, path_capacities, flow_sizes):
         """
         """
         # Iterate path combinations and choose the one that minimizes

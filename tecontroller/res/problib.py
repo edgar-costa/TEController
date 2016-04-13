@@ -65,12 +65,16 @@ class ProbabiliyCalculator(object):
             self.dumpSDict()
             return 1.0 - sncp
 
-    def ExactCongestionProbability(self, m, n):
+    def ExactCongestionProbability(self, path_capacities, flow_sizes):
         """
-        In this case, m is a list of paths available capacities : [c1, c2, ...]
+        In this case, path_capacities is a list of lists, representing possible flow path/s 
+        min available capacities : [[c1, c2], [c2]...]
         and n is a list of flow sizes: [s1, s2, ...]
 
         returns congestion probability.
+
+
+        (TODO: SHOULD BE RE-WRITTEN)
         """
         all_allocs = [t for p in
                       it.combinations_with_replacement(range(len(m)), len(n)) for t
