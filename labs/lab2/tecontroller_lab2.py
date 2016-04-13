@@ -453,10 +453,8 @@ class TEControllerLab2(SimplePathLB):
         # Get current matching destination prefix
         dst_prefix = dst_prefix
 
-        # Get current DAG for destination prefix
-        cdag = self.getCurrentDag(dst_prefix)
         # Get current active DAG (all-sources dag)
-        adag = self.getActiveDag(cdag)
+        adag = self.getActiveDag(dst_prefix)
 
         # Get flow ingress and egress routers
         ingress_rid = self.getIngressRouter(flow)
