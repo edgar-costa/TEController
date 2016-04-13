@@ -97,8 +97,8 @@ class TEControllerLab2(SimplePathLB):
 
             else:
                 if self.pendingForFeedback != {}:
-                # Put into queue
-                self.feedbackRequestQueue.put(self.pendingForFeedback.copy())
+                    # Put into queue
+                    self.feedbackRequestQueue.put(self.pendingForFeedback.copy())
 
     def dealWithAllocationFeedback(self, responsePathDict):
         # Acquire locks for self.flow_allocation and self.dags
@@ -514,13 +514,13 @@ class TEControllerLab2(SimplePathLB):
 
             else:
                 # Note down results
-                results.append((ri_dx_dag, new_adag, congProb)
+                results.append((ri_dx_dag, new_adag, congProb))
 
         # Choose ri-dx DAG that minimizes Pc
         # If we didn't found a dag with congProb low enough, we need
         # to chose the one that minimizes congProb
         if not foundEarlyDag:
-            chosen = min(results, key:lambda x: x[2])
+            chosen = min(results, key=lambda x: x[2])
             chosen_ridx_dag = chosen[0]
             chosen_alls_dag = chosen[1]
             chosen_congProb = chosen[2]
@@ -594,7 +594,7 @@ class TEControllerLab2(SimplePathLB):
 
         # Extract the single only path
         try:
-            sources = [(f, p[0]) if len(p) == 1 else raise KeyError for (f, p) in sources]
+            sources = [(f, p[0]) for (f, p) in sources if len(p) == 1]
         except:
             log.info("ERROR: some flows yet to receive Feedback")
             import ipdb; ipdb.set_trace()
