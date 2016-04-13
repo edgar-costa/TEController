@@ -47,8 +47,7 @@ class TEControllerLab1(SimplePathLB):
         """
         getTimeout = 1
 
-        logtimes = False
-        
+        logtimes = False        
         while not self.isStopped():            
             # Get event from the queue (blocking with timeout)
             try:
@@ -63,14 +62,15 @@ class TEControllerLab1(SimplePathLB):
                 
             # Check if flows allocations still pending for feedback
             if self.pendingForFeedback != {}:
-                log.info("*** Some Flows Pending for Feedback...\n")
+                if logtimes:
+                    log.info("*** Some Flows still pending for Feedback...\n")
                 if not self.feedbackResponseQueue.empty():
                     # Read element from responseQueue
                     responsePathDict = self.feedbackResponseQueue.get()
                     self.dealWithAllocationFeedback(responsePathDict)
                     
             if event:
-                log.info("*** Got event!...\n")
+                #log.info("*** Got event!...\n")
                 start_time = time.time()
                 
                 if event['type'] == 'newFlowStarted':

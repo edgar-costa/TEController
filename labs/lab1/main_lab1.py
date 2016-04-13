@@ -88,11 +88,11 @@ class Lab1Topo(IPTopo):
         r3 = self.addRouter(R3, cls=MyCustomRouter)
         r4 = self.addRouter(R4, cls=MyCustomRouter)
 
-        self.addLink(r1, r2, cost=1)
-        self.addLink(r1, r4, cost=1)
-        self.addLink(r1, r3, cost=2)
-        self.addLink(r2, r3, cost=1)
-        self.addLink(r3, r4, cost=1)
+        self.addLink(r1, r2, cost=2)
+        self.addLink(r1, r4, cost=2)
+        self.addLink(r1, r3, cost=4)
+        self.addLink(r2, r3, cost=2)
+        self.addLink(r3, r4, cost=2)
 
         # Create broadcast domains
         self.addLink(r1, self.addHost(H10)) 

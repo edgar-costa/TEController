@@ -36,18 +36,17 @@ class feedbackThread(threading.Thread):
 
         A dictionary indexed by flow -> allocated path is returned
         """
-        queueTimeout = 1 #seconds
+        queueLookupPeriod = 1 #seconds
         while True:
             try:
-                requestFlowsDict = self.requestQueue.get(timeout=queueTimeout) # Blocking read
+                requestFlowsDict = self.requestQueue.get(timeout=queueLookupPeriod) # Blocking read
             except:
                 # Update flow sets for each router
                 self.updateRouterFlowSets()
             else:
                 responsePathDict = self.dealWithRequest(requestFlowsDict)
                 if responsePathDict != {}:
-                    self.responseQueue.put(responsePathDict)
-                    
+                    self.responseQueue.put(responsePathDict)                    
                 self.updateRouterFlowSets()
 
     def updateRouterFlowSets(self):
