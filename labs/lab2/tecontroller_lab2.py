@@ -534,7 +534,7 @@ class TEControllerLab2(SimplePathLB):
 
     # TODO FUNCTIONS #########################################
 
-    def getNInterations(self, all_dags):
+    def getNIterations(self, all_dags):
         # We iterate all of them now
 
         return len(all_dags)
