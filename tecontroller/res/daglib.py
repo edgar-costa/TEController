@@ -118,6 +118,42 @@ def getAllPossibleDags(graph, start, end):
    			# not seen before
    			uniqueDags += [(rdag.edges(), 1, rdag)]
    		else:
+   			(ude, fq, ud) = seenUD[0]
+   			uniqueDags.remove(seenUD[0])
+   			uniqueDags += [(ude, fq+1, ud)]
+
+   	#Collect unique dags and return them
+   	allPossibleDags = [c for (a,b,c) in uniqueDags]
+
+   	return allPossibleDags
+
+def getAllPossibleMultiplePathDags(graph, start, end):
+	"""
+	Given a network graph, and start and end nodes, computes
+	a random DAG from start towards end nodes. 
+	"""
+	## Calculate firts all paths from start to end
+	all_paths = getAllPathsLim(graph, start, end, k=0)
+
+    # Calculate all combinations of possible paths.
+   	all_path_subsets = []
+   	action = [all_path_subsets.append(c) for i in range(2, len(all_paths)+1) for c in list(it.combinations(all_paths, i))]
+
+   	# Compute merge of dags
+   	allRandomDags = []
+   	for subset in all_path_subsets:
+   		mergedDag = getMergedDag(start, end, subset)
+   		allRandomDags.append(mergedDag)
+
+   	# Check for duplicates
+   	uniqueDags = []
+	for rdag in allRandomDags:
+   		# Search first if seen in uniqueDags
+   		seenUD = [e for e in uniqueDags if rdag.edges() == e[0]]
+   		if seenUD == []:
+   			# not seen before
+   			uniqueDags += [(rdag.edges(), 1, rdag)]
+   		else:
    
    			(ude, fq, ud) = seenUD[0]
    			uniqueDags.remove(seenUD[0])
@@ -172,36 +208,36 @@ def getAllPathsLim(graph, start, end, k, path=[]):
     return paths
 
 
-## TESTS #####################################
+# ## TESTS #####################################
 
-# Create sample graph
-graph1 = nx.DiGraph()
-edges1 = [('A','B'),('B','A'),
-	('A','F'),('F','A'),
-	('A','D'),('D','A'),
-	('B','F'),('F','B'),
-	('F','E'),('E','F'),
-	('E','D'),('D','E'),
-	('D','C'),('C','D'),
-	('C','A'),('A','C'),
-	('C','B'),('B','C')]
-graph1.add_edges_from(edges1)
+# # Create sample graph
+# graph1 = nx.DiGraph()
+# edges1 = [('A','B'),('B','A'),
+# 	('A','F'),('F','A'),
+# 	('A','D'),('D','A'),
+# 	('B','F'),('F','B'),
+# 	('F','E'),('E','F'),
+# 	('E','D'),('D','E'),
+# 	('D','C'),('C','D'),
+# 	('C','A'),('A','C'),
+# 	('C','B'),('B','C')]
+# graph1.add_edges_from(edges1)
 
 
-graph2 = nx.DiGraph()
-edges2 = [('A','B'),('B','A'),
-	('A','C'),('C','A'),
-	('B','C'),('C','B'),
-	('A','D'),('D','A'),
-	('D','C'),('C','D')]
+# graph2 = nx.DiGraph()
+# edges2 = [('A','B'),('B','A'),
+# 	('A','C'),('C','A'),
+# 	('B','C'),('C','B'),
+# 	('A','D'),('D','A'),
+# 	('D','C'),('C','D')]
 
-graph2.add_edges_from(edges2)
+# graph2.add_edges_from(edges2)
 
-#randomDags = []
-#for i in range(10):
-	#randomDag = getRandomDAG(graph, 'A', 'E')
-#	randomDag = getRandomSinglePathDAG(graph, 'A', 'E')
-#	print randomDag.edges()
+# #randomDags = []
+# #for i in range(10):
+# 	#randomDag = getRandomDAG(graph, 'A', 'E')
+# #	randomDag = getRandomSinglePathDAG(graph, 'A', 'E')
+# #	print randomDag.edges()
 
-apd = getAllPossibleDags(graph2, 'A', 'C')
-import ipdb; ipdb.set_trace()
+# apd = getAllPossibleDags(graph2, 'A', 'C')
+# import ipdb; ipdb.set_trace()
