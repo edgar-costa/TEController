@@ -9,6 +9,7 @@ import time
 import Queue
 import itertools as it
 import sys
+import random
 import tecontroller.res.daglib as daglib
 
 log = get_logger()
