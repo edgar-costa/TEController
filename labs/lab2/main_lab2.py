@@ -37,6 +37,9 @@ R4 = 'r4'
 H10 = 'h10'
 H11 = 'h11'
 H12 = 'h12'
+H13 = 'h13'
+H14 = 'h14'
+H15 = 'h15'
 
 H20 = 'h20'
 H21 = 'h21'
@@ -57,23 +60,14 @@ BW = 1  # Absurdly low bandwidth for easy congestion (in Mb)
 class Lab1Topo(IPTopo):
     def build(self, testfile, pcalgorithm, *args, **kwargs):
         """
-            +--+         +--+  +--+
-            |S4|         |D |  |T |
-   +--+     +--+         +--+  +--+
-   |S3|___    |           |   __/
-   +--+   \_+---+        +---+    +--+
-            | R2|--------|R3 |----|X |
-            +---+       /+---+__  +--+
-              |     ___/   |    \__+--+
-           10 |    /       |       |Y |
-              |   /        |       +--+
- +--+      +----+'       +---+      +--+
- |S1|------| R1 |--------| R4|------|C1|
- +--+     _+----+       _+---+_     +--+
-        _/    |       _/   |   \_
-    +--+    +---+   +--+  +--+   \+---+
-    |M1|    |S2 |   |S5|  |TG|    |LBC|
-    +--+    +---+   +--+  +--+    +---+
+         h2's        h3's
+            \        /
+            r2------r3
+             | _____/|  
+           10|/      |
+            r1------r4---[TEC,TG,FibC]
+            /         \
+          h1's        h4's
         """
         # Add routers and router-router links
         r1 = self.addRouter(R1, cls=MyCustomRouter)
@@ -116,7 +110,14 @@ class Lab1Topo(IPTopo):
         c3 = self.addHost(LBC, isLBController=True, algorithm='lab2', pcalgorithm=pcalgorithm)
         self.addLink(c3, r4)
 
+        # Create the monitoring network
+        monitorSwitch = self.addSwitch('s1')
+        # connect nodes in it
+        nodes_to_monitor = [r1, r2, r3, r4, c2, c3]
+        for n in nodes_to_monitor:
+            self.addLink(monitorSwitch, n, cost=-1)
 
+            
 class Lab1Topo2(IPTopo):
     def build(self, testfile,pcalgorithm, *args, **kwargs):
 
