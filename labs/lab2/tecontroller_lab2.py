@@ -395,6 +395,15 @@ class TEControllerLab2(SimplePathLB):
         """
         return False
 
+    def utilizationIncrease(self, path, flow):
+        # Get edge with minimum capacity of the path
+        ((x,y), minCap) = self.getMinCapacityEdge(path)
+        bw = self.cgc[x][y].get('bw')
+
+        currentLoad = (bw - minCap)/float(bw)
+        nextLoad = ((bw - minCap) + flow.size)/float(bw)
+        return nextLoad - currentLoad
+
     def getIngressRouter(self, flow):
         """
         """
