@@ -9,6 +9,7 @@ import time
 import Queue
 import itertools as it
 import sys
+import tecontroller.res.daglib as daglib
 
 log = get_logger()
 lineend = "-"*100+'\n'
@@ -17,7 +18,7 @@ lineend = "-"*100+'\n'
 ALGORITHM = 'sampled'
 
 class TEControllerLab2(SimplePathLB):
-    def __init__(self, probabilityAlgorithm='simplified', congestionThreshold = 0.95):
+    def __init__(self, probabilityAlgorithm=None, congestionThreshold = 0.95):
         
         # Call init method from LBController
         super(TEControllerLab2, self).__init__()
@@ -57,11 +58,23 @@ class TEControllerLab2(SimplePathLB):
     def run(self):
         """Main loop that deals with new incoming events
         """
+
+        getTimeout = 1
+
         while not self.isStopped():
-            # Get event from the queue (blocking)
-            event = self.eventQueue.get()
-                        
-            if event['type'] == 'newFlowStarted':
+            try:
+                event = self.eventQueue.get(timeout=getTimeout)
+            except:
+                event = None
+                    
+            # Check if flows allocations still pending for feedback
+            if self.pendingForFeedback != {}:
+                if not self.feedbackResponseQueue.empty():
+                    # Read element from responseQueue
+                    responsePathDict = self.feedbackResponseQueue.get()
+                    self.dealWithAllocationFeedback(responsePathDict)
+
+            if event and event['type'] == 'newFlowStarted':
                 # Log it
                 log.info(lineend)
                 t = time.strftime("%H:%M:%S", time.gmtime())
@@ -77,10 +90,62 @@ class TEControllerLab2(SimplePathLB):
                         # Deal with new flow                    
                         self.dealWithNewFlow(flow)
                     
-            else:
+            elif event:
                 t = time.strftime("%H:%M:%S", time.gmtime())
                 log.info("%s - run(): UNKNOWN Event\n"%t)
                 log.info("\t* Event: "%str(event))
+
+            else:
+                if self.pendingForFeedback != {}:
+                # Put into queue
+                self.feedbackRequestQueue.put(self.pendingForFeedback.copy())
+
+    def dealWithAllocationFeedback(self, responsePathDict):
+        # Acquire locks for self.flow_allocation and self.dags
+        # dictionaries
+        t = time.strftime("%H:%M:%S", time.gmtime())
+        log.info("%s - Allocation feedback received: processing...\n"%t)
+        
+        self.flowAllocationLock.acquire()
+        self.dagsLock.acquire()
+
+        # Iterate flows for which there is allocation feedback
+        for (f, p) in responsePathDict.iteritems():
+            flow_dst_prefix = self.getCurrentOSPFPrefix(f.dst.compressed)
+            flow_dst_prefix = flow_dst_prefix.compressed
+            
+            # Update flow_allocation dictionary
+            if flow_dst_prefix in self.flow_allocation.keys():
+                pl = self.flow_allocation[flow_dst_prefix].get(f, None)
+                if pl == None:
+                    # It means flow finished... so we should remove it
+                    # from pendingForFeedback
+                    self.pendingForFeedback.pop(f)
+                else:
+                    # Log a bit
+                    to_log = "\t* %s allocated to %s.\n\t  Previous options: %s\n"
+                    log.info(to_log%(self.toLogFlowNames(f), self.toLogRouterNames([p]), self.toLogRouterNames(pl)))
+
+                    # Update allocation
+                    self.flow_allocation[flow_dst_prefix][f] = [p]
+
+                    # Update current DAG (ongoing_flows = False) should be
+                    # done here. But since it's not used anyway, we skip
+                    # it for now...
+                    
+                    # Remove flow from pendingForFeedback
+                    if f in self.pendingForFeedback.keys():
+                        self.pendingForFeedback.pop(f)
+                    else:
+                        raise KeyError
+            else:
+                # It means flow finished... so we should remove it
+                # from pendingForFeedback
+                self.pendingForFeedback.pop(f)
+
+        # Release locks
+        self.flowAllocationLock.release()
+        self.dagsLock.release()
 
     def dealWithNewFlow(self, flow):
         """
@@ -93,6 +158,7 @@ class TEControllerLab2(SimplePathLB):
             # and release the lock.
             self.cgc = self.cg.copy()
 
+        # Log capacities in stdout
         t = time.strftime("%H:%M:%S", time.gmtime())
         log.info("%s - Copy of the capacity graph done. Current edge usages:\n"%t)
         for (x, y, data) in self.cgc.edges(data=True):
@@ -136,13 +202,15 @@ class TEControllerLab2(SimplePathLB):
             # ECMP not active
             ecmp_active = False
             log.info("\t* ECMP is NOT active\n")
-            
+        
+        # Error here
         else:
             t = time.strftime("%H:%M:%S", time.gmtime())
             to_log = "%s - dealWithNewFlow(): ERROR. No path between src and dst\n"
             log.info(to_log%t)
             return
 
+        # ECMP active in default paths
         if ecmp_active:
             # Calculate congestion probability
             
@@ -155,12 +223,9 @@ class TEControllerLab2(SimplePathLB):
             ingress_router = currentPaths[0][0]
             egress_router = currentPaths[0][-1]
 
-            # compute congestion probability
+            # Compute congestion probability
             t = time.strftime("%H:%M:%S", time.gmtime())
             log.info("%s - Computing flow congestion probability\n"%t)
-            #log.info("\t * DAG: %s\n"%(self.toLogDagNames(adag).edges(data=True)))
-            #log.info("\t * Ingress router: %s\n"%ingress_router)
-            #log.info("\t * Engress router: %s\n"%egress_router)
             log.info("\t* Flow size: %d\n"%flow.size)
             log.info("\t* Equal Cost Paths: %s\n"%self.toLogRouterNames(currentPaths))
             
@@ -182,13 +247,17 @@ class TEControllerLab2(SimplePathLB):
             if self.shouldDeactivateECMP(adag, currentPaths, congProb):
                 # Here we have to think what to do when probability of
                 # congestion is too high.
-                log.info("\t* ECMP Should be de-activated!\n")
-                pass
+                # Here we have to think what to do when probability of
+                # congestion is too high.
+                log.info("\t* ECMP SHOULD be de-activated!\n")
+                self.flowAllocationAlgorithm(dst_prefix, flow, currentPaths)
+
             else:
-                log.info("\t* For the moment, returning always False...\n")
-                
+                log.info("\t* ECMP Should NOT de-activated!\n")
                 # Allocate flow to current paths
                 self.addAllocationEntry(dst_prefix, flow, currentPaths)
+
+        # ECMP is not active in default paths       
         else:
             # currentPath is still a list of a single list: [[A,B,C]]
             # but makes it more understandable
@@ -198,21 +267,40 @@ class TEControllerLab2(SimplePathLB):
             if self.canAllocateFlow(flow, currentPath):
                 # No congestion. Do nothing
                 t = time.strftime("%H:%M:%S", time.gmtime())
-                to_log = "%s - Flow can be ALLOCATED. Path: %s, min capacity: %s\n"
-                log.info(to_log%(t, self.toLogRouterNames(currentPath), self.getMinCapacity(currentPath[0])))
-                
+                log.info("%s - Flow can be ALLOCATED in current path: %s\n"%(t, self.toLogRouterNames(currentPath)))
+
+                (edge, currentLoad) = self.getFullestEdge(currentPath[0])
+                increase = self.utilizationIncrease(currentPath[0], flow)
+                log.info("\t* Min capacity edge %s is %.1f%% full\n"%(str(edge), currentLoad*100))
+                log.info("\t* New Flow with size %d represents an increase of %.1f%%\n"%(flow.size, increase*100))
+
                 # We just allocate the flow to the currentPath
                 self.addAllocationEntry(dst_prefix, flow, currentPath)
 
             else:
                 # Congestion created. 
                 t = time.strftime("%H:%M:%S", time.gmtime())
-                to_log = "%s - Flow will cause CONGESTION. Path: %s, min capacity: %s\n"
-                log.info(to_log%(t, self.toLogRouterNames(currentPath), self.getMinCapacity(currentPath[0])))
-                                 
+                log.info("%s - Flow will cause CONGESTION in current path: %s\n"%(t, self.toLogRouterNames(currentPath)))
+
+                (edge, currentLoad) = self.getFullestEdge(currentPath[0])
+                increase = self.utilizationIncrease(currentPath[0], flow)
+                log.info("\t* Min capacity edge %s is %.1f%% full\n"%(str(edge), currentLoad*100))
+                log.info("\t* New Flow with size %d represents an increase of %.1f%%\n"%(flow.size, increase*100))
+            
                 # Call the subclassed method to properly 
                 # allocate flow to a congestion-free path
                 self.flowAllocationAlgorithm(dst_prefix, flow, currentPath)
+
+    def shouldDeactivateECMP(self, dag, currentPaths, congProb):
+        """This function returns a boolean output that decides wheather we
+        should deactivate ECMP.
+
+        TODO
+        """
+        if congProb > 0.5:
+            return True
+        else:
+            return False
 
     def canAllocateFlow(self, flow, path_list):
         """Returns true if there is at least flow.size bandwidth available in
@@ -232,6 +320,14 @@ class TEControllerLab2(SimplePathLB):
                 if nextload > self.congestionThreshold:
                     return False
         return True
+
+    def getFullestEdge(self, path):
+        # Get edge with minimum capacity of the path
+        ((x,y), minCap) = self.getMinCapacityEdge(path)
+        bw = self.cgc[x][y].get('bw')
+
+        currentLoad = (bw - minCap)/float(bw)
+        return ((x,y), currentLoad)
 
     def getCurrentEdgeLoad(self, x,y):
         cap = self.cgc[x][y].get('capacity')
@@ -350,160 +446,173 @@ class TEControllerLab2(SimplePathLB):
 
         # Get current DAG for destination prefix
         cdag = self.getCurrentDag(dst_prefix)
-        
-        # Get required capacity
-        required_capacity = flow['size']
-        
-        # Calculate all possible paths for flow
-        all_paths = self.getAllPathsRanked(self.initial_graph, src_cr, dst_prefix, ranked_by='length')
+        # Get current active DAG (all-sources dag)
+        adag = self.getActiveDag(cdag)
 
-        # Get already ongoing flows for that prefix
-        ongoing_flow_allocations = self.getAllocatedFlows(dst_prefix)
+        # Get flow ingress and egress routers
+        ingress_rid = self.getIngressRouter(flow)
+        egress_rid = self.getEgressRouter(flow)
 
-        # Filter only those that are able to allocate flow + ongoing flows moved without congestion
-        congestion_free_paths = [path for (path, plen) in all_paths if self.canAllocateFlow(flow, [path[:-1]]) == True]
-        
-        # Check if congestion free paths exist
-        if len(congestion_free_paths) == 0:
-
-            # No. So allocate it in the least congested path.
-            t = time.strftime("%H:%M:%S", time.gmtime())
-            log.info("%s - Flow can't be allocated in a single path\n"%t)
-
-            self.ECMPAlgorithm(dst_prefix, flow)
-
+        if self.shouldCalculateAllDAGs():
+            # Check all DAGs
+            all_dags = daglib.getAllPossibleDags(self.initial_graph, ingress_rid, egress_rid)  
         else:
-            # Yes. There is a path. Let's check though if there is at least one path 
-            # that when forcing new DAG does not create congestion.
+            # Check only Single-Path dags
+            all_dags = daglib.getAllPossibleSimplePathDags(self.initial_graph, ingress_rid, egress_rid)
+
+        # Choose first which probability calculation algorithm is
+        # going to be used
+        if not self.probabilityAlgorithm:
+            probAlgo = self.chooseProbabilityAlgorithm()
+        else:
+            probAlgo = self.probabilityAlgorithm
+
+        # Randomly shuffle DAGs
+        random.shuffle(all_dags)
+
+        ## Repeat n times:
+        n_iterations = self.getNIterations(all_dags)  
+        results = []
+        foundEarlyDag = False
         
-            t = time.strftime("%H:%M:%S", time.gmtime())
-            log.info("%s - Found path/s that can allocate flow\n"%t)
+        import ipdb; ipdb.set_trace() # TRACE HERE
+        for i in range(n_iterations):
+            # Try ouf unique random ri-dx DAG
+            ri_dx_dag = all_dags[i]
 
-            path_congestion_pairs = []
+            # Compute new all-sources DAG
+            if not self.probabilityAlgorithm:
+                self.chooseProbabilityAlgorithm()
 
-            path_found = False
-            for (path, plen) in all_paths:
-                # Remove the destination subnet hop node from the path
-                path = path[:-1]
-                    
-                # Create virtual copy of capacity graph
-                cg_copy = self.cgc.copy()
+            # Compute the new all-routers DAG
+            new_adag = self.recomputeAllSourcesDag(adag, ri_dx_dag)
 
-                # Initialize accumulated required capacity
-                accumulated_required_capacity = required_capacity
-                accumulated_congestion = 0
-                    
-                # Accumulate flows that will be moved
-                total_moved_flows = []
-                    
-                for index, node in enumerate(path[:-1]):
-                    # Get flows that will be moved to path
-                    moved_flows_pairs = [(f, pl) for (f, pl) in ongoing_flow_allocations for p in pl if node in p]
-                    moved_flows = [f for (f,pl) in moved_flows_pairs]
+            # Add virtual capacities to new_adag
+            new_adag = self.addVirtualCapacities(new_adag, dst_prefix)
 
-                    # Accumulate the sizes of the flows that are moved to path
-                    accumulated_required_capacity += sum([f.size for f in moved_flows])
+            import ipdb; ipdb.set_trace()
+            # From here down, not ready yet.
 
-                    # Virtually substract capacities from ongoing flows
-                    for (f, pl) in moved_flows_pairs:
-                        # Accumulate edges where capacities have to be virtually changed
-                        p_edges = set()
-                        action = [p_edges.update(set(zip(p[:-1], p[1:]))) for p in pl]
-                        for (x,y) in list(p_edges):
-                            # Add flow size back to available capacity
-                            cg_copy[x][y]['capacity'] += f.size
+            # Compute congestion probability Pc
+            congProb = self.computeCongProb(probAlgo, new_adag, dst_prefix)
 
-                    # Add moved flows to total_moved_flows
-                    total_moved_flows += moved_flows
-                        
-                    # Calculate edge required capacity
-                    edge = (node, path[index+1])
-                    congestion = accumulated_required_capacity - cg_copy[edge[0]][edge[1]]['capacity']
-
-                    if congestion > 0:
-                        accumulated_congestion += congestion
-
-                if accumulated_congestion == 0:
-                    # Next shortest-path that does not create congestion found!
-                    path_found = True
-                    chosen_path = path
-                    chosen_path_moved_flows = total_moved_flows
-                    break
-
-                # Choosing this path, would create such amount of accumulated congestion
-                # Append it in variable
-                path_congestion_pairs.append((path, accumulated_congestion, total_moved_flows))
-                
-            if path_found == True:
-                # Fib this new path
-                log.info("\t* Found path that does not create congestion\n")
-                log.info("\t* Path (ips): %s\n"%chosen_path)
-                log.info("\t* Path (readable): %s\n"%str(self.toLogRouterNames(chosen_path)))
-
-                # Get edges of new found path
-                chosen_path_edges = set(zip(chosen_path[:-1], chosen_path[1:]))
-                        
-                # Deactivate old edges from initial path nodes (won't be
-                # used anymore)
-                for node in chosen_path:
-                    # Get active edges of node
-                    active_edges = self.getActiveEdges(cdag, node)
-                    for a_e in active_edges:
-                        if a_e not in chosen_path_edges:
-                            cdag = self.switchDagEdgesData(cdag, [(a_e)], active = False)
-                            cdag = self.switchDagEdgesData(cdag, [(a_e)], ongoing_flows = False)
-
-                # Update the flow_allocation
-                for f in chosen_path_moved_flows:
-                    # Get path list of flow
-                    pl = self.flow_allocation[dst_prefix].get(f)
-                    
-                    final_pl = []
-                    # Iterate previous paths (pp) in path list
-                    for pp in pl:
-                        # Check if previous path has a node in common with chosen path
-                        indexes = [pp.index(node) for node in pp if node in chosen_path]
-                        if indexes == []:
-                            final_pl.append(pp)
-                        else:
-                            index_pp = min(indexes)
-                            index_cp = chosen_path.index(pp[index_pp])
-                            final_pl.append(pp[:index_pp] + chosen_path[index_cp:])
-                            
-                    # Update allocation entry
-                    self.flow_allocation[dst_prefix][f] = final_pl
-
-                # Add new edges from new computed path
-                cdag = self.switchDagEdgesData(cdag, [chosen_path], active=True)
-                    
-                # This complete DAG goes to the prefix-dag data attribute
-                self.setCurrentDag(dst_prefix, cdag)
-                    
-                # Retrieve only the active edges to force fibbing
-                final_dag = self.getActiveDag(dst_prefix)
-
-                # Log it
-                log.info("\t* Final modified dag for prefix: the one with which we fib the prefix\n")
-                log.info("\t  %s\n"%str(self.toLogDagNames(final_dag).edges()))
-                    
-                # Force DAG for dst_prefix
-                self.sbmanager.add_dag_requirement(dst_prefix, final_dag)
-                    
-                # Allocate flow to Path. It HAS TO BE DONE after changing the DAG...
-                self.addAllocationEntry(dst_prefix, flow, [chosen_path])
-
-                # Log 
-                t = time.strftime("%H:%M:%S", time.gmtime())
-                to_print = "%s - Forced forwarding DAG in Southbound Manager\n"
-                log.info(to_print%t)
+            # If found congProb low enough
+            if self.isLowEnough(congProb):
+                # Chose and break
+                foundEarlyDag = True
+                chosen_ridx_dag = ri_dx_dag
+                chosen_alls_dag = new_adag
+                chosen_congProb = congProb
+                break
 
             else:
-                self.ECMPAlgorithm(dst_prefix, flow)
-    
+                # Note down results
+                results.append((ri_dx_dag, new_adag, congProb)
+
+        # Choose ri-dx DAG that minimizes Pc
+        # If we didn't found a dag with congProb low enough, we need
+        # to chose the one that minimizes congProb
+        if not foundEarlyDag:
+            chosen = min(results, key:lambda x: x[2])
+            chosen_ridx_dag = chosen[0]
+            chosen_alls_dag = chosen[1]
+            chosen_congProb = chosen[2]
+
+        # Fib new all-sources DAG (modify edges accordingly)
+        # Extact active dag
+        # Fib it
+
+        # Update flows and leave
+
+    # TODO FUNCTIONS #########################################
+
+    def getNInterations(self, all_dags):
+        # We iterate all of them now
+
+        return len(all_dags)
+
+    def shouldCalculateAllDAGs(self):
+
+        return True
+
+    def isLowEnough(self, congProb):
+        if congProb < 0.1:
+            return True
+        else:
+            return False
+
+    def chooseProbabilityAlgorithm(self):
+        # This should be replaced by the results of the evaluation
+        return 'exact'
+
+    def recomputeAllSourcesDag(all_dag, new_ridx_dag):
+        """
+        Given the initial all_routers_dag, and the new chosen ridxDag, we compute
+        the newly created all_routers_dag merging the previous one while forcing the
+        new ridxDag.
+        """
+        # Add 'flag' in new ridx dag
+        edges = new_ridx_dag.edges()
+        ridx_dag = nx.DiGraph()
+        ridx_dag.add_edges_from(edges, flag=True)
+        
+        # Compose it with all_dag
+        new_adag = nx.compose(all_dag, ridx_dag)
+
+        # Iterate new ridx nodes. Remove those outgoing edges from the same node 
+        # in all_dag that do not have 'flag'.
+        final_all_dag = new_adag.copy()
+
+        # Get edges to remove
+        edges_to_remove = [(x, y) for node in new_ridx_dag.nodes()
+                           for (x, y, data) in new_adag.edges(data=True) if node == x and not
+                           data.get('flag')]
+
+        # Remove them
+        final_all_dag.remove_edges_from(edges_to_remove)
+        
+        # Return modified all_dag
+        return final_all_dag
+
+    def addVirtualCapacities(all_dag, dst_prefix):
+        """
+        Adds the virtual capacities to all sources dag. Virtual capacities 
+        are those computed by: taking current capacities, and substracting
+        the flow sizes for dst_prefix traffic in the corresponding paths.
+
+        We assume here that all allocations for flows to dst_prefix are known.
+        """
+        # Get ongoing flows
+        sources = self.getAllocatedFlows(dst_prefix)
+
+        # Extract the single only path
+        try:
+            sources = [(f, p[0]) if len(p) == 1 else raise KeyError for (f, p) in sources]
+        except:
+            log.info("ERROR: some flows yet to receive Feedback")
+            import ipdb; ipdb.set_trace()
+
+        # Iterate each edge on all_dag
+        for (x, y, data) in all_dag.edges(data=True):
+            # Get edge capacity
+            cap = self.cgc[x][y].get('capacity')
+
+            # Accumulate sizes of flows that pass through there
+            to_add = sum([f.size for (f, p) in sources if (x, y) in zip(p[:-1], p[:1])])
+            
+            # Compute new virtual capacity
+            vcap = cap + to_add
+
+            # Update new size in all_dag edge
+            data['capacity'] = vcap
+
+        return all_dag
+
+    ##########################################################
+
     def ECMPAlgorithm(self, dst_prefix, flow):
         """
         """
-        
         # Get flow ingress router
         ingress_rid = self.getIngressRouter(flow)
 
@@ -521,9 +630,6 @@ class TEControllerLab2(SimplePathLB):
         
         # Create virtual copy of capacity graph
         cg_copy = self.cgc.copy()
-
-
-        #import ipdb; ipdb.set_trace()
         
         # Add back capacities to their respective paths
         for f, pl in ongoing_flows_same_ir:
@@ -623,6 +729,20 @@ class TEControllerLab2(SimplePathLB):
         for (u, v) in zip(path[:-1], path[1:]):
             caps.append(capacity_graph[u][v].get('capacity', None))
         return min(caps)
+
+    def computeCongProb(algorithm, all_dag, sources):
+        """
+        :param algorithm: name of the algorithm to compute the probability with.
+        :param all_dag: all routers dag with virtual capacities
+        :param sources: list of tuples (f, p) with flows and corresponding allocated paths
+        """
+        if algorithm == 'exact':
+            pass
+        elif algorithm == 'sampled':
+            pass
+        else:
+            pass
+        
     
     def SimplifiedProbability(self, all_path_subsets, flow_sizes):
         # Get biggest flow size
@@ -757,7 +877,6 @@ class TEControllerLab2(SimplePathLB):
         to_log = "\t* It took %s ms to calculate probabilities\n"
         log.info(to_log%(str(self.pc.timer.msecs)))
         return chosen_paths
-
 
 if __name__ == '__main__':
     log.info("LOAD BALANCER CONTROLLER - Lab 2 - Enforcing simple paths + ECMP when needed\n")
