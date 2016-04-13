@@ -4,6 +4,7 @@ from tecontroller.linkmonitor.linksmonitor_thread import LinksMonitorThread
 from fibbingnode.misc.mininetlib import get_logger
 from tecontroller.res import defaultconf as dconf
 from tecontroller.res.problib import ProbabiliyCalculator
+import networkx as nx
 import threading
 import time
 import Queue
@@ -14,9 +15,6 @@ import tecontroller.res.daglib as daglib
 
 log = get_logger()
 lineend = "-"*100+'\n'
-
-#ALGORITHM = 'exact'
-ALGORITHM = 'sampled'
 
 class TEControllerLab2(SimplePathLB):
     def __init__(self, probabilityAlgorithm=None, congestionThreshold = 0.95):
@@ -483,15 +481,10 @@ class TEControllerLab2(SimplePathLB):
         results = []
         foundEarlyDag = False
         
-        import ipdb; ipdb.set_trace() # TRACE HERE
         for i in range(n_iterations):
             # Try ouf unique random ri-dx DAG
             ri_dx_dag = all_dags[i]
-
-            # Compute new all-sources DAG
-            if not self.probabilityAlgorithm:
-                self.chooseProbabilityAlgorithm()
-
+            
             # Compute the new all-routers DAG
             new_adag = self.recomputeAllSourcesDag(adag, ri_dx_dag)
 
@@ -553,7 +546,7 @@ class TEControllerLab2(SimplePathLB):
         # This should be replaced by the results of the evaluation
         return 'exact'
 
-    def recomputeAllSourcesDag(all_dag, new_ridx_dag):
+    def recomputeAllSourcesDag(self, all_dag, new_ridx_dag):
         """
         Given the initial all_routers_dag, and the new chosen ridxDag, we compute
         the newly created all_routers_dag merging the previous one while forcing the
@@ -582,7 +575,7 @@ class TEControllerLab2(SimplePathLB):
         # Return modified all_dag
         return final_all_dag
 
-    def addVirtualCapacities(all_dag, dst_prefix):
+    def addVirtualCapacities(self, all_dag, dst_prefix):
         """
         Adds the virtual capacities to all sources dag. Virtual capacities 
         are those computed by: taking current capacities, and substracting
@@ -594,11 +587,7 @@ class TEControllerLab2(SimplePathLB):
         sources = self.getAllocatedFlows(dst_prefix)
 
         # Extract the single only path
-        try:
-            sources = [(f, p[0]) for (f, p) in sources if len(p) == 1]
-        except:
-            log.info("ERROR: some flows yet to receive Feedback")
-            import ipdb; ipdb.set_trace()
+        sources = [(f, p[0]) for (f, p) in sources if len(p) == 1]
 
         # Iterate each edge on all_dag
         for (x, y, data) in all_dag.edges(data=True):
@@ -606,13 +595,17 @@ class TEControllerLab2(SimplePathLB):
             cap = self.cgc[x][y].get('capacity')
 
             # Accumulate sizes of flows that pass through there
-            to_add = sum([f.size for (f, p) in sources if (x, y) in zip(p[:-1], p[:1])])
+            to_add = sum([f.size for (f, p) in sources if (x, y) in zip(p[:-1], p[1:])])
             
             # Compute new virtual capacity
             vcap = cap + to_add
 
             # Update new size in all_dag edge
             data['capacity'] = vcap
+
+            # Remove flag
+            if 'flag' in data.keys():
+                data.pop('flag')
 
         return all_dag
 
