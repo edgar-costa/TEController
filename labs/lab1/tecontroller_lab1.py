@@ -301,14 +301,12 @@ class TEControllerLab1(SimplePathLB):
                 # allocate flow to a congestion-free path
                 self.flowAllocationAlgorithm(dst_prefix, flow, currentPath)
 
-
     def getCurrentEdgeLoad(self, x,y):
         cap = self.cgc[x][y].get('capacity')
         bw = self.cgc[x][y].get('bw')
         if cap and bw:
             currentLoad = (bw - cap)/float(bw)
         return currentLoad
-        
                 
     def getMinCapacity(self, path):
         """
