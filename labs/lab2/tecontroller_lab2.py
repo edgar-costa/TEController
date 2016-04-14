@@ -508,7 +508,7 @@ class TEControllerLab2(SimplePathLB):
 
             #else:
             # Note down results
-            results.append((ri_dx_dag, new_adag, congProb))
+            results.append((ri_dx_dag, new_adag, congProb, new_sources))
 
         # Now choose ri-dx DAG that minimizes Pc
         
@@ -532,11 +532,12 @@ class TEControllerLab2(SimplePathLB):
             chosen_ridx_dag = min_results[0][0]
             chosen_alls_dag = min_results[0][1]
             chosen_congProb = min_results[0][2]
-
+            chosen_newsources = min_results[0][3]
         else:
             chosen_ridx_dag = min_congProb[0]
             chosen_alls_dag = min_congProb[1]
             chosen_congProb = min_congProb[2]
+            chosen_newsources = min_congProb[3]
             
         # to chose the one that minimizes congProb
         #if not foundEarlyDag:
@@ -550,14 +551,152 @@ class TEControllerLab2(SimplePathLB):
         # cdag.copy()
         self.updateCurrentDag(dst_prefix, chosen_alls_dag)
         
+        # Extact active DAG
+        new_active_dag = self.getActiveDag(dst_prefix)
+
         import ipdb; ipdb.set_trace()
         
-        # Extact active DAG
-        
-        # Fib it
-        
-        # Update flow allocations and leave
+        # Update flow allocations with new path taken by flows
+        self.updateFlowAllocations(dst_prefix, chosen_newsources)
 
+        # Spawn removeAllocation for new flow
+        # Define the removeAllocatoinEntry thread
+        t = threading.Thread(target=self.removeAllocationEntry, args=(dst_prefix, flow))
+        # Start the thread
+        t.start()
+        # Add handler to list and start thread
+        self.thread_handlers[flow] = t
+        
+        # Fib final DAG
+        self.sbmanager.add_dag_requirement(dst_prefix, new_active_dag.copy())
+
+    def removeAllocationEntry(self, prefix, flow):
+        """
+        """
+        # Wait until flow finishes
+        time.sleep(flow['duration']) 
+        
+        # Acquire locks for self.flow_allocation and self.dags
+        # dictionaries
+        self.flowAllocationLock.acquire()
+        self.dagsLock.acquire()
+        
+        log.info(lineend)
+        if prefix not in self.flow_allocation.keys():
+            # prefix not in table
+            raise KeyError("The is no such prefix allocated: %s"%str(prefix))
+        else:
+            if flow in self.flow_allocation[prefix].keys():
+                path_list = self.flow_allocation[prefix].pop(flow, None)
+            else:
+                raise KeyError("%s is not alloacated in this prefix %s"%str(repr(flow)))
+
+        t = time.strftime("%H:%M:%S", time.gmtime())
+        log.info("%s - Flow REMOVED from Paths\n"%t)
+        log.info("\t* Dest_prefix: %s\n"%prefix)
+        to_log = "\t* Paths (%s): %s\n"
+        log.info(to_log%(len(path_list), str(self.toLogRouterNames(path_list))))
+        log.info("\t* Flow: %s\n"%self.toLogFlowNames(flow))
+
+        # Current dag for destination
+        current_dag = self.getCurrentDag(prefix)
+        
+        # Get the active Dag
+        activeDag = self.getActiveDag(prefix)
+
+        # Log active DAG
+        to_log = "\t* removeAllocationEntry: current active DAG\n\t  %s\n"
+        log.info(to_log%str(self.toLogDagNames(activeDag).edges()))
+        
+        # Get current remaining allocated flows for destination
+        remaining_flows = self.getAllocatedFlows(prefix)
+
+        # Create DAG showing remaining flow paths only
+        edges_with_flows = []
+        for (f, pl) in remaining_flows:
+            edges_with_flows += self.getEdgesFromPathList(f_path_list)        
+        edges_with_flows = list(set(edges_with_flows))
+        remaining_traffic_dag = nx.DiGraph()
+        remaining_traffic_dag.add_nodes_from(activeDag.nodes())
+        remaining_traffic_dag.add_edges_from(edges_with_flows)
+        
+        # Difference with active DAG can be set to 'ongoing_flows' = False
+        to_set_noflows = nx.difference(activeDag, remaining_traffic_dag)
+        for (x, y) in to_set_noflows.edges_iter():
+            current_dag[x][y]['ongoing_flows'] = False
+            
+        # Set the new calculated dag to its destination prefix dag
+        self.setCurrentDag(prefix, current_dag)
+
+        # Check if we can set destination forwarding to the initial
+        # default OSPF DAG
+        if len(remaining_flows) == 0:
+            # Log a bit
+            to_log = "\t* No more flows remain to prefix."
+            to_log += " Re-setting to initial OSPF DAG\n"
+            log.info(to_log)
+            
+            # Set forwarding to original
+            self.setOSPFOriginalDAG(prefix)
+        else:
+            # Log it only
+            log.info("\t* Some flows to prefix still remain.\n")
+
+            # Log final DAG that is foced
+            activeDag = self.getActiveDag(prefix)
+            to_log = "\t* removePrefixLies: final active DAG\n\t  %s\n"
+            log.info(to_log%str(self.toLogDagNames(activeDag).edges()))
+
+            # Force it to fibbing
+            self.sbmanager.add_dag_requirement(prefix, activeDag.copy())
+            log.info(lineend)
+        
+        # Release locks
+        self.flowAllocationLock.release()
+        self.dagsLock.release()
+
+    def setOSPFOriginalDAG(self, prefix):
+        """
+        """
+        # Iterate current DAG
+        cdag = self.getCurrentDag(prefix)
+        
+        # Retrieve those edges with default=True. Set them to active
+        # and set the rest to inactive
+        for (x, y) in cdag.edges_iter():
+            if cdag[x][y].get('default', False) == True:
+                cdag[x][y]['active'] = True
+            else:
+                cdag[x][y]['active'] = False
+
+        # Set modified current dag
+        self.setCurrentDag(cdag)
+
+        # Retrieve active dag
+        activeDag = self.getActiveDag(prefix)
+        to_log = "\t* removePrefixLies: final active DAG\n\t  %s\n"
+        log.info(to_log%str(self.toLogDagNames(activeDag).edges()))
+        
+        # Force it to fibbing
+        self.sbmanager.add_dag_requirement(prefix, activeDag.copy())
+        
+        log.info(lineend)
+        
+    def updateFlowAllocations(self, dst_prefix, new_sources):
+        """
+        Updates allocations of flows given by the new forced DAG
+        """
+        # Re-set flow allocations for that prefix
+        self.flow_allocation[dst_prefix] = {}
+
+        # Update with new allocations
+        for (f, pl) in new_sources:
+            d = {f: pl}
+            self.flow_allocatoin[dst_prefix] = d
+
+            # Check if flow needs feedback
+            if len(pl) > 1:
+                self.pendingForFeedback[f] = pl
 
     def updateCurrentDag(self, dst_prefix, new_activeDag):
         """
@@ -572,12 +711,26 @@ class TEControllerLab2(SimplePathLB):
 
         # Get edges to set 'active' = False in c_completeDag
         edges_to_inactive = nx.difference(c_activeDag, new_activeDag)
-
+        # Set them
+        for (x, y) in edges_to_inactive.edges_iter():
+            if not c_completeDag.has_edge(x, y):
+                c_completeDag.add_edge(x, y)
+                c_completeDag[x][y]['default'] = False
+            c_completeDag[x][y]['active'] = False
+            c_completeDag[x][y]['ongoing_flows'] = False
+            
         # Get edges to set 'active' = True in c_completeDag
         edges_to_active = nx.difference(new_activeDag, c_activeDag)
+        # Set them
+        for (x, y) in edges_to_active.edges_iter():
+            if not c_completeDag.has_edge(x, y):
+                c_completeDag.add_edge(x, y)
+                c_completeDag[x][y]['default'] = False
+            c_completeDag[x][y]['active'] = True
+            c_completeDag[x][y]['ongoing_flows'] = True
 
-        import ipdb; ipdb.set_trace()
-        pass
+        # Set new computed curren complete DAG to dict attribute
+        self.setCurrentDag(dst_prefix, c_completeDag)
         
     def recomputeAllSourcesDag(self, all_dag, new_ridx_dag):
         """
@@ -598,9 +751,9 @@ class TEControllerLab2(SimplePathLB):
         final_all_dag = new_adag.copy()
 
         # Get edges to remove
-        edges_to_remove = [(x, y) for node in new_ridx_dag.nodes()
-                           for (x, y, data) in new_adag.edges(data=True) if node == x and not
-                           data.get('flag')]
+        edges_to_remove = [(x, y) for node in new_ridx_dag.nodes() for
+                           (x, y, data) in new_adag.edges(data=True)
+                           if node == x and not data.get('flag')]
 
         # Remove them
         final_all_dag.remove_edges_from(edges_to_remove)
@@ -708,121 +861,7 @@ class TEControllerLab2(SimplePathLB):
         return congProb
 
     ##########################################################
-
-    def ECMPAlgorithm(self, dst_prefix, flow):
-        """
-        """
-        # Get flow ingress router
-        ingress_rid = self.getIngressRouter(flow)
-
-        # Get current DAG for flow
-        cdag = self.getCurrentDag(dst_prefix)
-
-        # Get already ongoing flows for dst_prefix
-        prefix_ongoing_flows = self.getAllocatedFlows(dst_prefix)
-
-        # Filter those who has same ingress router
-        ongoing_flows_same_ir = [(f, pl) for (f, pl) in prefix_ongoing_flows if self.getIngressRouter(f) == ingress_rid]
-
-        # Calculate maximum flow size and parameter n
-        flow_sizes = [f.size for (f, pl) in ongoing_flows_same_ir]+[flow.size]
         
-        # Create virtual copy of capacity graph
-        cg_copy = self.cgc.copy()
-        
-        # Add back capacities to their respective paths
-        for f, pl in ongoing_flows_same_ir:
-            # Accumulate edges where capacities have to be virtually changed
-            p_edges = set()
-            action = [p_edges.update(set(zip(p[:-1], p[1:]))) for p in pl]
-            for (x,y) in list(p_edges):
-                # Add flow size back to available capacity
-                cg_copy[x][y]['capacity'] += f.size
-
-        # Compute all loop-less different paths from src to dst
-        all_paths = self.getAllPathsRanked(self.initial_graph, ingress_rid, dst_prefix, ranked_by='capacity')
-
-        # Filter out only disjoint paths
-        disjoint_paths = []
-        unique_edges = set()
-        for path, pcap in all_paths:
-            path = path[:-1]
-            # Get path edges
-            path_edges = set(zip(path[:-1], path[1:]))
-            # Check if collides with other paths
-            if path_edges.intersection(unique_edges) == set():
-                unique_edges.update(path_edges)
-                # Calculate virtual minimum capacity
-                pvcap = self._getVirtualMinCapacity(cg_copy, path)
-                disjoint_paths.append((path, pvcap))
-
-        # Log disjoint paths found:
-        t = time.strftime("%H:%M:%S", time.gmtime())
-        log.info("%s - Disjoint paths found: Path -> virtual minimum capacity\n"%t)
-        for (p, pvcap) in disjoint_paths:
-            log.info("\t%s\t->\t%s\n"%(str(self.toLogRouterNames(p)), str(pvcap)))
-
-        # Log flow sizes
-        log.info("%s - Flow sizes:\n"%t)
-        log.info("\t%s\n"%str(flow_sizes))
-            
-        # Calculate all combinations of possible paths.
-        all_path_subsets = []
-        action = [all_path_subsets.append(c) for i in range(2, len(disjoint_paths)+1) for c in list(it.combinations(disjoint_paths, i))]
-
-        if self.probabilityAlgorithm == 'sampled':
-            chosen_paths = self.SampledProbability(all_path_subsets, flow_sizes)
-            
-        elif self.probabilityAlgorithm == 'exact':
-            chosen_paths = self.ExactProbability(all_path_subsets, flow_sizes)
-            
-        else:
-            chosen_paths = self.SimplifiedProbability(all_path_subsets, flow_sizes)
-
-        # Fib chosen paths
-        # Deactivate old edges from initial path nodes (won't be
-        # used anymore)
-        for chosen_path in chosen_paths:
-            # Get edges of new found path
-            chosen_path_edges = set(zip(chosen_path[:-1], chosen_path[1:]))
-            
-            for node in chosen_path:
-                # Get active edges of node
-                active_edges = self.getActiveEdges(cdag, node)
-                for a_e in active_edges:
-                    if a_e not in chosen_path_edges:
-                        cdag = self.switchDagEdgesData(cdag, [(a_e)], active = False)
-                        cdag = self.switchDagEdgesData(cdag, [(a_e)], ongoing_flows = False)
-
-        # Update the flow_allocation
-        for (f, pl) in ongoing_flows_same_ir:
-            # Update allocation entry
-            self.flow_allocation[dst_prefix][f] = chosen_paths
-
-        # Add new edges from new computed path
-        cdag = self.switchDagEdgesData(cdag, chosen_paths, active=True)
-                    
-        # This complete DAG goes to the prefix-dag data attribute
-        self.setCurrentDag(dst_prefix, cdag)
-                    
-        # Retrieve only the active edges to force fibbing
-        final_dag = self.getActiveDag(dst_prefix)
-
-        # Log it
-        log.info("\t* Final modified dag for prefix: the one with which we fib the prefix\n")
-        log.info("\t  %s\n"%str(self.toLogDagNames(final_dag).edges()))
-                    
-        # Force DAG for dst_prefix
-        self.sbmanager.add_dag_requirement(dst_prefix, final_dag)
-                    
-        # Allocate flow to Path. It HAS TO BE DONE after changing the DAG...
-        self.addAllocationEntry(dst_prefix, flow, chosen_paths)
-
-        # Log 
-        t = time.strftime("%H:%M:%S", time.gmtime())
-        to_print = "%s - Forced forwarding DAG in Southbound Manager\n"
-        log.info(to_print%t)
-
     def _getVirtualMinCapacity(self, capacity_graph, path):
         caps = []
         for (u, v) in zip(path[:-1], path[1:]):
