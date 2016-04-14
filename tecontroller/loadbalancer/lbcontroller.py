@@ -59,7 +59,7 @@ class MyGraphProvider(SouthboundManager):
         HAS_INITIAL_GRAPH.set()        
                 
 class LBController(object):
-    def __init__(self):
+    def __init__(self, congestionThreshold = 0.95):
         """It basically reads the network topology from the MyGraphProvider,
         which is running in another thread because
         SouthboundManager.run() is blocking.
@@ -85,6 +85,11 @@ class LBController(object):
         self.dagsLock = threading.Lock()
         self.dags = {}
 
+        # Set the congestion threshold
+        self.congestionThreshold = congestionThreshold
+        t = time.strftime("%H:%M:%S", time.gmtime())
+        log.info("%s - Congestion Threshold is set to %.2f%% of the link\n"%(t, (self.congestionThreshold)*100.0))
+        
         # Used to stop the thread
         self._stop = threading.Event() 
 
@@ -280,6 +285,7 @@ class LBController(object):
                         bw = self.db.interface_bandwidth(xname, yname)
                         data['bw'] = int(bw*1e6)
                         data['capacity'] = int(bw*1e6)
+                        data['mincap'] = (1-self.congestionThreshold)*(bw*1e6)
                     except:
                         import ipdb; ipdb.set_trace()
                         print "EXCEPTION"

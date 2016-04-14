@@ -12,7 +12,7 @@ log = get_logger()
 lineend = "-"*100+'\n'
 
 class TEControllerLab1(SimplePathLB):
-    def __init__(self, congestionThreshold = 0.95):
+    def __init__(self):
         # Call init method from LBController
         super(TEControllerLab1, self).__init__()
 

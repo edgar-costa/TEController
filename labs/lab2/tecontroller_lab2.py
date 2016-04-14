@@ -17,7 +17,7 @@ log = get_logger()
 lineend = "-"*100+'\n'
 
 class TEControllerLab2(SimplePathLB):
-    def __init__(self, probabilityAlgorithm=None, congestionThreshold = 0.95):
+    def __init__(self, probabilityAlgorithm=None):
         
         # Call init method from LBController
         super(TEControllerLab2, self).__init__()
@@ -36,11 +36,6 @@ class TEControllerLab2(SimplePathLB):
         # capacity graph
         self.cgc = self.cg.copy()
 
-        # Set the congestion threshold
-        self.congestionThreshold = congestionThreshold
-        t = time.strftime("%H:%M:%S", time.gmtime())
-        log.info("%s - Congestion Threshold is set to %.2f%% of the link\n"%(t, (self.congestionThreshold)*100.0))
-        
         # Type of algorithm used to calculate congestion probability
         # in the ECMP part. It can be: simplified, exact or sampled
         self.probabilityAlgorithm = probabilityAlgorithm
@@ -57,23 +52,29 @@ class TEControllerLab2(SimplePathLB):
     def run(self):
         """Main loop that deals with new incoming events
         """
-
         getTimeout = 1
 
         while not self.isStopped():
+            
             try:
+                log.info("*** Reading from event queue...\n")
                 event = self.eventQueue.get(timeout=getTimeout)
             except:
+                log.info("*** Timeout occurred\n")
                 event = None
                     
             # Check if flows allocations still pending for feedback
             if self.pendingForFeedback != {}:
+                log.info("*** Some flows yet neet feedback...\n")
                 if not self.feedbackResponseQueue.empty():
                     # Read element from responseQueue
                     responsePathDict = self.feedbackResponseQueue.get()
                     self.dealWithAllocationFeedback(responsePathDict)
-
+                else:
+                    log.info("*** But nothing is on the responseQueue...\n")
+                    
             if event and event['type'] == 'newFlowStarted':
+                log.info("*** newFlowStarted event received...\n")
                 # Log it
                 log.info(lineend)
                 t = time.strftime("%H:%M:%S", time.gmtime())
@@ -86,18 +87,21 @@ class TEControllerLab2(SimplePathLB):
                 # modified.
                 with self.dagsLock:
                     with self.flowAllocationLock:
-                        # Deal with new flow                    
+                        # Deal with new flow
                         self.dealWithNewFlow(flow)
-                    
+                log.info("*** dealWithNewFlow finished...\n")
+                
             elif event:
                 t = time.strftime("%H:%M:%S", time.gmtime())
                 log.info("%s - run(): UNKNOWN Event\n"%t)
                 log.info("\t* Event: "%str(event))
 
-            else:
-                if self.pendingForFeedback != {}:
-                    # Put into queue
-                    self.feedbackRequestQueue.put(self.pendingForFeedback.copy())
+            if self.pendingForFeedback != {}:
+                log.info("*** We still need feedback for some flows...\n")
+                log.info("*** Puting pendingForFeedback dictionary into requestQueue...\n")
+
+                # Put into queue
+                self.feedbackRequestQueue.put(self.pendingForFeedback.copy())
 
     def dealWithAllocationFeedback(self, responsePathDict):
         # Acquire locks for self.flow_allocation and self.dags
@@ -552,7 +556,7 @@ class TEControllerLab2(SimplePathLB):
 
         log.info("\t* Chosen ri->dx DAG: %s\n"%(str(self.toLogDagNames(chosen_ridx_dag).edges())))
         log.info("\t* Chosen complete DAG: %s\n"%(str(self.toLogDagNames(chosen_alls_dag).edges())))
-        log.info("\t* Congestion Probability Pc: %.2f%%\n"%chosen_congProb*100.0)
+        log.info("\t* Congestion Probability Pc: %.2f%%\n"%(chosen_congProb*100.0))
             
         # to chose the one that minimizes congProb
         #if not foundEarlyDag:
@@ -564,12 +568,14 @@ class TEControllerLab2(SimplePathLB):
         # Modify current all-sources DAG for destination (modify edges
         # accordingly) and set it to variable self.dags[dst_prefix] =
         # cdag.copy()
+        log.info("\t* Updating current complete DAG to destination %s\n"%str(dst_prefix))
         self.updateCurrentDag(dst_prefix, chosen_alls_dag)
         
         # Extact active DAG
         new_active_dag = self.getActiveDag(dst_prefix)
 
         # Update flow allocations with new path taken by flows
+        log.info("\t* Updating flow allocations ...\n")
         self.updateFlowAllocations(dst_prefix, chosen_newsources)
 
         # Spawn removeAllocation for new flow
@@ -691,8 +697,8 @@ class TEControllerLab2(SimplePathLB):
                 cdag[x][y]['active'] = False
 
         # Set modified current dag
-        self.setCurrentDag(cdag)
-
+        self.setCurrentDag(prefix, cdag)
+        
         # Retrieve active dag
         activeDag = self.getActiveDag(prefix)
         to_log = "\t* removePrefixLies: final active DAG\n\t  %s\n"
@@ -707,17 +713,34 @@ class TEControllerLab2(SimplePathLB):
         """
         Updates allocations of flows given by the new forced DAG
         """
-        # Re-set flow allocations for that prefix
-        self.flow_allocation[dst_prefix] = {}
-
+        # New dict
+        new_dict = {}
+        
         # Update with new allocations
         for (f, pl) in new_sources:
-            d = {f: pl}
-            self.flow_allocation[dst_prefix] = d
+            # Accumulate it in new dict
+            new_dict[f] = pl
 
+            # Path list before
+            pl_before = self.flow_allocation[dst_prefix].get(f)
+
+            # Log a bit
+            if pl_before:
+                to_log = "\t%s before: %s, now allocated to: %s\n"
+                log.info(to_log%(self.toLogFlowNames(f), self.toLogRouterNames(pl_before), self.toLogRouterNames(pl)))
+            else:
+                to_log = "\t%s allocated to: %s\n"
+                log.info(to_log%(self.toLogFlowNames(f), self.toLogRouterNames(pl)))
+                
             # Check if flow needs feedback
             if len(pl) > 1:
+                log.info("\t* Adding %s to allocation feedback...\n"%self.toLogFlowNames(f))
                 self.pendingForFeedback[f] = pl
+                
+        # Re-set flow allocations for that prefix
+        self.flow_allocation[dst_prefix] = new_dict
+
+
 
     def updateCurrentDag(self, dst_prefix, new_activeDag):
         """
