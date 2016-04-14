@@ -440,7 +440,8 @@ class TEControllerLab2(SimplePathLB):
         """
         """
         t = time.strftime("%H:%M:%S", time.gmtime())
-        log.info("%s - Greedy path allocation algorithm started\n"%t)
+        log.info("%s - Flow Allocation algorithm started\n"%t)
+        f_start_time = time.time()
 
         # Get source connected router (src_cr)
         src_iface = flow['src']
@@ -461,10 +462,13 @@ class TEControllerLab2(SimplePathLB):
 
         if self.shouldCalculateAllDAGs():
             # Check all DAGs
-            all_dags = daglib.getAllPossibleDags(self.initial_graph, ingress_rid, egress_rid)  
+            all_dags = daglib.getAllPossibleDags(self.initial_graph, ingress_rid, egress_rid)
+            log.info("\t* All possible DAGs should be considered (single+multiple path DAGs)\n")
+
         else:
             # Check only Single-Path dags
             all_dags = daglib.getAllPossibleSimplePathDags(self.initial_graph, ingress_rid, egress_rid)
+            log.info("\t* Only single path DAGs are considered\n")
 
         # Choose first which probability calculation algorithm is
         # going to be used
@@ -472,15 +476,21 @@ class TEControllerLab2(SimplePathLB):
             probAlgo = self.chooseProbabilityAlgorithm()
         else:
             probAlgo = self.probabilityAlgorithm
-
+        log.info("\t* Algorithm to compute Pc chosen: %s\n"%probAlgo)
+            
         # Randomly shuffle DAGs
         random.shuffle(all_dags)
 
         ## Repeat n times:
-        n_iterations = self.getNIterations(all_dags)  
+        n_iterations = self.getNIterations(all_dags)
+        to_log = "\t* First level sampling: %d samples out of %d\n"
+        log.info(to_log%(n_iterations, len(all_dags)))
+
         results = []
         #foundEarlyDag = False
-        
+
+        start_time = time.time()
+        # First level sampling
         for i in range(n_iterations):
             # Try ouf unique random ri-dx DAG
             ri_dx_dag = all_dags[i]
@@ -510,8 +520,9 @@ class TEControllerLab2(SimplePathLB):
             # Note down results
             results.append((ri_dx_dag, new_adag, congProb, new_sources))
 
+        log.info("\t* It took %.3f ms to find optimal DAG\n"%((time.time()-start_time)*1000.0))
+
         # Now choose ri-dx DAG that minimizes Pc
-        
         # Sort results by increasing congestion probability
         sorted_results = sorted(results, key=lambda x: x[2])
 
@@ -538,6 +549,10 @@ class TEControllerLab2(SimplePathLB):
             chosen_alls_dag = min_congProb[1]
             chosen_congProb = min_congProb[2]
             chosen_newsources = min_congProb[3]
+
+        log.info("\t* Chosen ri->dx DAG: %s\n"%(str(self.toLogDagNames(chosen_ridx_dag).edges())))
+        log.info("\t* Chosen complete DAG: %s\n"%(str(self.toLogDagNames(chosen_alls_dag).edges())))
+        log.info("\t* Congestion Probability Pc: %.2f%%\n"%chosen_congProb*100.0)
             
         # to chose the one that minimizes congProb
         #if not foundEarlyDag:
@@ -554,8 +569,6 @@ class TEControllerLab2(SimplePathLB):
         # Extact active DAG
         new_active_dag = self.getActiveDag(dst_prefix)
 
-        import ipdb; ipdb.set_trace()
-        
         # Update flow allocations with new path taken by flows
         self.updateFlowAllocations(dst_prefix, chosen_newsources)
 
@@ -566,10 +579,18 @@ class TEControllerLab2(SimplePathLB):
         t.start()
         # Add handler to list and start thread
         self.thread_handlers[flow] = t
-        
+
         # Fib final DAG
+        log.info("\t* Fibbing final chosen complete DAG...\n")
         self.sbmanager.add_dag_requirement(dst_prefix, new_active_dag.copy())
 
+        # Leave
+        t = time.strftime("%H:%M:%S", time.gmtime())
+        to_log = "%s - Flow Allocation algorithm finished - elapsed time: %.5f s\n"
+        log.info(to_log%(t, (time.time()-f_start_time)))
+
+
+        
     def removeAllocationEntry(self, prefix, flow):
         """
         """
@@ -692,7 +713,7 @@ class TEControllerLab2(SimplePathLB):
         # Update with new allocations
         for (f, pl) in new_sources:
             d = {f: pl}
-            self.flow_allocatoin[dst_prefix] = d
+            self.flow_allocation[dst_prefix] = d
 
             # Check if flow needs feedback
             if len(pl) > 1:
