@@ -158,7 +158,7 @@ class LBController(object):
         self.feedbackRequestQueue = feedbackRequestQueue
         self.feedbackResponseQueue = feedbackResponseQueue
         
-        # List in which we save flows pending for allocation feedback
+        # Dict in which we save flows pending for allocation feedback
         self.pendingForFeedback = {}
 
         # Spawn FeedbackThread
@@ -549,7 +549,7 @@ class LBController(object):
                             edge_data = dag.get_edge_data(u,v)
                             edge_data['active'] = True
                             edge_data['fibbed'] = False
-                            edge_data['defaul'] = True
+                            edge_data['default'] = True
                             edge_data['ongoing_flows'] = False
 
             # Add DAG to prefix
@@ -706,8 +706,6 @@ class LBController(object):
         self.flowAllocationLock.release()
         self.dagsLock.release()
         
-
-
         
     def removePrefixLies(self, prefix, path_list):
         """Remove lies for a given prefix only if there are no more flows
@@ -728,8 +726,9 @@ class LBController(object):
 
         # Get the active Dag
         activeDag = self.getActiveDag(prefix)
-        
-        log.info("\t* removePrefixLies: initial DAG\n\t  %s\n"%str(self.toLogDagNames(activeDag).edges()))
+
+        to_log = "\t* removePrefixLies: initial DAG\n\t  %s\n"
+        log.info(to_log%str(self.toLogDagNames(activeDag).edges()))
 
         # Check if fibbed edge in paths
         thereIsFibbedPath = False
@@ -744,8 +743,9 @@ class LBController(object):
         else:
             # Get the lies for prefix
             lsa = self.getLiesFromPrefix(prefix)
-
-            log.info("\t* Found fibbed edges in paths: %s\n"%str(self.toLogRouterNames(path_list)))
+            
+            to_log = "\t* Found fibbed edges in paths: %s\n"
+            log.info(to_log%str(self.toLogRouterNames(path_list)))
 
             # Fibbed prefix
             # Let's check if there are other flows for prefix fist
