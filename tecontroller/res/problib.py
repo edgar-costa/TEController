@@ -65,7 +65,7 @@ class ProbabiliyCalculator(object):
             self.dumpSDict()
             return 1.0 - sncp
 
-    def ExactCongestionProbability(self, path_capacities, flow_sizes):
+    def ExactCongestionProbability(self, all_dag, flow_paths, flow_sizes):
         """
         In this case, path_capacities is a list of lists, representing possible flow path/s 
         min available capacities : [[c1, c2], [c2]...]
@@ -76,32 +76,37 @@ class ProbabiliyCalculator(object):
 
         Returns congestion probability.
         """
-
-        for alloc in it.product(*path_capacities):
-
-
-
-        all_allocs = [t for p in
-                      it.combinations_with_replacement(range(len(m)), len(n)) for t
-                      in it.permutations(p)]
-        final_allocs = []
-        action = [final_allocs.append(a) for a in all_allocs if a not in final_allocs]
-
-        n_samples = len(final_allocs) # == m**n
+        total_samples = 0
         congestion_samples = 0
-        
-        available_sizes = np.asarray(m)
-        for alloc in final_allocs:
-            required_sizes = np.zeros(len(m))
-            for i, a in enumerate(alloc):
-                required_sizes[a] += n[i]
+        for alloc in it.product(*flow_paths):
+            # Add sample to total count
+            total_samples += 1
+            
+            # Create copy of all_dag
+            adag_c = all_dag.copy()
 
-            balance = available_sizes - required_sizes
-            congestion = any(filter(lambda x: True if x < 0 else False, balance))
-            if congestion:
-                congestion_samples += 1
-
-        return congestion_samples/float(n_samples)
+            # Iterate alloc. For each path i in alloc:
+            for index, path in enumerate(alloc):
+                # Flag variable to break iteration 
+                congestion_found = False
+                
+                # Subtract size of flow i in all_dag
+                for (x, y) in zip(path[:-1], path[1:]):
+                    cap = adag_c[x][y]['capacity']
+                    cap -= flow_sizes[index]
+                    adag_c[x][y]['capacity'] = cap
+                    
+                    # Perform check: if at some point, available capacity
+                    # < 0: break iteration, go to next alloc                    
+                    if cap < 0:
+                        congestion_found = True
+                        break
+                    
+                if congestion_found:
+                    congestion_samples += 1
+                    break
+                
+        return congestion_samples/float(total_samples)
 
     def SampledCongestionProbability(self, m, n, percentage=10, estimate=0):
         """

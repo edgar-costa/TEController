@@ -491,7 +491,6 @@ class TEControllerLab2(SimplePathLB):
             # Add virtual capacities to new_adag
             new_adag = self.addVirtualCapacities(new_adag, dst_prefix)
 
-            import ipdb; ipdb.set_trace()
             # Compute new path taken by sources in new re-computed DAG
             new_sources = self.computeNewSources(new_adag, flow, dst_prefix)
 
@@ -511,6 +510,9 @@ class TEControllerLab2(SimplePathLB):
                 # Note down results
                 results.append((ri_dx_dag, new_adag, congProb))
 
+
+        import ipdb; ipdb.set_trace()
+        
         # Choose ri-dx DAG that minimizes Pc
         # If we didn't found a dag with congProb low enough, we need
         # to chose the one that minimizes congProb
@@ -610,7 +612,7 @@ class TEControllerLab2(SimplePathLB):
         # This should be replaced by the results of the evaluation
         return 'exact'
 
-    def computeNewSources(new_adag, flow, dst_prefix):
+    def computeNewSources(self, new_adag, flow, dst_prefix):
         """
         Returns the list of tuples that assigns each flow to
         dst_prefix to its new computed on the new all-sources dag.
@@ -620,7 +622,7 @@ class TEControllerLab2(SimplePathLB):
         flows = [flow]+[f for (f, p) in ongoing_flows]
 
         # Calculate ingress routers for each flow
-        irs = map(flows, key=lambda x: self.getIngressRouter(x))
+        irs = map(lambda x: self.getIngressRouter(x), flows)
 
         # Calculate egress router (should be the same for all)
         er = self.getEgressRouter(flow)
@@ -635,31 +637,24 @@ class TEControllerLab2(SimplePathLB):
 
         return sources_to_paths
 
-    def computeCongProb(algorithm, all_dag, sources):
+    def computeCongProb(self, algorithm, all_dag, sources):
         """
         :param algorithm: name of the algorithm to compute the probability with.
         :param all_dag: all routers dag with virtual capacities
         :param sources: list of tuples (f, pl) with flows and corresponding allocated
                         possible paths
         """
-        import ipdb; ipdb.set_trace()
-        
         # Convert flows into sizes and paths into capacities
-        flow_sizes = []
-        path_mincaps = []
-        for (f, pl) in sources:
-            flow_sizes.append(f.size)
-            caps = []
-            for p in pl:
-                cap = self._getVirtualMinCapacity(all_dag, p)
-                caps.append(cap)
+        flow_sizes = [f.size for (f, pl) in sources]
+        flow_paths = [pl for (f, pl) in sources]
 
         if algorithm == 'exact':
-                self.pc.ExactCongestionProbability(path_capacities, flow_sizes)
+            congProb = self.pc.ExactCongestionProbability(all_dag, flow_paths, flow_sizes)
         elif algorithm == 'sampled':
             pass
         else:
             pass
+        return congProb
 
 
     ##########################################################
@@ -784,18 +779,6 @@ class TEControllerLab2(SimplePathLB):
             caps.append(capacity_graph[u][v].get('capacity', None))
         return min(caps)
 
-    def computeCongProb(algorithm, all_dag, sources):
-        """
-        :param algorithm: name of the algorithm to compute the probability with.
-        :param all_dag: all routers dag with virtual capacities
-        :param sources: list of tuples (f, p) with flows and corresponding allocated paths
-        """
-        if algorithm == 'exact':
-            pass
-        elif algorithm == 'sampled':
-            pass
-        else:
-            pass
         
     def SimplifiedProbability(self, all_path_subsets, flow_sizes):
         # Get biggest flow size
