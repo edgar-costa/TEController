@@ -609,9 +609,6 @@ class LBController(object):
         log.info("\t* Paths (%s): %s\n"%(len(path_list), str([self.toLogRouterNames(path) for path in path_list])))
         log.info("\t* Flow: %s\n"%self.toLogFlowNames(flow))
                         
-        # Check first how many ECMP paths are there
-        ecmp_paths = float(len(path_list))
-
         # Current dag for destination
         current_dag = self.getCurrentDag(prefix)
         
