@@ -479,7 +479,7 @@ class TEControllerLab2(SimplePathLB):
         ## Repeat n times:
         n_iterations = self.getNIterations(all_dags)  
         results = []
-        foundEarlyDag = False
+        #foundEarlyDag = False
         
         for i in range(n_iterations):
             # Try ouf unique random ri-dx DAG
@@ -498,36 +498,76 @@ class TEControllerLab2(SimplePathLB):
             congProb = self.computeCongProb(probAlgo, new_adag, new_sources)
 
             # If found congProb low enough
-            if self.isLowEnough(congProb):
+            #if self.isLowEnough(congProb):
                 # Chose and break
-                foundEarlyDag = True
-                chosen_ridx_dag = ri_dx_dag
-                chosen_alls_dag = new_adag
-                chosen_congProb = congProb
-                break
+            #    foundEarlyDag = True
+            #    chosen_ridx_dag = ri_dx_dag
+            #    chosen_alls_dag = new_adag
+            #    chosen_congProb = congProb
+            #    break
 
-            else:
-                # Note down results
-                results.append((ri_dx_dag, new_adag, congProb))
+            #else:
+            # Note down results
+            results.append((ri_dx_dag, new_adag, congProb))
 
+        # Now choose ri-dx DAG that minimizes Pc
+        
+        # Sort results by increasing congestion probability
+        sorted_results = sorted(results, key=lambda x: x[2])
 
+        # Get minimum congProb obtained
+        min_congProb = min(sorted_results, key=lambda x: x[2])
+
+        # Filter those with the same congProb as minimum
+        min_results = filter(lambda x: x[2] == min_congProb[2], sorted_results)
+
+        # Check if many with same results
+        if len(min_results) > 1:
+            # Take the one with the shortest overall distance
+
+            # So far we only choose one at random
+            random.shuffle(min_results)
+
+            # Chosen one
+            chosen_ridx_dag = min_results[0][0]
+            chosen_alls_dag = min_results[0][1]
+            chosen_congProb = min_results[0][2]
+
+        else:
+            chosen_ridx_dag = min_congProb[0]
+            chosen_alls_dag = min_congProb[1]
+            chosen_congProb = min_congProb[2]
+            
+        # to chose the one that minimizes congProb
+        #if not foundEarlyDag:
+        #    chosen = min(results, key=lambda x: x[2])
+        #    chosen_ridx_dag = chosen[0]
+        #    chosen_alls_dag = chosen[1]
+        #    chosen_congProb = chosen[2]
+
+        # Modify current all-sources DAG for destination (modify edges
+        # accordingly) and set it to variable self.dags[dst_prefix] =
+        # cdag.copy()
+        self.updateCurrentDag(dst_prefix, chosen_alls_dag)
+        
         import ipdb; ipdb.set_trace()
         
-        # Choose ri-dx DAG that minimizes Pc
-        # If we didn't found a dag with congProb low enough, we need
-        # to chose the one that minimizes congProb
-        if not foundEarlyDag:
-            chosen = min(results, key=lambda x: x[2])
-            chosen_ridx_dag = chosen[0]
-            chosen_alls_dag = chosen[1]
-            chosen_congProb = chosen[2]
-
-        # Fib new all-sources DAG (modify edges accordingly)
-        # Extact active dag
+        # Extact active DAG
+        
         # Fib it
+        
+        # Update flow allocations and leave
 
-        # Update flows and leave
 
+    def updateCurrentDag(self, dst_prefix, alls_dag):
+        """
+        :param dst_prefix:
+        :param alls_dag: DAG directing any possible router towards dst_prefix
+        """
+        currentDag = self.getCurrentDag(dst_prefix)
+        
+        pass
+        
     def recomputeAllSourcesDag(self, all_dag, new_ridx_dag):
         """
         Given the initial all_routers_dag, and the new chosen ridxDag, we compute
