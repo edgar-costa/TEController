@@ -642,6 +642,8 @@ class TEControllerLab2(SimplePathLB):
         :param sources: list of tuples (f, pl) with flows and corresponding allocated
                         possible paths
         """
+        import ipdb; ipdb.set_trace()
+        
         # Convert flows into sizes and paths into capacities
         flow_sizes = []
         path_mincaps = []

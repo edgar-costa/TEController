@@ -71,11 +71,16 @@ class ProbabiliyCalculator(object):
         min available capacities : [[c1, c2], [c2]...]
         and n is a list of flow sizes: [s1, s2, ...]
 
-        returns congestion probability.
 
+        Flow to paths bidings are given by the lists indexes.
 
-        (TODO: SHOULD BE RE-WRITTEN)
+        Returns congestion probability.
         """
+
+        for alloc in it.product(*path_capacities):
+
+
+
         all_allocs = [t for p in
                       it.combinations_with_replacement(range(len(m)), len(n)) for t
                       in it.permutations(p)]
