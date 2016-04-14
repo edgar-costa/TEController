@@ -559,13 +559,24 @@ class TEControllerLab2(SimplePathLB):
         # Update flow allocations and leave
 
 
-    def updateCurrentDag(self, dst_prefix, alls_dag):
+    def updateCurrentDag(self, dst_prefix, new_activeDag):
         """
         :param dst_prefix:
-        :param alls_dag: DAG directing any possible router towards dst_prefix
+        :param new_activeDag: DAG directing any possible router towards dst_prefix
         """
-        currentDag = self.getCurrentDag(dst_prefix)
+        # Get current complete DAG
+        c_completeDag = self.getCurrentDag(dst_prefix)
         
+        # Get current active DAG
+        c_activeDag = self.getActiveDag(dst_prefix)
+
+        # Get edges to set 'active' = False in c_completeDag
+        edges_to_inactive = nx.difference(c_activeDag, new_activeDag)
+
+        # Get edges to set 'active' = True in c_completeDag
+        edges_to_active = nx.difference(new_activeDag, c_activeDag)
+
+        import ipdb; ipdb.set_trace()
         pass
         
     def recomputeAllSourcesDag(self, all_dag, new_ridx_dag):
@@ -696,7 +707,6 @@ class TEControllerLab2(SimplePathLB):
             pass
         return congProb
 
-
     ##########################################################
 
     def ECMPAlgorithm(self, dst_prefix, flow):
@@ -818,8 +828,7 @@ class TEControllerLab2(SimplePathLB):
         for (u, v) in zip(path[:-1], path[1:]):
             caps.append(capacity_graph[u][v].get('capacity', None))
         return min(caps)
-
-        
+     
     def SimplifiedProbability(self, all_path_subsets, flow_sizes):
         # Get biggest flow size
         max_flow_size = max(flow_sizes)
