@@ -95,10 +95,11 @@ class ProbabiliyCalculator(object):
                     cap = adag_c[x][y]['capacity']
                     cap -= flow_sizes[index]
                     adag_c[x][y]['capacity'] = cap
-                    
+
+                    mincap = adag_c[x][y]['mincap']
                     # Perform check: if at some point, available capacity
                     # < 0: break iteration, go to next alloc                    
-                    if cap < 0:
+                    if cap < mincap:
                         congestion_found = True
                         break
                     
