@@ -55,12 +55,12 @@ class TEControllerLab2(SimplePathLB):
         getTimeout = 1
 
         while not self.isStopped():
-            
+
             try:
-                log.info("*** Reading from event queue...\n")
+                #log.info("*** Reading from event queue...\n")
                 event = self.eventQueue.get(timeout=getTimeout)
             except:
-                log.info("*** Timeout occurred\n")
+                #log.info("*** Timeout occurred\n")
                 event = None
                     
             # Check if flows allocations still pending for feedback
@@ -74,7 +74,7 @@ class TEControllerLab2(SimplePathLB):
                     log.info("*** But nothing is on the responseQueue...\n")
                     
             if event and event['type'] == 'newFlowStarted':
-                log.info("*** newFlowStarted event received...\n")
+                #log.info("*** newFlowStarted event received...\n")
                 # Log it
                 log.info(lineend)
                 t = time.strftime("%H:%M:%S", time.gmtime())
@@ -89,7 +89,7 @@ class TEControllerLab2(SimplePathLB):
                     with self.flowAllocationLock:
                         # Deal with new flow
                         self.dealWithNewFlow(flow)
-                log.info("*** dealWithNewFlow finished...\n")
+                #log.info("*** dealWithNewFlow finished...\n")
                 
             elif event:
                 t = time.strftime("%H:%M:%S", time.gmtime())
@@ -98,8 +98,8 @@ class TEControllerLab2(SimplePathLB):
 
             if self.pendingForFeedback != {}:
                 log.info("*** We still need feedback for some flows...\n")
-                log.info("*** Puting pendingForFeedback dictionary into requestQueue...\n")
-
+                log.info("    ... Puting pendingForFeedback dictionary into requestQueue...\n")
+                
                 # Put into queue
                 self.feedbackRequestQueue.put(self.pendingForFeedback.copy())
 
@@ -259,6 +259,14 @@ class TEControllerLab2(SimplePathLB):
                 log.info("\t* ECMP Should NOT de-activated!\n")
                 # Allocate flow to current paths
                 self.addAllocationEntry(dst_prefix, flow, currentPaths)
+
+                # Adding flow and paths to pendingForFeedback
+                log.info("\t* Adding flow and paths to pendingForFeedback...\n")
+                if not self.pendingForFeedback.get(flow, None):
+                    self.pendingForFeedback[flow] = currentPaths
+                else:
+                    raise KeyError("How is it possible that flow is in there? It shouldn't happen\n")
+
 
         # ECMP is not active in default paths       
         else:
@@ -641,7 +649,7 @@ class TEControllerLab2(SimplePathLB):
         # Create DAG showing remaining flow paths only
         edges_with_flows = []
         for (f, pl) in remaining_flows:
-            edges_with_flows += self.getEdgesFromPathList(f_path_list)        
+            edges_with_flows += self.getEdgesFromPathList(pl)
         edges_with_flows = list(set(edges_with_flows))
         remaining_traffic_dag = nx.DiGraph()
         remaining_traffic_dag.add_nodes_from(activeDag.nodes())
@@ -726,10 +734,10 @@ class TEControllerLab2(SimplePathLB):
 
             # Log a bit
             if pl_before:
-                to_log = "\t%s before: %s, now allocated to: %s\n"
+                to_log = "\t   - %s\n\t   - Before: %s\n\t   - Now: %s\n"
                 log.info(to_log%(self.toLogFlowNames(f), self.toLogRouterNames(pl_before), self.toLogRouterNames(pl)))
             else:
-                to_log = "\t%s allocated to: %s\n"
+                to_log = "\t   - %s\n\t   - Allocated to: %s\n"
                 log.info(to_log%(self.toLogFlowNames(f), self.toLogRouterNames(pl)))
                 
             # Check if flow needs feedback
@@ -739,7 +747,6 @@ class TEControllerLab2(SimplePathLB):
                 
         # Re-set flow allocations for that prefix
         self.flow_allocation[dst_prefix] = new_dict
-
 
 
     def updateCurrentDag(self, dst_prefix, new_activeDag):
@@ -824,6 +831,9 @@ class TEControllerLab2(SimplePathLB):
             # Get edge capacity
             cap = self.cgc[x][y].get('capacity')
 
+            # Add also minimum capacity mincap
+            mincap = self.cgc[x][y].get('mincap')
+            
             # Accumulate sizes of flows that pass through there
             to_add = sum([f.size for (f, p) in sources if (x, y) in zip(p[:-1], p[1:])])
             
@@ -832,6 +842,7 @@ class TEControllerLab2(SimplePathLB):
 
             # Update new size in all_dag edge
             data['capacity'] = vcap
+            data['mincap'] = mincap
 
             # Remove flag
             if 'flag' in data.keys():

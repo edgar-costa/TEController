@@ -20,7 +20,17 @@ def main(args):
         edges_to_print = [i.strip('[').strip(']') for i in tmp]
         
     print "Edges to print: %s"%str(edges_to_print)
-    
+
+    if args.timeframe_max:
+        until = int(args.timeframe_max)
+    else:
+        until = None
+
+    if args.timeframe_min:
+        fromm = int(args.timeframe_min) + 8
+    else:
+        fromm = 8
+        
     # Open links logfile
     f = open(dconf.LinksMonitor_LogFile, 'r') # LINKS LOGFILE
     lines = f.readlines()
@@ -34,13 +44,18 @@ def main(args):
     if args.all ==True:
         edges_to_print = edges
         
+
+    offset = 8
     seconds = np.asarray([float(line[0]) for line in lines])
-    seconds = seconds - seconds[0] # make time relative to start
+    seconds = seconds - seconds[0] - offset# make time relative to start
+
+
     
     data = [line[1:] for line in lines]
 
+    
     loads = []
-    for line in data:
+    for line in data[fromm:until]:
         values = []
         for i, v in enumerate(line):
             values.append(float(v.split(' ')[1].strip('%)')))
@@ -70,8 +85,8 @@ def main(args):
             ax = fig.add_subplot(len(edges_to_print), 1, count)
             label = l+" %s"%edges[i].replace(' ', ', ')
             label_f = label+' filtered'
-            ax.plot(seconds, loads[:,i], 'r.', label=label)
-            ax.plot(seconds, loads2[:,i], 'b-', label=label_f)
+            ax.plot(seconds[fromm:until], loads[:,i], 'r.', label=label)
+            ax.plot(seconds[fromm:until], loads2[:,i], 'b-', label=label_f)
             ax.set_ylim(0,150)
             ax.legend([label, label_f], loc='right')
             #ax.legend([label_f], loc='right')
@@ -90,5 +105,7 @@ if __name__ == '__main__':
                        type=str,
                        default="[(s1 r1),(s2 r1),(r1 r2),(r1 r3),(r1 r4),(r4 r3),(r3 d1)]")
     group.add_argument('--all', action='store_true', default=False)
+    parser.add_argument('--timeframe_max')
+    parser.add_argument('--timeframe_min')
     args = parser.parse_args()
     main(args)

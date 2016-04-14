@@ -36,7 +36,7 @@ class feedbackThread(threading.Thread):
 
         A dictionary indexed by flow -> allocated path is returned
         """
-        queueLookupPeriod = 1 #seconds
+        queueLookupPeriod = 2 #seconds
         while True:
             try:
                 requestFlowsDict = self.requestQueue.get(timeout=queueLookupPeriod) # Blocking read
@@ -44,14 +44,18 @@ class feedbackThread(threading.Thread):
                 # Update flow sets for each router
                 self.updateRouterFlowSets()
             else:
+                #log.info("*** FEEDBACK REQUEST RECEIVED:\n")
+                #log.info("     %s\n"%str(requestFlowsDict))
+                self.updateRouterFlowSets()
                 responsePathDict = self.dealWithRequest(requestFlowsDict)
                 if responsePathDict != {}:
                     self.responseQueue.put(responsePathDict)                    
-                self.updateRouterFlowSets()
+                
 
     def updateRouterFlowSets(self):
         for rid, capfile in self.capFilesDict.iteritems():
             lines = capfile.readlines()
+            # Create new empty set
             ridSet = set()
             for line in lines:
                 try:
@@ -65,8 +69,6 @@ class feedbackThread(threading.Thread):
                     dst_ip = ipaddress.ip_address('.'.join(map(str, dst_ip_tmp)))
                     ridSet.update({((src_ip, 's'), (dst_ip, 'd'), dport)})
                 except:
-                    #import ipdb; ipdb.set_trace()
-                    #traceback.print_exception()
                     pass
                 
             # Add set into dictionary
@@ -92,29 +94,26 @@ class feedbackThread(threading.Thread):
             routers_containing_flow = {self.db.getIpFromHostName(rid) for rid, rset in
                                        self.router_flowsets.iteritems() if
                                        rset.intersection(flowSet) != set()}
+
+            #log.info("*** SEARCHING:\n")
+            #log.info("     - %s\n"%f)
+            #log.info("     - %s\n"%str(list(routers_containing_flow)))
             
             # Iterate path list and choose which of them is the one in
             # which the flow is allocated
             pathSetList = [(p, set(p)) for p in pl]
 
-            # Compute similarities with routers containing flows set
-            pathCoincidences = [(p, pset, pset.intersection(routers_containing_flow),  
-                                 len(pset.intersection(routers_containing_flow)))
-                                for (p, pset) in pathSetList]
-
-            # Get the one with biggest common routers
-            (p, pset, prouters, similarity) = max(pathCoincidences, key=lambda x: x[3])
-
-            # Only put in responsePathDict if all routers in which
-            # flow was observed coincede with one of its possible
-            # paths.
-            if len(pset) == similarity:
-                #import ipdb; ipdb.set_trace()
-                responsePathDict[f] = p
-            else:
+            # Retrieve path that matches
+            chosen_path = [(p, pset) for (p, pset) in pathSetList if pset == routers_containing_flow]
+            if len(chosen_path) == 1:
+                responsePathDict[f] = chosen_path[0][0]
+                
+            elif len(chosen_path) == 0:
                 pass
             
-        #log.info("*** It took %s seconds to compute which path should it go\n"%(time.time()-start_time))
+            else:
+                log.info("*** FEEDBACK THREAD ERROR\n")
+
         return responsePathDict
 
     

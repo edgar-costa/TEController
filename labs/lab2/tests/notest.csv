@@ -1,5 +1,8 @@
 #src,dst,sport,dport,size,start_time,duration
 
-## NO FLOWS ARE STARTED 
+## NO FLOWS ARE STARTED
 
+h10,h30,30021,5001,300K,3s,30s
+h11,h30,30021,5001,100K,13s,30s
+h12,h30,30021,5001,500K,23s,30s
 
