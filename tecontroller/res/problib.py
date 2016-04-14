@@ -79,12 +79,8 @@ class ProbabiliyCalculator(object):
 
         for alloc in it.product(*path_capacities):
 
+        available_sites
 
-
-        all_allocs = [t for p in
-                      it.combinations_with_replacement(range(len(m)), len(n)) for t
-                      in it.permutations(p)]
-        final_allocs = []
         action = [final_allocs.append(a) for a in all_allocs if a not in final_allocs]
 
         n_samples = len(final_allocs) # == m**n
