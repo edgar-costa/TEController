@@ -84,8 +84,11 @@ class Lab1Topo(IPTopo):
         # Create broadcast domains
         self.addLink(r1, self.addHost(H10)) 
         self.addLink(r1, self.addHost(H11)) 
-        self.addLink(r1, self.addHost(H12)) 
-
+        self.addLink(r1, self.addHost(H12))
+        self.addLink(r1, self.addHost(H13))
+        self.addLink(r1, self.addHost(H14))
+        self.addLink(r1, self.addHost(H15)) 
+        
         self.addLink(r2, self.addHost(H20))  
      	self.addLink(r2, self.addHost(H21))  
         self.addLink(r2, self.addHost(H22))  
