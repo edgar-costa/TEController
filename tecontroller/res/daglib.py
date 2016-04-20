@@ -63,19 +63,6 @@ def getRandomDag(graph, start, end):
 	return finalRandomDag	
 
 
-def getRandomDag(graph, start, end):
-	# Save nodes for which the choice of a random 
-	# subset of its edges was done
-	traversed_nodes = set()
-
-	# Save edges that can't be chosen anymore:
-	#  1) Edges that were not randomly chosen (and opposite edge)
-	#  2) All 
-	forbidden_edges = set()
-
-
-
-
 
 def getRandomSinglePathDag(graph, start, end):
 	"""
