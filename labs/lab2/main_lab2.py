@@ -33,13 +33,13 @@ R1 = 'r1'
 R2 = 'r2'
 R3 = 'r3'
 R4 = 'r4'
+R5 = 'r5'
+R6 = 'r6'
+R7 = 'r7'
 
 H10 = 'h10'
 H11 = 'h11'
 H12 = 'h12'
-H13 = 'h13'
-H14 = 'h14'
-H15 = 'h15'
 
 H20 = 'h20'
 H21 = 'h21'
@@ -48,16 +48,22 @@ H22 = 'h22'
 H30 = 'h30'
 H31 = 'h31'
 H32 = 'h32'
+H33 = 'h33'
+H34 = 'h34'
 
 H40 = 'h40'
 H41 = 'h41'
 H42 = 'h42'
 
+H50 = 'h50'
+H60 = 'h60'
+H70 = 'h70'
+
 M1 = 'm1'
 
 BW = 1  # Absurdly low bandwidth for easy congestion (in Mb)
 
-class Lab1Topo(IPTopo):
+class Lab2Topo(IPTopo):
     def build(self, testfile, pcalgorithm, *args, **kwargs):
         """
          h2's        h3's
@@ -75,35 +81,36 @@ class Lab1Topo(IPTopo):
         r3 = self.addRouter(R3, cls=MyCustomRouter)
         r4 = self.addRouter(R4, cls=MyCustomRouter)
 
-        self.addLink(r1, r2)
-        self.addLink(r1, r4)
-        self.addLink(r2, r3)
-        self.addLink(r3, r4)
-        self.addLink(r1, r3, cost=4)
+        self.addLink(r1, r2, cost=10)
+        self.addLink(r1, r4, cost=2)
+        self.addLink(r1, r3, cost=2)
+        self.addLink(r2, r3, cost=2)
+        self.addLink(r3, r4, cost=5)
 
         # Create broadcast domains
         self.addLink(r1, self.addHost(H10)) 
         self.addLink(r1, self.addHost(H11)) 
-        self.addLink(r1, self.addHost(H12))
-        self.addLink(r1, self.addHost(H13))
-        self.addLink(r1, self.addHost(H14))
-        self.addLink(r1, self.addHost(H15)) 
-        
+        self.addLink(r1, self.addHost(H12)) 
+
         self.addLink(r2, self.addHost(H20))  
      	self.addLink(r2, self.addHost(H21))  
         self.addLink(r2, self.addHost(H22))  
 
-        self.addLink(r3, self.addHost(H30))
-        self.addLink(r3, self.addHost(H31))
-        self.addLink(r3, self.addHost(H32))
-        
+        s2 = self.addSwitch('s2')
+        self.addLink(r3, s2)
+        self.addLink(s2, self.addHost(H30))
+        self.addLink(s2, self.addHost(H31))
+        self.addLink(s2, self.addHost(H32))
+        self.addLink(s2, self.addHost(H33))
+        self.addLink(s2, self.addHost(H34))
+
         self.addLink(r4, self.addHost(H40))
         self.addLink(r4, self.addHost(H41))
         self.addLink(r4, self.addHost(H42))
 
         # Adding Fibbing Controller
         c1 = self.addController(C1, cfg_path=C1_cfg)
-        self.addLink(c1, r4, cost=1000)
+        self.addLink(c1, r4, cost=999)
 
         # Adding Traffic Generator Host
         c2 = self.addHost(TG, isTrafficGenerator=True, flowfile=testfile) 
@@ -112,16 +119,17 @@ class Lab1Topo(IPTopo):
         # Adding Traffic Engineering Controller
         c3 = self.addHost(LBC, isLBController=True, algorithm='lab2', pcalgorithm=pcalgorithm)
         self.addLink(c3, r4)
-
+        
+        
         # Create the monitoring network
         monitorSwitch = self.addSwitch('s1')
         # connect nodes in it
-        nodes_to_monitor = [r1, r2, r3, r4, c2, c3]
+        nodes_to_monitor = [r1, r2, r3, r4, c2, c3, c1]
         for n in nodes_to_monitor:
             self.addLink(monitorSwitch, n, cost=-1)
 
-            
-class Lab1Topo2(IPTopo):
+
+class Lab2Topo2(IPTopo):
     def build(self, testfile,pcalgorithm, *args, **kwargs):
 
         topo = """
@@ -176,7 +184,7 @@ class Lab1Topo2(IPTopo):
 
         
 def launch_network(testfile, pcalgorithm):
-    net = IPNet(topo = Lab1Topo(testfile, pcalgorithm),
+    net = IPNet(topo = Lab2Topo(testfile, pcalgorithm),
                 debug =_lib.DEBUG_FLAG,
                 intf = custom(TCIntf, bw = BW),
                 host = MyCustomHost)
