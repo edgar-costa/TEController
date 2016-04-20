@@ -1,0 +1,26 @@
+#src,dst,sport,dport,size,start_time,duration
+
+## TEST 1 ######################################
+## Testing Allocation Algorithm ################
+# Fill (r3, r1) up to 60% usage
+
+h30,h10,30001,5001,600K,3s,57s
+
+# Allocate Flow h20->h11:200K. Should force new path [r2,r3,r4,r1]
+
+h20,h11,30001,5001,300K,13s,49s
+
+# Start Flow h20->h12:200K. Should force new path [r2, r1]
+
+h20,h12,30001,5001,600K,23s,42s
+
+
+
+# Check that network is reset to default state
+#h11,h32,30001,5001,800K,45s,10s
+
+# Comments:
+# You should observe how there is no congestion in the network, and
+# all links are load-balanced. In the end, you should observe how
+# Flow(h11->h32) is allocated to default shortest path, since there is
+# no more traffic in the network (the lies are removed correctly).
