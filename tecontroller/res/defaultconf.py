@@ -38,11 +38,13 @@ RES_Path = PPATH + 'tecontroller/res/'
 
 # Path to Labs
 Labs_Path = PPATH + 'labs/'
+Lab0_Path = Labs_Path + 'lab0/'
 Lab1_Path = Labs_Path + 'lab1/'
 Lab2_Path = Labs_Path + 'lab2/'
 Lab3_Path = Labs_Path + 'lab3/'
 
 # Paths to test folders
+Lab0_Tests = Lab0_Path + 'tests/'
 Lab1_Tests = Lab1_Path + 'tests/'
 Lab2_Tests = Lab2_Path + 'tests/'
 
