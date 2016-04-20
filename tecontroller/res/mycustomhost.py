@@ -31,12 +31,10 @@ dconf.LBC_Path
 
 commented = False#True #
 
-algo_to_file = {'lab1': dconf.Lab1_Path + 'tecontroller_lab1.py',
+algo_to_file = {'lab0': dconf.Lab0_Path + 'tecontroller_lab0.py',
+                'lab1': dconf.Lab1_Path + 'tecontroller_lab1.py',
                 'lab2': dconf.Lab2_Path + 'tecontroller_lab2.py',
-                'lab3': dconf.Lab3_Path + 'tecontroller_lab3.py',
-                'None': dconf.LBC_Path + 'lbcontroller.py',
-                'SimplePath': dconf.LBC_Path + 'simplepathlb.py', 
-                'ECMP': dconf.LBC_Path + 'ecmplb.py'}
+                'lab3': dconf.Lab3_Path + 'tecontroller_lab3.py'}
 
 class MyCustomHost(_node.Host):
     """This class essentially extends the Host class in mininet so that
