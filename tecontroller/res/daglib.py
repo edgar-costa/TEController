@@ -15,15 +15,20 @@ def getMergedDag(start, end, path_list):
 
 	## Merge them all into one single DAG
 	composedDag = nx.compose_all(pathsDags)
-
-	# Get simple cycles
-	simple_cycles = [c for c in nx.simple_cycles(composedDag)]
-
-	## Eliminate loops
-	for cycle in simple_cycles:
-		[x, y] = cycle
-		composedDag.remove_edge(x, y)
-		composedDag.remove_edge(y, x)
+        
+        while not nx.is_directed_acyclic_graph(composedDag):
+                ## Eliminate loop edges at random
+                # Get simple cycles
+                simple_cycles = [c for c in nx.simple_cycles(composedDag)]
+                
+                ## Eliminate loops
+                for cycle in simple_cycles:
+                        # Remove cycle edge at random
+                        cycle_edges = zip(cycle[:-1], cycle[1:])
+                        random.shuffle(cycle_edges)
+                        (x, y) = cycle_edges[0]
+                        if (x,y) in composedDag.edges():
+                                composedDag.remove_edge(x, y)
 
 	# Compute all paths on randomDag (to eliminate dummy paths)
 	all_final_paths = getAllPathsLim(composedDag, start, end, k=0)
@@ -92,14 +97,14 @@ def getAllPossibleSinglePathDags(graph, start, end):
 	return all_dags
 
 def getAllPossibleDags(graph, start, end):
-	"""
+        """
 	Given a network graph, and start and end nodes, computes
 	a random DAG from start towards end nodes. 
 	"""
 	## Calculate firts all paths from start to end
 	all_paths = getAllPathsLim(graph, start, end, k=0)
 
-    # Calculate all combinations of possible paths.
+        # Calculate all combinations of possible paths.
    	all_path_subsets = []
    	action = [all_path_subsets.append(c) for i in range(1, len(all_paths)+1) for c in list(it.combinations(all_paths, i))]
 
@@ -135,7 +140,7 @@ def getAllPossibleMultiplePathDags(graph, start, end):
 	## Calculate firts all paths from start to end
 	all_paths = getAllPathsLim(graph, start, end, k=0)
 
-    # Calculate all combinations of possible paths.
+        # Calculate all combinations of possible paths.
    	all_path_subsets = []
    	action = [all_path_subsets.append(c) for i in range(2, len(all_paths)+1) for c in list(it.combinations(all_paths, i))]
 
