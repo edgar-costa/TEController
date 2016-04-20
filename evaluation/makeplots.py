@@ -167,7 +167,7 @@ def main(args):
         ax.set_ylim(-0.5,105)
        
         # Set label for that link
-        label = "%s"%(str(link))
+        label = "(%s, %s)"%(link[0], link[1])
 
         ax.legend([label], loc='right', handlelength=0, numpoints=1)
 
@@ -180,6 +180,7 @@ def main(args):
 
     fig.text(0.06, 0.5, 'Link utilization (%)', ha='center', va='center', rotation='vertical', fontsize=18)
     plt.xlabel("Time (s)", fontsize=18)
+    #import ipdb; ipdb.set_trace()
     plt.show()
     #plt.savefig(dconf.Hosts_LogFolder+'links.png')
 
