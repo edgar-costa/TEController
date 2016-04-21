@@ -3,28 +3,28 @@ import itertools as it
 import numpy as np
 import random
 import time
+import marshal
 
 class Evaluation(object):
-    def __init__(self, nodes=5, edgeCreationProb = 0.5):
+    def __init__(self, nodes=5, edgeCreationProb = 0.2, marshalFile = None):
         # Number of nodes in the network
         self.n = nodes
         # Probability of edge creation
     	self.p = edgeCreationProb
-
+        
+        
         print("*** Evaluation: %d nodes, %f prob."%(self.n, self.p))
 
     def generateGraph(self, max_OSPF_weight, max_available_capacity):
         """
     	"""
         # Generate random nodes and edges
-    	graph_tmp = nx.gnp_random_graph(self.n, self.p, directed=True)
+    	graph_tmp = nx.gnp_random_graph(self.n, self.p)
+        while not nx.is_connected(graph_tmp):
+            graph_tmp = nx.gnp_random_graph(self.n, self.p)
 
-        # Generate reverse edges
-        graph = graph_tmp.copy()
-        taken = []
-        for (x,y) in graph_tmp.edges_iter():
-            if (x,y) not in taken:
-                graph.add_edge(y,x)
+        # Turn it into directed graph
+        graph = graph_tmp.to_directed()
 
         # Generate random OSPF weights and capacities
     	taken = []
@@ -50,34 +50,55 @@ class Evaluation(object):
         random.shuffle(nodes_copy)
         return nodes_copy[0]
         
+    def loadResults(self, filename):
+        with open(filename, 'rb') as file:
+            data = file.read()
+            results = marshal.loads(data)
+            return data
+
+    def saveResults(self, results, n, p, id):
+        pstr = str(p)
+        pstr = pstr.replace('.', '_')
+        filename = './results_%d_%s_%s'%(n, pstr, id)
+        with open(filename, 'wb') as file:
+            data = marshal.dumps(results)
+            file.write(data)
+
     def generateSources(self, graph, egress_node, max_flow_size):
         """
         """
+        # Create copy of graph
+        graph_c = graph.copy()
+
+        # Accumulate sources here
         flow_sizes = []
         flow_paths = []
-        probCong = self.exactCongestionProbability(graph, flow_paths, flow_sizes)
-        while probCong < 0.75:
-            # Add new flow
-            # Pick random ingress node
-            ingress_node = self.pickRandomNode(graph)
 
-            # Pick random flow siez
+        # Compute probCong
+        probCong = self.exactCongestionProbability(graph_c, flow_paths, flow_sizes)
+
+        # Iterate until congestion
+        while probCong < 0.75:
+            ## Add new flow
+            # Pick random ingress node
+            ingress_node = self.pickRandomNode(graph_c)
+
+            # Pick random flow size
             flow_size = random.randint(1, max_flow_size)
 
-            # Calculate all default OSPF paths for flow
-
+            ## Calculate all default OSPF paths for flow
             # Get first length of shortest dijkstra path
-            ospf_path_len = nx.dijkstra_path_length(graph, ingress_node, egress_node)
+            ospf_path_len = nx.dijkstra_path_length(graph_c, ingress_node, egress_node)
            
             # Compute all equal cost paths
-            all_paths = self._getAllPathsLim(graph, ingress_node, egress_node, ospf_path_len)
+            all_paths = self._getAllPathsLim(graph_c, ingress_node, egress_node, k=ospf_path_len)
 
             # Update flow sizes and flow paths
             flow_sizes.append(flow_size)
             flow_paths.append(all_paths)
 
             # Calculate new probCong
-            probCong = self.exactCongestionProbability(graph, flow_paths, flow_sizes)
+            probCong = self.exactCongestionProbability(graph_c, flow_paths, flow_sizes)
             
         # Accumulate all sources
         all_sources = [(flow_sizes[i], flow_paths[i]) for i in range(len(flow_sizes))]        
@@ -87,10 +108,28 @@ class Evaluation(object):
     def makePlot():
         """
         """
-        pass
-        
+        import ipdb; ipdb.set_trace()
+        pass        
+
+    def generateRandomDag(self, all_paths):
+        ingressNode = all_paths[0][0]
+        egressNode = all_paths[0][-1]
+
+        # Take random number between 1 and len(all_paths)
+        n_paths = random.randint(1, len(all_paths))
+                          
+        # Shuffle all_paths
+        random.shuffle(all_paths)
+
+        # Take n random dags from all_dags
+        paths_to_merge = all_paths[:n_paths]
+                        
+        # Create merged dag
+        new_dag = self.getMergedDag(ingressNode, egressNode, paths_to_merge)                        
+
+        return new_dag
     
-    def run(self):
+    def run(self, estimate = False):
         """
         """
         # Generate random dag
@@ -113,9 +152,19 @@ class Evaluation(object):
         ingressNode = tf_pl[0][0]
         print("*** Source at ingress node %d creates congestion"%ingressNode)
 
-        # Compute all possible ir->er DAGs
-        all_dags = self.getAllPossibleDags(graph, ingressNode, egressNode)
+        # Compute all possible paths from ingress node to egress node
+        all_paths = self._getAllPathsLim(graph, ingressNode, egressNode, k=0)
+        print("*** Number of possible paths from ingress to egress: %d"%len(all_paths))
 
+        # Take 10 only at random
+        #random.shuffle(all_paths)
+       	#all_paths = all_paths[:10]
+
+        # Number of possible DAGs
+        n_possible_dags = sum([1 for i in range(1, len(all_paths)+1) for c in list(it.combinations(all_paths, i))])
+        print("*** Number of possible DAGs: %d"%n_possible_dags)
+
+        #        import ipdb; ipdb.set_trace()
         # Compute current all-nodes->er DAG
         all_nodes_dag = self.computeAllNodesDag(graph, egressNode)
 
@@ -123,25 +172,71 @@ class Evaluation(object):
         results = {}
 
         # Sample the space
-        total_samples = len(all_dags)
+        total_samples = n_possible_dags
+
+        import ipdb; ipdb.set_trace()
 
         for n in range(1, total_samples+1):
             print('*** %d/%d samples'%(n, total_samples))
-            # Do it 10 times and take average
-            pcs = []
-            for times in range(5):
-                # Shuffle all_dags
-                random.shuffle(all_dags)
+            # n is the number of DAG samples to generate
 
-                # Take n random dags from all_dags
-                samples = all_dags[:n]
+            if estimate:                
+                # Do it 5 times and take average
+                pcs = []
 
-                # Compute congestion probability for each sample
+                for times in range(5):   
+                    tmp_pcs = []
+                    
+                    # Try out n samples
+                    for sample in range(n):
+
+                        # Get random DAG sample
+                        new_dag = self.generateRandomDag(all_paths)
+
+                        # Compute congestion probability
+                        pc = self.computeCongestionProbability(graph, all_nodes_dag, new_dag, sources)
+
+                        # Append it to tmp_pcs
+                        tmp_pcs.append((new_dag, pc))
+
+                    # Take minimum
+                    minPc = min(tmp_pcs, key=lambda x: x[1])
+
+                    # Append it to pcs
+                    pcs.append(minPc[1])
+
+                # Convert to numpy array
+                pcs = np.asarray(pcs)
+            
+                # Log a bit
+                print("    minPc: %.2f +/- %.2f"%(pcs.mean(), pcs.std()))
+
+                # Add results to dict
+                results[n] = {'pcs': pcs} 
+
+            else:
+                # Save tmp resutls
                 tmp_pcs = []
-                for new_dag in samples:
+
+                # Start global crono
+                start_time = time.time()
+
+                # Accumulate partial cronos for Pc here	
+                partial_times = []
+
+                # Try out n samples
+                for sample in range(n):
+                    # Get random DAG sample
+                    new_dag = self.generateRandomDag(all_paths)
+                    
+                    # Start partial time
+                    partial_time = time.time()
 
                     # Compute congestion probability
                     pc = self.computeCongestionProbability(graph, all_nodes_dag, new_dag, sources)
+
+                    # Stop partial time
+                    partial_times.append(time.time()-partial_time)
 
                     # Append it to tmp_pcs
                     tmp_pcs.append((new_dag, pc))
@@ -149,19 +244,111 @@ class Evaluation(object):
                 # Take minimum
                 minPc = min(tmp_pcs, key=lambda x: x[1])
 
-                # Append it to pcs
-                pcs.append(minPc[1])
+                # Take average of partial times
+                partial_times = np.asarray(partial_times)
 
-            # Convert to numpy array
-            pcs = np.asarray(pcs)
-            
-            # Log a bit
-            print("    minPc: %.2f +/- %.2f"%(pcs.mean(), pcs.std()))
+                # Add results to dict
+                results[n] = {'pc': minPc[1], 'time': time.time()-start_time, 'pc_times': partial_times.mean()} 
 
-            # Add results to dict
-            results[n] = {'pcs': pcs} 
+                # Log a bit
+                print("    minPc: %.2f"%(minPc[1]))
 
+        return results
+
+    def run2(self, estimate = False):
+        # Generate random dag
+        graph = self.generateGraph(max_OSPF_weight=5, max_available_capacity=10)
+        
+        # Pick random destination
+        egressNode = self.pickRandomNode(graph)
+        print("*** Egress node chosen: %d"%egressNode)
+        
+        # Generate random sources
+        sources = self.generateSources(graph, egress_node=egressNode, max_flow_size=2)
+        print("*** Number of sources: %d"%(len(sources)))
+        
+        # Get flow triggering congestion
+        trigger_flow = sources[-1]
+        # Extract flow and path_list
+        (tf, tf_pl) = trigger_flow
+        
+        # Ingress node for triggering flow
+        ingressNode = tf_pl[0][0]
+        print("*** Source at ingress node %d creates congestion"%ingressNode)
+
+        # Compute all possible ir->er DAGs
+        all_dags = self.getAllPossibleDags(graph, ingressNode, egressNode)
+        
+        # Compute current all-nodes->er DAG
+        all_nodes_dag = self.computeAllNodesDag(graph, egressNode)
+
+        # Results are stored in a dict
+        results = {}
+	
+        # Sample the space
+        total_samples = len(all_dags)
+        
         import ipdb; ipdb.set_trace()
+        for n in range(1, total_samples+1):
+            print('*** %d/%d samples'%(n, total_samples))
+            #Start global crono
+            start_time = time.time()
+            
+            # Accumulate partial cronos for Pc here	
+            partial_times = []
+            
+            # Shuffle all_dags
+            random.shuffle(all_dags)
+            
+            # Take n random dags from all_dags
+            samples = all_dags[:n]
+            
+            # Compute congestion probability for each sample
+            tmp_pcs = []
+            for new_dag in samples:
+                # Start partial time
+                partial_time = time.time()
+                
+                # Compute congestion probability
+                pc = self.computeCongestionProbability(graph, all_nodes_dag, new_dag, sources)
+                
+                # Stop partial time
+                partial_times.append(time.time()-partial_time)
+                
+                # Append it to tmp_pcs
+                tmp_pcs.append((new_dag, pc))
+                
+            # Take minimum
+            minPc = min(tmp_pcs, key=lambda x: x[1])
+            
+            # Convert into array
+            partial_times = np.asarray(partial_times)
+
+            # Log a bit
+            print("    minPc: %.3f"%(minPc[1]))
+            
+            # Add results to dict
+            results[n] = {'pc': minPc[1], 'time': time.time()-start_time, 'pc_times': partial_times.mean()} 
+
+        return results
+            
+    def computeCongestionProbability(self, graph, all_sources_dag, new_ridx_dag, sources):
+        """
+        """
+        # Compute new all-nodes DAG
+        new_adag = self.recomputeAllSourcesDag(all_sources_dag, new_ridx_dag)
+        
+        # Recompute sources paths
+        new_sources = self.recomputeSourcesPaths(new_adag, sources)
+
+        # Extract new flow paths and sizes
+        flow_paths = [pl for (f, pl) in new_sources]
+        flow_sizes = [f for (f, pl) in new_sources]
+
+        # Compute congestion probability Pc
+        pc = self.exactCongestionProbability(graph, flow_paths, flow_sizes)
+
+        return pc
 
     def computeAllNodesDag(self, graph, egress_node):
         """
@@ -182,7 +369,6 @@ class Evaluation(object):
         # Add edges forcing found paths
         all_nodes_dag.add_edges_from(list(edges_set))
         return all_nodes_dag
-
 
     def recomputeAllSourcesDag(self, all_dag, new_ridx_dag):
         """
@@ -213,24 +399,6 @@ class Evaluation(object):
         
         # Return modified all_dag
         return final_all_dag
-
-    def computeCongestionProbability(self, graph, all_sources_dag, new_ridx_dag, sources):
-        """
-        """
-        # Compute new all-nodes DAG
-        new_adag = self.recomputeAllSourcesDag(all_sources_dag, new_ridx_dag)
-        
-        # Recompute sources paths
-        new_sources = self.recomputeSourcesPaths(new_adag, sources)
-
-        # Extract new flow paths and sizes
-        flow_paths = [pl for (f, pl) in sources]
-        flow_sizes = [f for (f, pl) in sources]
-
-        # Compute congestion probability Pc
-        pc = self.exactCongestionProbability(graph, flow_paths, flow_sizes)
-
-        return pc
 
     def recomputeSourcesPaths(self, new_adag, sources):
         # Get egress node
@@ -292,8 +460,6 @@ class Evaluation(object):
                     for newpath in newpaths:
                         paths.append(newpath)
         return paths
-
-
 
     def _getAllPathsLim(self, igp_graph, start, end, k, path=[], len_path=0, die=False):
         """Recursive function that finds all paths from start node to end
@@ -369,16 +535,14 @@ class Evaluation(object):
                     cap -= flow_sizes[index]
                     adag_c[x][y]['capacity'] = cap
                     
-                    #mincap = adag_c[x][y]['mincap']
-                    # Perform check: if at some point, available capacity
-                    # < 0: break iteration, go to next alloc                    
-                    #if cap < mincap:
                     if cap < 0:
                         congestion_found = True
+                        # Stop checking that path in that allocation
                         break
                         
                 if congestion_found:
                     congestion_samples += 1
+                    # Stop checking that allocation
                     break
                 
         return congestion_samples/float(total_samples)
@@ -434,6 +598,13 @@ class Evaluation(object):
         all_paths = self._getAllPathsLim(graph, start, end, k=0)
 
         print("*** Possible paths from %d to %d: %d"%(start, end, len(all_paths)))
+        
+        # Take only 1/10 of them
+        #lim = len(all_paths)/10
+        random.shuffle(all_paths)
+        all_paths = all_paths[:10]
+        print("*** We take only 10...")
+
 
         # Calculate all combinations of possible paths.
         all_path_subsets = []
@@ -442,7 +613,6 @@ class Evaluation(object):
 
         #action = [all_path_subsets.append(c) for i in range(1, 3) for c in
         #          list(it.combinations(all_paths, i))]
-
         print("*** Number of path permutations without repetition: %d"%(len(all_path_subsets)))
         # Compute merge of dags
         allRandomDags = []
@@ -475,15 +645,40 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("-n", "--nodes", type=int, help="Number of nodes in the network")
     parser.add_argument("-p", "--probability", type=float, help="Edge probability")
+    parser.add_argument("--plot", type=str, help="Give results file to plot")
     args = parser.parse_args()
 
     # Parse input parameters
     if args.nodes and args.probability:
         n = args.nodes
         p = args.probability
+
+        # Create object
         evaluation = Evaluation(n, p)
+
+        # Run experiment
+        results = evaluation.run2(estimate=False)
+        
+        # Stop to check first
+        import ipdb; ipdb.set_trace()
+        
+        # Marshal results
+        id = random.randint(1, 1000)
+        evaluation.saveResults(results, n, p, id)
+
+        # Plot results
+        evaluation.makePlot(results)
+
     else:
-        evaluation = Evaluation()
-    
-    # Run experiment
-    evaluation.run()
+        if not args.plot:
+            print "-n and -p should be present!"
+            exit
+        else:
+            if not args.filename:
+                print "--filename must be given!"
+                exit
+            else:
+                results = evaluation.loadResults(args.filename)
+                evaluation.makePlot(results)
+
+        
