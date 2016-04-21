@@ -4,6 +4,8 @@ import numpy as np
 import random
 import time
 import marshal
+import matplotlib.pyplot as plt
+
 
 class Evaluation(object):
     def __init__(self, nodes=5, edgeCreationProb = 0.2, marshalFile = None):
@@ -51,18 +53,17 @@ class Evaluation(object):
         return nodes_copy[0]
         
     def loadResults(self, filename):
-        with open(filename, 'rb') as file:
-            data = file.read()
-            results = marshal.loads(data)
-            return data
+        with open(filename, 'rb') as f:
+            results = marshal.load(f)
+            return results
 
     def saveResults(self, results, n, p, id):
         pstr = str(p)
         pstr = pstr.replace('.', '_')
         filename = './results_%d_%s_%s'%(n, pstr, id)
-        with open(filename, 'wb') as file:
-            data = marshal.dumps(results)
-            file.write(data)
+        with open(filename, 'wb') as f:
+            marshal.dump(results, f)
+            print("*** Results saved in %s"%filename)
 
     def generateSources(self, graph, egress_node, max_flow_size):
         """
@@ -104,12 +105,136 @@ class Evaluation(object):
         all_sources = [(flow_sizes[i], flow_paths[i]) for i in range(len(flow_sizes))]        
         return all_sources
 
-    @staticmethod
-    def makePlot():
+    def makePlot(self, results, what='all'):
         """
         """
-        import ipdb; ipdb.set_trace()
-        pass        
+        # Search for minimum Pc found
+        minPc = min(results.items(), key=lambda x: x[1]['pc'])
+        minPc = minPc[1]['pc']
+
+        print("*** Optimal Pc: %.5f"%minPc)
+        print("*** Pc of 1 would be close to %.2f in the graph"%(1/minPc))
+
+        # To avoid ZeroDivisionError
+        if minPc == 0:
+            minPc = 1e-6
+
+        # Calculate ratio for each n
+        ratios = []
+        global_times = []
+        partial_times = []
+
+        # Get ns sorted 
+        ns = results.keys()
+        print("*** Total number of DAG samples: %d"%len(ns))
+        ns = sorted(ns)
+        
+        for n in ns:
+            # Get obtained Pc
+            pc = results[n]['pc']
+            # Get global time
+            gt = results[n]['time']            
+            # Get partial times
+            pt = results[n]['pc_times']
+
+            # Accumulate
+            ratios.append(pc)
+            global_times.append(gt)
+            partial_times.append(pt)
+            
+        # Transform ns to n percents
+        npercent = [(n/float(ns[-1]))*100 for n in ns]
+
+        # Start figure
+        fig = plt.figure(1)
+
+        if what=='all':
+            ##### Plot rations first
+            # Calculate ratios
+            ratios = [1 if pc == 0 else pc/float(minPc) for pc in ratios]
+            # Configure plot
+            ax = fig.add_subplot(3,1,1)  
+            ax.plot(npercent, ratios, '.')
+            ax.set_title('Ratio Pc found/minPc')# fontsize=20)
+            ax.set_ylabel("Ratio")#, fontsize=16)
+            ax.set_ylim(0.5,1.5)
+            ax.grid(True)
+            
+            ##### Plot total time to compute minPc
+            # Calculate times
+            ax = fig.add_subplot(3,1,2)
+            ax.plot(npercent, global_times, '.')
+            ax.set_title('Time to find minimum Pc')# fontsize=20)
+            ax.set_ylabel("Time (s)")
+            ax.grid(True)
+            
+            #### Plot average time to compute Pc
+            ax = fig.add_subplot(3,1,3)
+            partial_times = np.asarray(partial_times)
+            partial_times_ms = np.multiply(partial_times, 1000)
+            ax.plot(npercent, partial_times_ms, '.')
+            ax.set_title('Average time needed to compute Pc')# fontsize=20)
+            ax.set_ylabel("Time (ms)")
+            ax.grid(True)
+            
+            #### Final plot details
+            #        import ipdb; ipdb.set_trace()
+            fig.subplots_adjust(bottom=0.10, left=0.12, right=0.90, top=0.95, wspace=0.2, hspace=0.31)
+            plt.xlabel("% of DAG samples")#, fontsize=16)
+            plt.show()
+
+        else:
+            if what not in ['ratios', 'gtimes', 'ptimes']:
+                print("*** ERROR: what parameter must be: ratios|gtimes|ptimes")
+            else:
+                if what == 'ratios':
+                    ##### Plot rations first
+                    # Calculate ratios
+                    ratios = [1 if pc == 0 else pc/float(minPc) for pc in ratios]
+                    # Configure plot
+                    ax = fig.add_subplot(1,1,1)  
+                    ax.plot(npercent, ratios, '.')
+                    #ax.set_title('observedPc/minPc', fontsize=20)
+                    ax.set_ylabel("Ratio", fontsize=16)
+                    ax.set_ylim(0.95,None)
+                    ax.grid(True)                 
+                    #### Final plot details
+                    #        import ipdb; ipdb.set_trace()
+                    #fig.subplots_adjust(bottom=0.10, left=0.12, right=0.90, top=0.95, wspace=0.2, hspace=0.31)
+                    plt.xlabel("% of DAG samples", fontsize=16)
+                    plt.show()
+
+                elif what == 'gtimes':     
+                    ##### Plot total time to compute minPc
+                    # Calculate times
+                    ax = fig.add_subplot(1,1,1)
+                    ax.plot(npercent, global_times, '.')
+                    ax.set_ylabel("Time (s)", fontsize=16)
+                    ax.grid(True)
+
+                    #### Final plot details
+                    #        import ipdb; ipdb.set_trace()
+                    fig.subplots_adjust(bottom=0.10, left=0.12, right=0.90, top=0.95, wspace=0.2, hspace=0.31)
+                    plt.xlabel("% of DAG samples", fontsize=16)
+                    plt.show()
+
+                else:
+                    #### Plot average time to compute Pc
+                    ax = fig.add_subplot(1,1,1)
+                    partial_times = np.asarray(partial_times)
+                    partial_times_ms = np.multiply(partial_times, 1000)
+                    ax.plot(npercent, partial_times_ms, '.')
+                    ax.set_title('Average time needed to compute Pc')# fontsize=20)
+                    ax.set_ylabel("Time (ms)")
+                    ax.grid(True)
+                    
+                    #### Final plot details
+                    #        import ipdb; ipdb.set_trace()
+                    fig.subplots_adjust(bottom=0.10, left=0.12, right=0.90, top=0.95, wspace=0.2, hspace=0.31)
+                    plt.xlabel("% of DAG samples")#, fontsize=16)
+                    plt.show()
+
+
 
     def generateRandomDag(self, all_paths):
         ingressNode = all_paths[0][0]
@@ -248,7 +373,7 @@ class Evaluation(object):
                 partial_times = np.asarray(partial_times)
 
                 # Add results to dict
-                results[n] = {'pc': minPc[1], 'time': time.time()-start_time, 'pc_times': partial_times.mean()} 
+                results[n] = {'pc': minPc[1], 'time': time.time()-start_time, 'pc_times': float(partial_times.mean())} 
 
                 # Log a bit
                 print("    minPc: %.2f"%(minPc[1]))
@@ -295,7 +420,10 @@ class Evaluation(object):
             start_time = time.time()
             
             # Accumulate partial cronos for Pc here	
-            partial_times = []
+            partial_times = {
+                'new_sources':[],
+                'new_adag':[],
+                'pc':[]}
             
             # Shuffle all_dags
             random.shuffle(all_dags)
@@ -307,13 +435,33 @@ class Evaluation(object):
             tmp_pcs = []
             for new_dag in samples:
                 # Start partial time
-                partial_time = time.time()
+                partial_time_start = time.time()
                 
                 # Compute congestion probability
-                pc = self.computeCongestionProbability(graph, all_nodes_dag, new_dag, sources)
+                # Compute new all-nodes DAG
+                new_adag = self.recomputeAllSourcesDag(all_nodes_dag, new_dag)
+                partial_time_new_adag = time.time()-partial_time_start
+
+                # Recompute sources paths
+                new_sources = self.recomputeSourcesPaths(new_adag, sources)
+                partial_time_new_sources = time.time() - partial_time_start - partial_time_new_adag
                 
+                # Extract new flow paths and sizes
+                flow_paths = [pl for (f, pl) in new_sources]
+                flow_sizes = [f for (f, pl) in new_sources]
+
+                # Get average path list length
+                flow_path_lens = [len(pl) for (f, pl) in new_sources]
+                flow_path_lens = np.asarray(flow_path_lens)
+                
+                # Compute congestion probability Pc
+                pc = self.exactCongestionProbability(graph, flow_paths, flow_sizes)
+                partial_time_pc = time.time() - partial_time_start - partial_time_new_sources
+
                 # Stop partial time
-                partial_times.append(time.time()-partial_time)
+                partial_times['new_adag'].append(partial_time_new_adag)
+                partial_times['pc'].append(partial_time_pc)
+                partial_times['new_sources'].append(partial_time_new_sources)
                 
                 # Append it to tmp_pcs
                 tmp_pcs.append((new_dag, pc))
@@ -322,14 +470,23 @@ class Evaluation(object):
             minPc = min(tmp_pcs, key=lambda x: x[1])
             
             # Convert into array
-            partial_times = np.asarray(partial_times)
+            partial_times_new_adag = np.asarray(partial_times['new_adag'])
+            partial_times_new_sources = np.asarray(partial_times['new_sources'])
+            partial_times_pc = np.asarray(partial_times['pc'])
 
             # Log a bit
             print("    minPc: %.3f"%(minPc[1]))
-            
-            # Add results to dict
-            results[n] = {'pc': minPc[1], 'time': time.time()-start_time, 'pc_times': partial_times.mean()} 
+            print("    total_time: %f"%(time.time()-start_time))
+            print("     - New all->d DAG: %f"%(partial_times_new_adag.mean()))
+            print("     - New sources: %f"%(partial_times_new_sources.mean()))
+            print("     - Pc calculation: %f"%(partial_times_pc.mean()))
 
+            # Add results to dict
+            results[n] = {'pc': minPc[1],
+                          'total_time': time.time()-start_time,
+                          'pc_time': float(partial_times_pc.mean()),
+                          'new_adag_time': float(partial_times_new_adag.mean()),
+                          'new_sources': float(partial_times_new_sources.mean())} 
         return results
             
     def computeCongestionProbability(self, graph, all_sources_dag, new_ridx_dag, sources):
@@ -646,6 +803,7 @@ if __name__ == '__main__':
     parser.add_argument("-n", "--nodes", type=int, help="Number of nodes in the network")
     parser.add_argument("-p", "--probability", type=float, help="Edge probability")
     parser.add_argument("--plot", type=str, help="Give results file to plot")
+    parser.add_argument("--what", type=str, help="What to plot: ratios|gtimes|ptimes")
     args = parser.parse_args()
 
     # Parse input parameters
@@ -671,14 +829,31 @@ if __name__ == '__main__':
 
     else:
         if not args.plot:
-            print "-n and -p should be present!"
+            print "--plot filename must be present!"
             exit
         else:
-            if not args.filename:
-                print "--filename must be given!"
-                exit
+            if not args.what:
+                what = 'all'
             else:
-                results = evaluation.loadResults(args.filename)
-                evaluation.makePlot(results)
+                what = args.what
+
+            filename = args.plot
+            # Get n and p from filename
+            n = int(filename.split('_')[1])
+            p1 = filename.split('_')[2]
+            p2 = filename.split('_')[3]
+            pstr = p1+'.'+p2
+            p = float(pstr)
+            
+            # Create object
+            evaluation = Evaluation(n, p)
+            
+            # Load results
+            results = evaluation.loadResults(args.plot)
+            
+            # Plot them
+            evaluation.makePlot(results, what)
+                    
+
 
         
