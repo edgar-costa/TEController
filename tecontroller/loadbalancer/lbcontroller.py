@@ -949,7 +949,7 @@ class LBController(object):
             t = time.strftime("%H:%M:%S", time.gmtime())
             to_print = "%s - getAllocatedFlows(): WARNING: "
             to_print += "prefix %s not yet in flow_allocation table\n"
-            log.info(to_print%(t, prefix))
+            #log.info(to_print%(t, prefix))
             return []
         
     def getFlowSizes(self, prefix):

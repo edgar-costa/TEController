@@ -1,42 +1,26 @@
 #src,dst,sport,dport,size,start_time,duration
 
-## TEST 1 #####################################
-## Overcoming Lab1 limitation #################
-# Fill up (r2, r3) to 50%
+## TEST 1 ######################################
+## Testing Allocation Algorithm ################
+# Fill (r3, r1) up to 60% usage
 
-h22,h32,30001,5001,500K,5s,2m
+h30,h10,30001,5001,600K,3s,57s
 
-# Fill up (r1, r3) to 70%
+# Allocate Flow h20->h11:200K. Should force new path [r2,r3,r4,r1]
 
-h12,h31,30021,5001,700K,10s,2m
+h20,h11,30001,5001,300K,13s,49s
 
-# Fill up (r1, r4) to 70%
+# Start Flow h20->h12:200K. Should force new path [r2, r1]
 
-h11,h42,30031,5001,700K,15s,2m
-
-# Start flows to h30
-#f1
-h10,h30,30001,5001,100K,20s,2m
-
-#f2
-h11,h30,30002,5001,100K,25s,2m
-
-#f3
-h12,h30,30003,5001,150K,30s,2m
-
-#f4
-h13,h30,30004,5001,100K,40s,2m
-
-#f5
-h14,h30,30005,5001,150K,50s,2m
+h20,h12,30001,5001,600K,23s,42s
 
 
-# Comments: f1 and f2 should be allocated in [r1, r3], but when f3
-# arrives, all three flows should move to path [r1,r2,r3], since they
-# don't fit in any other path. f4 is allocated in [r1, r2, r3] too,
-# which is the default path for the flow when it arrives, and it fits
-# in it. When f5 arrives, all traffic towards h30 can't be fit in any
-# single path, so the congestion probability is 100%. Therefore, the
-# ECMP algorithm is activated, and it should compute the path
-# combination that maximally reduces the probability.
 
+# Check that network is reset to default state
+#h11,h32,30001,5001,800K,45s,10s
+
+# Comments:
+# You should observe how there is no congestion in the network, and
+# all links are load-balanced. In the end, you should observe how
+# Flow(h11->h32) is allocated to default shortest path, since there is
+# no more traffic in the network (the lies are removed correctly).

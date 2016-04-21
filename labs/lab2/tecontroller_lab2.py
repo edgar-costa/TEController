@@ -1,5 +1,5 @@
 #!/usr/bin/python
-from tecontroller.loadbalancer.simplepathlb import SimplePathLB
+from tecontroller.loadbalancer.lbcontroller import LBController
 from tecontroller.linkmonitor.linksmonitor_thread import LinksMonitorThread
 from fibbingnode.misc.mininetlib import get_logger
 from tecontroller.res import defaultconf as dconf
@@ -16,11 +16,11 @@ import tecontroller.res.daglib as daglib
 log = get_logger()
 lineend = "-"*100+'\n'
 
-class TEControllerLab2(SimplePathLB):
-    def __init__(self, probabilityAlgorithm=None):
+class TEControllerLab2(LBController):
+    def __init__(self, congestionThreshold = 0.8, probabilityAlgorithm='exact'):
         
         # Call init method from LBController
-        super(TEControllerLab2, self).__init__()
+        super(TEControllerLab2, self).__init__(congestionThreshold)
 
         # Instantiate probability calculator object
         self.pc = ProbabiliyCalculator()
@@ -215,17 +215,22 @@ class TEControllerLab2(SimplePathLB):
 
         # ECMP active in default paths
         if ecmp_active:
-            # Calculate congestion probability
-            
-            # Insert current available capacities in DAG
+            # Calculate congestion probability for specific destination
+
+            # Get ongoing flows
+            allocated_flows = self.getAllocatedFlows(dst_prefix)
+
+            # Collect flow sizes and paths
+            flow_sizes = [f.size for (f, pl) in allocated_flows]+[flow.size]
+            flow_paths = [pl for (f, pl) in allocated_flows]+[currentPaths]
+
+            # Insert capacities into active DAG
             for (u, v, data) in adag.edges(data=True):
                 cap = self.cgc[u][v]['capacity']
+                mincap = self.cgc[u][v]['mincap']
                 data['capacity'] = cap
+                data['mincap'] = mincap
             
-            # Get ingress and egress router
-            ingress_router = currentPaths[0][0]
-            egress_router = currentPaths[0][-1]
-
             # Compute congestion probability
             t = time.strftime("%H:%M:%S", time.gmtime())
             log.info("%s - Computing flow congestion probability\n"%t)
@@ -233,8 +238,7 @@ class TEControllerLab2(SimplePathLB):
             log.info("\t* Equal Cost Paths: %s\n"%self.toLogRouterNames(currentPaths))
             
             with self.pc.timer as t:
-                congProb = self.pc.flowCongestionProbability(adag, ingress_router,
-                                                                 egress_router, flow.size)
+                congProb = self.pc.ExactCongestionProbability(adag, flow_paths, flow_sizes)
 
             # Log it
             to_print = "\t* Flow will be allocated with a congestion probability of %.2f%%\n"
@@ -716,6 +720,7 @@ class TEControllerLab2(SimplePathLB):
         self.sbmanager.add_dag_requirement(prefix, activeDag.copy())
         
         log.info(lineend)
+
         
     def updateFlowAllocations(self, dst_prefix, new_sources):
         """
@@ -730,16 +735,20 @@ class TEControllerLab2(SimplePathLB):
             new_dict[f] = pl
 
             # Path list before
-            pl_before = self.flow_allocation[dst_prefix].get(f)
-
-            # Log a bit
-            if pl_before:
-                to_log = "\t   - %s\n\t   - Before: %s\n\t   - Now: %s\n"
-                log.info(to_log%(self.toLogFlowNames(f), self.toLogRouterNames(pl_before), self.toLogRouterNames(pl)))
+            if dst_prefix in self.flow_allocation:
+                pl_before = self.flow_allocation[dst_prefix].get(f)
+                
+                # Log a bit
+                if pl_before:
+                    to_log = "\t   - %s\n\t   - Before: %s\n\t   - Now: %s\n"
+                    log.info(to_log%(self.toLogFlowNames(f), self.toLogRouterNames(pl_before), self.toLogRouterNames(pl)))
+                else:
+                    to_log = "\t   - %s\n\t   - Allocated to: %s\n"
+                    log.info(to_log%(self.toLogFlowNames(f), self.toLogRouterNames(pl)))
             else:
                 to_log = "\t   - %s\n\t   - Allocated to: %s\n"
                 log.info(to_log%(self.toLogFlowNames(f), self.toLogRouterNames(pl)))
-                
+                    
             # Check if flow needs feedback
             if len(pl) > 1:
                 log.info("\t* Adding %s to allocation feedback...\n"%self.toLogFlowNames(f))

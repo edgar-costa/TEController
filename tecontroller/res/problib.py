@@ -71,7 +71,6 @@ class ProbabiliyCalculator(object):
         min available capacities : [[c1, c2], [c2]...]
         and n is a list of flow sizes: [s1, s2, ...]
 
-
         Flow to paths bidings are given by the lists indexes.
 
         Returns congestion probability.

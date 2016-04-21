@@ -92,7 +92,6 @@ def main(args):
             #ax.legend([label_f], loc='right')
             ax.grid(True)
             count += 1
-
     plt.suptitle('Load of links over time')
     plt.show()
     plt.savefig(dconf.Hosts_LogFolder+'links.png')
